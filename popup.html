@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Designspector</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="header">
+    <div class="header-top">
+      <h1>🎨 Designspector</h1>
+      <div class="header-actions">
+        <label class="toggle-switch">
+          <input type="checkbox" id="inspector-toggle">
+          <span class="toggle-slider"></span>
+        </label>
+        <button id="close-popup-btn" class="close-btn" title="Close Extension">
+          <span>✕</span>
+        </button>
+      </div>
+    </div>
+    <p class="subtitle" id="subtitle">Inspect website styles effortlessly</p>
+  </div>
+  
+  <!-- Default UI: Colors and Fonts -->
+  <div class="content" id="default-ui">
+    <div class="stats">
+      <div class="stat-card">
+        <div class="stat-icon">🎨</div>
+        <div class="stat-number" id="color-count">-</div>
+        <div class="stat-label">Colors</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">📝</div>
+        <div class="stat-number" id="font-count">-</div>
+        <div class="stat-label">Font Styles</div>
+      </div>
+    </div>
+    
+    <div class="actions">
+      <button id="view-colors" class="button button-secondary">
+        <span class="button-icon">🎨</span>
+        <span>View All Colors</span>
+      </button>
+      <button id="view-typography" class="button button-secondary">
+        <span class="button-icon">📝</span>
+        <span>View Typography</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Inspector UI -->
+  <div class="content inspector-ui" id="inspector-ui" style="display: none;">
+    <div id="element-info">
+      <div class="empty-state">
+        <p>👆 Hover over any element to inspect it</p>
+        <p class="hint"><strong>Important:</strong> Only hover - clicking on the page will close this popup</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p class="footer-text">Made for designers ✨</p>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
+
