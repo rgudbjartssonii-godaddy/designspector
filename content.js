@@ -520,7 +520,8 @@ class CSSInspector {
           </div>
           <button id="close-inspector-panel" style="background: transparent; border: none; font-size: 16px; cursor: pointer; color: #8B8B8B; padding: 4px; border-radius: 4px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;" onmouseover="this.style.background='#1F1F1F'; this.style.color='#E5E5E5'" onmouseout="this.style.background='transparent'; this.style.color='#8B8B8B'" title="Close Panel">✕</button>
         </div>
-        <div style="padding: 0 16px 12px 16px; display: flex; flex-direction: column; gap: 4px;">
+        <div id="locked-element-info" style="padding: 0 16px 8px 16px; display: none;"></div>
+        <div id="website-info" style="padding: 0 16px 12px 16px; display: flex; flex-direction: column; gap: 4px;">
           <div style="font-size: 13px; font-weight: 600; color: #E5E5E5; font-family: 'Inter', sans-serif;">${websiteName
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;")}</div>
@@ -603,6 +604,11 @@ class CSSInspector {
 
     // Reinitialize drag handle after content update
     this.initDragHandle();
+
+    // If there's a locked element, restore its header
+    if (this.selectedElement) {
+      this.updateLockedElementHeader(this.selectedElement);
+    }
   }
 
   switchPanelToInspectorMode() {
@@ -633,7 +639,8 @@ class CSSInspector {
           </div>
           <button id="close-inspector-panel" style="background: transparent; border: none; font-size: 16px; cursor: pointer; color: #8B8B8B; padding: 4px; border-radius: 4px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;" onmouseover="this.style.background='#1F1F1F'; this.style.color='#E5E5E5'" onmouseout="this.style.background='transparent'; this.style.color='#8B8B8B'" title="Close Panel">✕</button>
         </div>
-        <div style="padding: 0 16px 12px 16px; display: flex; flex-direction: column; gap: 4px;">
+        <div id="locked-element-info" style="padding: 0 16px 8px 16px; display: none;"></div>
+        <div id="website-info" style="padding: 0 16px 12px 16px; display: flex; flex-direction: column; gap: 4px;">
           <div style="font-size: 13px; font-weight: 600; color: #E5E5E5; font-family: 'Inter', sans-serif;">${websiteName
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;")}</div>
@@ -685,6 +692,11 @@ class CSSInspector {
 
     // Reinitialize drag handle after content update
     this.initDragHandle();
+
+    // If there's a locked element, restore its header
+    if (this.selectedElement) {
+      this.updateLockedElementHeader(this.selectedElement);
+    }
   }
 
   loadPanelStats() {
@@ -951,6 +963,16 @@ class CSSInspector {
   updateInspectorPanel(element, isSelected = false) {
     if (!this.inspectorPanel) return;
 
+    // If an element is locked and we're trying to update with a different element (not from a click),
+    // skip the update to prevent flickering
+    if (
+      this.selectedElement &&
+      this.selectedElement !== element &&
+      !isSelected
+    ) {
+      return;
+    }
+
     const styles = window.getComputedStyle(element);
     const rect = element.getBoundingClientRect();
     const elementInfo = this.extractElementInfo(element, styles, rect);
@@ -1144,17 +1166,19 @@ class CSSInspector {
       this.hoveredElement.classList.remove("css-inspector-highlight");
     }
 
-    // Only highlight on hover (don't auto-lock)
-    // If element is already selected, don't add highlight
+    // Always allow highlighting on hover (even when element is locked)
+    // But only update panel if no element is locked
     if (element !== this.selectedElement) {
       this.hoveredElement = element;
       element.classList.add("css-inspector-highlight");
 
-      // Send update to popup (not locked, just hovered)
-      clearTimeout(this.updateTimeout);
-      this.updateTimeout = setTimeout(() => {
-        this.sendElementUpdateToPopup(element, false);
-      }, 50);
+      // Only send update to popup if no element is locked
+      if (!this.selectedElement) {
+        clearTimeout(this.updateTimeout);
+        this.updateTimeout = setTimeout(() => {
+          this.sendElementUpdateToPopup(element, false);
+        }, 50);
+      }
     }
   }
 
@@ -1174,10 +1198,9 @@ class CSSInspector {
 
     if (this.hoveredElement === element) {
       this.hoveredElement = null;
-      // If we have a selected element, keep showing it (locked)
-      if (this.selectedElement) {
-        this.sendElementUpdateToPopup(this.selectedElement, true);
-      } else if (this.inspectorPanel) {
+      // If we have a selected element, don't trigger any updates - just keep showing it (locked)
+      // This prevents flickering when hovering over other elements
+      if (!this.selectedElement && this.inspectorPanel) {
         this.showEmptyState();
       }
     }
@@ -1239,11 +1262,6 @@ class CSSInspector {
       this.selectedElement.classList.remove("css-inspector-selected");
     }
 
-    // TODO: Implement element lock feature with identifier and close button
-    // - When element is locked, show identifier (tag, id, classes) at top of panel
-    // - Add "Close" or "Exit" button to unlock the element
-    // - Prevent hover updates when element is locked (currently changes abruptly when hovering over panel)
-    // - Lock the element properties in the panel so they don't change when moving mouse
     // Lock (select) the clicked element
     this.selectedElement = element;
     if (this.hoveredElement === element) {
@@ -1253,11 +1271,155 @@ class CSSInspector {
     element.classList.remove("css-inspector-highlight");
     element.classList.add("css-inspector-selected");
 
+    // Update panel header to show locked element identifier
+    this.updateLockedElementHeader(element);
+
     // Send update to popup with locked state
     clearTimeout(this.updateTimeout);
     this.updateTimeout = setTimeout(() => {
       this.sendElementUpdateToPopup(element, true);
     }, 50);
+  }
+
+  getElementIdentifier(element) {
+    const tag = element.tagName.toLowerCase();
+    const id = element.id ? `#${element.id}` : "";
+    const classList = Array.from(element.classList);
+    const classString = classList.length > 0 ? "." + classList.join(".") : "";
+    return `${tag}${id}${classString}`;
+  }
+
+  getElementTypeLabel(element) {
+    if (!element) return "Element";
+
+    const tagName = element.tagName.toLowerCase();
+
+    // Check for specific tags first
+    if (tagName === "img") {
+      return "Image";
+    } else if (tagName === "a") {
+      return "Link";
+    } else if (tagName === "button") {
+      return "Button";
+    } else if (["input", "textarea", "select"].includes(tagName)) {
+      return "Input";
+    } else if (
+      [
+        "p",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "span",
+        "li",
+        "td",
+        "th",
+        "label",
+        "strong",
+        "em",
+        "b",
+        "i",
+      ].includes(tagName)
+    ) {
+      return "Text";
+    } else if (
+      tagName === "div" ||
+      tagName === "section" ||
+      tagName === "article" ||
+      tagName === "main" ||
+      tagName === "header" ||
+      tagName === "footer" ||
+      tagName === "aside" ||
+      tagName === "nav"
+    ) {
+      // Check for image content in containers
+      if (element.querySelector("img")) {
+        return "Image";
+      } else {
+        const styles = window.getComputedStyle(element);
+        if (
+          styles.backgroundImage &&
+          styles.backgroundImage !== "none" &&
+          styles.backgroundImage.includes("url(")
+        ) {
+          return "Image";
+        } else if (
+          element.textContent &&
+          element.textContent.trim().length > 0
+        ) {
+          return "Text";
+        } else {
+          return "Container";
+        }
+      }
+    } else {
+      // Default: capitalize first letter
+      return tagName.charAt(0).toUpperCase() + tagName.slice(1);
+    }
+  }
+
+  updateLockedElementHeader(element) {
+    if (!this.inspectorPanel) return;
+
+    const lockedInfo = this.inspectorPanel.querySelector(
+      "#locked-element-info"
+    );
+    const websiteInfo = this.inspectorPanel.querySelector("#website-info");
+
+    if (element) {
+      // Show locked element info, hide website info
+      // Format: "Type.tag" (e.g., "Text.p", "Image.div", "Button.button")
+      const tagName = element.tagName.toLowerCase();
+      const typeLabel = this.getElementTypeLabel(element);
+      const typeLabelEscaped = typeLabel
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      const tagNameEscaped = tagName
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+      if (lockedInfo) {
+        lockedInfo.style.display = "flex";
+        lockedInfo.style.alignItems = "center";
+        lockedInfo.style.gap = "8px";
+        lockedInfo.innerHTML = `
+          <div style="width: 6px; height: 6px; background: #10B981; border-radius: 50%; flex-shrink: 0;"></div>
+          <div style="font-size: 24px; font-weight: 600; color: #E5E5E5; font-family: 'Inter', sans-serif; letter-spacing: -0.01em;">
+            <span>${typeLabelEscaped}.</span>
+            <span style="opacity: 0.75;">${tagNameEscaped}</span>
+      </div>
+    `;
+      }
+
+      if (websiteInfo) {
+        websiteInfo.style.display = "none";
+      }
+    } else {
+      // Hide locked element info, show website info
+      if (lockedInfo) {
+        lockedInfo.style.display = "none";
+        lockedInfo.innerHTML = "";
+      }
+
+      if (websiteInfo) {
+        websiteInfo.style.display = "flex";
+      }
+    }
+  }
+
+  unlockElement() {
+    if (this.selectedElement) {
+      this.selectedElement.classList.remove("css-inspector-selected");
+      this.selectedElement = null;
+    }
+
+    // Update header to show website info again
+    this.updateLockedElementHeader(null);
+
+    // Show empty state
+    this.showEmptyState();
   }
 
   extractElementInfo(element, styles, rect) {
@@ -1484,177 +1646,148 @@ class CSSInspector {
               <span>0px</span>
               <span class="copy-hint" style="opacity: 0; font-size: 9px; color: #B8B8B8; transition: opacity 0.2s;">✓</span>
         </div>
-          </div>
+        </div>
           `
           }
-        </div>
+      </div>
       </div>
       `
           : ""
       }
 
-      <!-- TODO: Continue polishing spacing preview - improve readability and visual hierarchy -->
-      <!-- - Labels still overlap and are hard to read -->
-      <!-- - Need better spacing between margin, border, and padding labels -->
-      <!-- - Consider alternative layout or positioning strategy -->
       <div class="inspector-section" style="margin-bottom: 20px; opacity: 1; transform: translateY(0); transition: opacity 0.2s ease-out, transform 0.2s ease-out;">
         <div style="margin-bottom: 10px;">
           <h4 style="margin: 0; font-size: 13px; font-weight: 600; color: #E5E5E5; font-family: 'Inter', sans-serif;">Spacing</h4>
-        </div>
+          </div>
         
-        <!-- Fixed-size Box Model Preview -->
-        <div style="margin-bottom: 16px; padding: 32px; background: #1A1A1A; border: 1px solid #2A2A2A; border-radius: 8px; position: relative; width: 100%; min-height: 380px; display: flex; align-items: center; justify-content: center; overflow: visible;">
-          <!-- Outer container for scaling -->
-          <div style="position: relative; width: 100%; height: 200px; max-width: 200px; display: flex; align-items: center; justify-content: center;">
-            <!-- Margin (outermost) -->
-            ${
-              info.spacing.margin.top !== "0" ||
-              info.spacing.margin.right !== "0" ||
-              info.spacing.margin.bottom !== "0" ||
-              info.spacing.margin.left !== "0"
-                ? `
-            <div style="position: absolute; inset: 0; border: 2px dashed #EF4444; box-sizing: border-box; border-radius: ${
-              info.border.radius !== "0px" && info.border.radius !== "0"
-                ? this.parseBorderRadius(info.border.radius)
-                : "0px"
-            };">
-              <div style="position: absolute; top: 4px; left: 4px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 4px; background: #0D0D0D; border: 1px solid #2A2A2A; border-radius: 2px; color: #EF4444; font-family: 'Inter', sans-serif;">Margin</div>
+        <!-- CSS Peeper Style Box Model Preview -->
+        <div id="spacing-preview-container-${Date.now()}" style="margin-bottom: 16px; padding: 0; background: transparent; border: none; position: relative; width: 100%; min-height: 180px; display: flex; flex-direction: column; align-items: center; overflow: visible;">
+          <!-- Fixed-size preview container -->
+          <div id="spacing-preview-box-${Date.now()}" style="position: relative; width: 240px; height: 140px; display: flex; align-items: center; justify-content: center; overflow: visible; margin: 24px 0 32px 0;">
+            <!-- 1. Margin (outermost) - Always shown -->
+            <div style="position: absolute; inset: 0; background: rgba(255, 255, 255, 0.08); box-sizing: border-box; border-radius: 4px; overflow: hidden;">
               ${
                 info.spacing.margin.top !== "0"
-                  ? `<div style="position: absolute; top: -28px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 600; color: #EF4444; background: #0D0D0D; border: 1px solid #EF4444; padding: 4px 8px; border-radius: 3px; white-space: nowrap; font-family: 'Inter', sans-serif; cursor: pointer; z-index: 10;" onclick="navigator.clipboard.writeText('${info.spacing.margin.top}'); this.style.opacity='0.5'; setTimeout(() => this.style.opacity='1', 200);">${info.spacing.margin.top}</div>`
+                  ? `<div class="spacing-value" style="position: absolute; top: -20px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 500; color: #E5E5E5; font-family: 'Inter', sans-serif; cursor: pointer; white-space: nowrap; z-index: 10;" 
+                  title="margin-top"
+                  onmouseover="this.style.opacity='0.7';" 
+                  onmouseout="this.style.opacity='1';"
+                  onclick="(function(el, prop, val){navigator.clipboard.writeText(val); const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(boxRect.height+8)+'px;left:50%;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);setTimeout(()=>popover.remove(),1500);}})(this,'margin-top','${info.spacing.margin.top}')">${info.spacing.margin.top}</div>`
                   : ""
               }
               ${
                 info.spacing.margin.right !== "0"
-                  ? `<div style="position: absolute; right: -75px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 600; color: #EF4444; background: #0D0D0D; border: 1px solid #EF4444; padding: 4px 8px; border-radius: 3px; white-space: nowrap; font-family: 'Inter', sans-serif; cursor: pointer; z-index: 10;" onclick="navigator.clipboard.writeText('${info.spacing.margin.right}'); this.style.opacity='0.5'; setTimeout(() => this.style.opacity='1', 200);">${info.spacing.margin.right}</div>`
+                  ? `<div class="spacing-value" style="position: absolute; right: -35px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 500; color: #E5E5E5; font-family: 'Inter', sans-serif; cursor: pointer; white-space: nowrap; z-index: 10;" 
+                  title="margin-right"
+                  onmouseover="this.style.opacity='0.7';" 
+                  onmouseout="this.style.opacity='1';"
+                  onclick="(function(el, prop, val){navigator.clipboard.writeText(val); const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(boxRect.height+8)+'px;left:50%;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);setTimeout(()=>popover.remove(),1500);}})(this,'margin-right','${info.spacing.margin.right}')">${info.spacing.margin.right}</div>`
                   : ""
               }
               ${
                 info.spacing.margin.bottom !== "0"
-                  ? `<div style="position: absolute; bottom: -28px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 600; color: #EF4444; background: #0D0D0D; border: 1px solid #EF4444; padding: 4px 8px; border-radius: 3px; white-space: nowrap; font-family: 'Inter', sans-serif; cursor: pointer; z-index: 10;" onclick="navigator.clipboard.writeText('${info.spacing.margin.bottom}'); this.style.opacity='0.5'; setTimeout(() => this.style.opacity='1', 200);">${info.spacing.margin.bottom}</div>`
+                  ? `<div class="spacing-value" style="position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 500; color: #E5E5E5; font-family: 'Inter', sans-serif; cursor: pointer; white-space: nowrap; z-index: 10;" 
+                  title="margin-bottom"
+                  onmouseover="this.style.opacity='0.7';" 
+                  onmouseout="this.style.opacity='1';"
+                  onclick="(function(el, prop, val){navigator.clipboard.writeText(val); const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(boxRect.height+8)+'px;left:50%;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);setTimeout(()=>popover.remove(),1500);}})(this,'margin-bottom','${info.spacing.margin.bottom}')">${info.spacing.margin.bottom}</div>`
                   : ""
               }
               ${
                 info.spacing.margin.left !== "0"
-                  ? `<div style="position: absolute; left: -75px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 600; color: #EF4444; background: #0D0D0D; border: 1px solid #EF4444; padding: 4px 8px; border-radius: 3px; white-space: nowrap; font-family: 'Inter', sans-serif; cursor: pointer; z-index: 10;" onclick="navigator.clipboard.writeText('${info.spacing.margin.left}'); this.style.opacity='0.5'; setTimeout(() => this.style.opacity='1', 200);">${info.spacing.margin.left}</div>`
+                  ? `<div class="spacing-value" style="position: absolute; left: -35px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 500; color: #E5E5E5; font-family: 'Inter', sans-serif; cursor: pointer; white-space: nowrap; z-index: 10;" 
+                  title="margin-left"
+                  onmouseover="this.style.opacity='0.7';" 
+                  onmouseout="this.style.opacity='1';"
+                  onclick="(function(el, prop, val){navigator.clipboard.writeText(val); const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(boxRect.height+8)+'px;left:50%;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);setTimeout(()=>popover.remove(),1500);}})(this,'margin-left','${info.spacing.margin.left}')">${info.spacing.margin.left}</div>`
                   : ""
               }
             </div>
-            `
-                : ""
-            }
             
-            <!-- Border + Padding Container -->
-            <div style="position: absolute; ${
-              info.spacing.margin.top !== "0" ||
-              info.spacing.margin.right !== "0" ||
-              info.spacing.margin.bottom !== "0" ||
-              info.spacing.margin.left !== "0"
-                ? "inset: 30px;"
-                : "inset: 0;"
-            } box-sizing: border-box;">
-              <!-- Border -->
-              ${
-                info.border.width.top !== "0" ||
-                info.border.width.right !== "0" ||
-                info.border.width.bottom !== "0" ||
-                info.border.width.left !== "0"
-                  ? `
-              <div style="position: absolute; inset: 0; border-width: ${
-                info.border.width.top
-              } ${info.border.width.right} ${info.border.width.bottom} ${
-                      info.border.width.left
-                    }; border-style: solid; border-color: #8B8B8B; box-sizing: border-box; border-radius: ${
-                      info.border.radius !== "0px" && info.border.radius !== "0"
-                        ? this.parseBorderRadius(info.border.radius)
-                        : "0px"
-                    };">
-                <div style="position: absolute; top: 4px; left: 4px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 4px; background: #0D0D0D; border: 1px solid #2A2A2A; border-radius: 2px; color: #8B8B8B; font-family: 'Inter', sans-serif;">Border</div>
-                ${
-                  info.border.width.top !== "0"
-                    ? `<div style="position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 600; color: #8B8B8B; background: #0D0D0D; border: 1px solid #8B8B8B; padding: 4px 8px; border-radius: 3px; white-space: nowrap; font-family: 'Inter', sans-serif; cursor: pointer; z-index: 10;" onclick="navigator.clipboard.writeText('${info.border.width.top}'); this.style.opacity='0.5'; setTimeout(() => this.style.opacity='1', 200);">${info.border.width.top}</div>`
-                    : ""
-                }
-                ${
-                  info.border.width.right !== "0"
-                    ? `<div style="position: absolute; right: -65px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 600; color: #8B8B8B; background: #0D0D0D; border: 1px solid #8B8B8B; padding: 4px 8px; border-radius: 3px; white-space: nowrap; font-family: 'Inter', sans-serif; cursor: pointer; z-index: 10;" onclick="navigator.clipboard.writeText('${info.border.width.right}'); this.style.opacity='0.5'; setTimeout(() => this.style.opacity='1', 200);">${info.border.width.right}</div>`
-                    : ""
-                }
-                ${
-                  info.border.width.bottom !== "0"
-                    ? `<div style="position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 600; color: #8B8B8B; background: #0D0D0D; border: 1px solid #8B8B8B; padding: 4px 8px; border-radius: 3px; white-space: nowrap; font-family: 'Inter', sans-serif; cursor: pointer; z-index: 10;" onclick="navigator.clipboard.writeText('${info.border.width.bottom}'); this.style.opacity='0.5'; setTimeout(() => this.style.opacity='1', 200);">${info.border.width.bottom}</div>`
-                    : ""
-                }
-                ${
-                  info.border.width.left !== "0"
-                    ? `<div style="position: absolute; left: -65px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 600; color: #8B8B8B; background: #0D0D0D; border: 1px solid #8B8B8B; padding: 4px 8px; border-radius: 3px; white-space: nowrap; font-family: 'Inter', sans-serif; cursor: pointer; z-index: 10;" onclick="navigator.clipboard.writeText('${info.border.width.left}'); this.style.opacity='0.5'; setTimeout(() => this.style.opacity='1', 200);">${info.border.width.left}</div>`
-                    : ""
-                }
-              </div>
-              `
-                  : ""
-              }
-              
-              <!-- Padding -->
-              <div style="position: absolute; ${
-                info.border.width.top !== "0" ||
-                info.border.width.right !== "0" ||
-                info.border.width.bottom !== "0" ||
-                info.border.width.left !== "0"
-                  ? "inset: 12px;"
-                  : "inset: 0;"
-              } box-sizing: border-box; border: 1px solid #10B981; border-radius: ${
-      info.border.radius !== "0px" && info.border.radius !== "0"
-        ? this.parseBorderRadius(info.border.radius)
-        : "0px"
-    };">
-                <div style="position: absolute; top: 4px; left: 4px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 4px; background: #0D0D0D; border: 1px solid #2A2A2A; border-radius: 2px; color: #10B981; font-family: 'Inter', sans-serif;">Padding</div>
-                ${
-                  info.spacing.padding.top !== "0"
-                    ? `<div style="position: absolute; top: -8px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 600; color: #10B981; background: #0D0D0D; border: 1px solid #10B981; padding: 4px 8px; border-radius: 3px; white-space: nowrap; font-family: 'Inter', sans-serif; cursor: pointer; z-index: 10;" onclick="navigator.clipboard.writeText('${info.spacing.padding.top}'); this.style.opacity='0.5'; setTimeout(() => this.style.opacity='1', 200);">${info.spacing.padding.top}</div>`
-                    : ""
-                }
-                ${
-                  info.spacing.padding.right !== "0"
-                    ? `<div style="position: absolute; right: -55px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 600; color: #10B981; background: #0D0D0D; border: 1px solid #10B981; padding: 4px 8px; border-radius: 3px; white-space: nowrap; font-family: 'Inter', sans-serif; cursor: pointer; z-index: 10;" onclick="navigator.clipboard.writeText('${info.spacing.padding.right}'); this.style.opacity='0.5'; setTimeout(() => this.style.opacity='1', 200);">${info.spacing.padding.right}</div>`
-                    : ""
-                }
-                ${
-                  info.spacing.padding.bottom !== "0"
-                    ? `<div style="position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 600; color: #10B981; background: #0D0D0D; border: 1px solid #10B981; padding: 4px 8px; border-radius: 3px; white-space: nowrap; font-family: 'Inter', sans-serif; cursor: pointer; z-index: 10;" onclick="navigator.clipboard.writeText('${info.spacing.padding.bottom}'); this.style.opacity='0.5'; setTimeout(() => this.style.opacity='1', 200);">${info.spacing.padding.bottom}</div>`
-                    : ""
-                }
-                ${
-                  info.spacing.padding.left !== "0"
-                    ? `<div style="position: absolute; left: -55px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 600; color: #10B981; background: #0D0D0D; border: 1px solid #10B981; padding: 4px 8px; border-radius: 3px; white-space: nowrap; font-family: 'Inter', sans-serif; cursor: pointer; z-index: 10;" onclick="navigator.clipboard.writeText('${info.spacing.padding.left}'); this.style.opacity='0.5'; setTimeout(() => this.style.opacity='1', 200);">${info.spacing.padding.left}</div>`
-                    : ""
-                }
-                
-                <!-- Content (width x height) -->
-                <div style="position: absolute; inset: 0; background: linear-gradient(135deg, #4A4A4A 0%, #6A6A6A 100%); border: 1px dashed #8B8B8B; border-radius: ${
-                  info.border.radius !== "0px" && info.border.radius !== "0"
-                    ? this.parseBorderRadius(info.border.radius)
-                    : "0px"
-                }; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: 600; font-family: 'Inter', sans-serif; box-sizing: border-box; cursor: pointer;" onclick="navigator.clipboard.writeText('${
-      info.dimensions.width
-    }px × ${
-      info.dimensions.height
-    }px'); this.style.opacity='0.8'; setTimeout(() => this.style.opacity='1', 200);">
-                  ${info.dimensions.width} × ${info.dimensions.height}
-                </div>
-              </div>
-            </div>
-            
-            <!-- Border Radius Label (if exists) -->
+            <!-- 2. Border-radius corners (if exists) -->
             ${
               info.border.radius !== "0px" && info.border.radius !== "0"
                 ? `
-            <div style="position: absolute; bottom: -42px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 600; color: #8B8B8B; font-family: 'Inter', sans-serif; cursor: pointer; padding: 6px 10px; background: #1A1A1A; border: 1px solid #2A2A2A; border-radius: 4px; white-space: nowrap;" onclick="navigator.clipboard.writeText('${info.border.radius}'); this.style.opacity='0.5'; setTimeout(() => this.style.opacity='1', 200);">
-              Border Radius: ${info.border.radius}
-            </div>
-            `
+                <!-- Top-left corner -->
+                <svg style="position: absolute; top: -2px; left: -2px; width: 20px; height: 20px; pointer-events: none; z-index: 15;" viewBox="0 0 20 20">
+                  <path d="M 0 20 Q 0 0 20 0" stroke="#8B8B8B" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+                </svg>
+                <div style="position: absolute; top: 6px; left: 6px; font-size: 11px; font-weight: 500; color: #8B8B8B; font-family: 'Inter', sans-serif; cursor: pointer; z-index: 20;" title="border-radius" onclick="(function(el, val){navigator.clipboard.writeText(val); const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.textContent='border-radius'; popover.style.cssText='position:absolute;top:'+(boxRect.height+8)+'px;left:50%;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);setTimeout(()=>popover.remove(),1500);}})(this,'${
+                  info.border.radius
+                }')">${this.parseBorderRadius(info.border.radius)}</div>
+                <!-- Top-right corner -->
+                <svg style="position: absolute; top: -2px; right: -2px; width: 20px; height: 20px; pointer-events: none; z-index: 15;" viewBox="0 0 20 20">
+                  <path d="M 0 0 Q 20 0 20 20" stroke="#8B8B8B" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+                </svg>
+                <div style="position: absolute; top: 6px; right: 6px; font-size: 11px; font-weight: 500; color: #8B8B8B; font-family: 'Inter', sans-serif; cursor: pointer; z-index: 20;" title="border-radius" onclick="(function(el, val){navigator.clipboard.writeText(val); const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.textContent='border-radius'; popover.style.cssText='position:absolute;top:'+(boxRect.height+8)+'px;left:50%;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);setTimeout(()=>popover.remove(),1500);}})(this,'${
+                  info.border.radius
+                }')">${this.parseBorderRadius(info.border.radius)}</div>
+                <!-- Bottom-right corner -->
+                <svg style="position: absolute; bottom: -2px; right: -2px; width: 20px; height: 20px; pointer-events: none; z-index: 15;" viewBox="0 0 20 20">
+                  <path d="M 20 0 Q 20 20 0 20" stroke="#8B8B8B" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+                </svg>
+                <div style="position: absolute; bottom: 6px; right: 6px; font-size: 11px; font-weight: 500; color: #8B8B8B; font-family: 'Inter', sans-serif; cursor: pointer; z-index: 20;" title="border-radius" onclick="(function(el, val){navigator.clipboard.writeText(val); const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.textContent='border-radius'; popover.style.cssText='position:absolute;top:'+(boxRect.height+8)+'px;left:50%;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);setTimeout(()=>popover.remove(),1500);}})(this,'${
+                  info.border.radius
+                }')">${this.parseBorderRadius(info.border.radius)}</div>
+                <!-- Bottom-left corner -->
+                <svg style="position: absolute; bottom: -2px; left: -2px; width: 20px; height: 20px; pointer-events: none; z-index: 15;" viewBox="0 0 20 20">
+                  <path d="M 20 20 Q 0 20 0 0" stroke="#8B8B8B" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+                </svg>
+                <div style="position: absolute; bottom: 6px; left: 6px; font-size: 11px; font-weight: 500; color: #8B8B8B; font-family: 'Inter', sans-serif; cursor: pointer; z-index: 20;" title="border-radius" onclick="(function(el, val){navigator.clipboard.writeText(val); const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.textContent='border-radius'; popover.style.cssText='position:absolute;top:'+(boxRect.height+8)+'px;left:50%;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);setTimeout(()=>popover.remove(),1500);}})(this,'${
+                  info.border.radius
+                }')">${this.parseBorderRadius(info.border.radius)}</div>
+                `
                 : ""
             }
+            
+            <!-- 3. Padding Container - Always shown -->
+            <div style="position: absolute; inset: 35px; box-sizing: border-box; border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 4px; background: #0D0D0D;">
+              ${
+                info.spacing.padding.top !== "0"
+                  ? `<div class="spacing-value" style="position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 500; color: #E5E5E5; font-family: 'Inter', sans-serif; cursor: pointer; white-space: nowrap; z-index: 10;" 
+                  title="padding-top"
+                  onmouseover="this.style.opacity='0.7';" 
+                  onmouseout="this.style.opacity='1';"
+                  onclick="(function(el, prop, val){navigator.clipboard.writeText(val); const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(boxRect.height+8)+'px;left:50%;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);setTimeout(()=>popover.remove(),1500);}})(this,'padding-top','${info.spacing.padding.top}')">${info.spacing.padding.top}</div>`
+                  : ""
+              }
+              ${
+                info.spacing.padding.right !== "0"
+                  ? `<div class="spacing-value" style="position: absolute; right: -35px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 500; color: #E5E5E5; font-family: 'Inter', sans-serif; cursor: pointer; white-space: nowrap; z-index: 10;" 
+                  title="padding-right"
+                  onmouseover="this.style.opacity='0.7';" 
+                  onmouseout="this.style.opacity='1';"
+                  onclick="(function(el, prop, val){navigator.clipboard.writeText(val); const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(boxRect.height+8)+'px;left:50%;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);setTimeout(()=>popover.remove(),1500);}})(this,'padding-right','${info.spacing.padding.right}')">${info.spacing.padding.right}</div>`
+                  : ""
+              }
+              ${
+                info.spacing.padding.bottom !== "0"
+                  ? `<div class="spacing-value" style="position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 500; color: #E5E5E5; font-family: 'Inter', sans-serif; cursor: pointer; white-space: nowrap; z-index: 10;" 
+                  title="padding-bottom"
+                  onmouseover="this.style.opacity='0.7';" 
+                  onmouseout="this.style.opacity='1';"
+                  onclick="(function(el, prop, val){navigator.clipboard.writeText(val); const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(boxRect.height+8)+'px;left:50%;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);setTimeout(()=>popover.remove(),1500);}})(this,'padding-bottom','${info.spacing.padding.bottom}')">${info.spacing.padding.bottom}</div>`
+                  : ""
+              }
+              ${
+                info.spacing.padding.left !== "0"
+                  ? `<div class="spacing-value" style="position: absolute; left: -35px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 500; color: #E5E5E5; font-family: 'Inter', sans-serif; cursor: pointer; white-space: nowrap; z-index: 10;" 
+                  title="padding-left"
+                  onmouseover="this.style.opacity='0.7';" 
+                  onmouseout="this.style.opacity='1';"
+                  onclick="(function(el, prop, val){navigator.clipboard.writeText(val); const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(boxRect.height+8)+'px;left:50%;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);setTimeout(()=>popover.remove(),1500);}})(this,'padding-left','${info.spacing.padding.left}')">${info.spacing.padding.left}</div>`
+                  : ""
+              }
+              
+              <!-- 4. Content (width x height) - Always shown -->
+              <div style="position: absolute; inset: 0; background: #FFFFFF; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #0D0D0D; font-size: 11px; font-weight: 500; font-family: 'Inter', sans-serif; box-sizing: border-box; cursor: pointer;" onclick="navigator.clipboard.writeText('${
+                info.dimensions.width
+              } × ${
+      info.dimensions.height
+    }'); this.style.opacity='0.7'; setTimeout(() => this.style.opacity='1', 200);" title="width × height">
+                ${info.dimensions.width} × ${info.dimensions.height}
+          </div>
+          </div>
           </div>
         </div>
       </div>
@@ -1675,7 +1808,7 @@ class CSSInspector {
       <div class="inspector-section" style="margin-bottom: 20px; opacity: 1; transform: translateY(0); transition: opacity 0.2s ease-out, transform 0.2s ease-out;">
         <div style="margin-bottom: 10px;">
           <h4 style="margin: 0; font-size: 13px; font-weight: 600; color: #E5E5E5; font-family: 'Inter', sans-serif;">Colors</h4>
-        </div>
+          </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
           <div style="display: flex; flex-direction: column; gap: 8px;">
             <div style="color: #8B8B8B; font-size: 11px; font-family: 'Inter', sans-serif; font-weight: 400;">Text</div>
@@ -1689,9 +1822,9 @@ class CSSInspector {
               }; font-weight: 600; font-size: 13px; font-family: 'Inter', sans-serif; display: flex; align-items: center; gap: 8px;">
                 ${this.rgbToHex(info.colors.color)}
                 <span class="copy-hint" style="opacity: 0; font-size: 10px; transition: opacity 0.2s;">✓</span>
-              </div>
-            </div>
           </div>
+        </div>
+      </div>
           <div style="display: flex; flex-direction: column; gap: 8px;">
             <div style="color: #8B8B8B; font-size: 11px; font-family: 'Inter', sans-serif; font-weight: 400;">Background</div>
             <div style="padding: 12px; background: ${
