@@ -1172,6 +1172,44 @@ class CSSInspector {
       this.hoveredElement = element;
       element.classList.add("css-inspector-highlight");
 
+      // Ensure the element is fully visible (accounting for outline offset)
+      // Manually calculate and apply scroll to show the full outline
+      const rect = element.getBoundingClientRect();
+      const outlineWidth = 2;
+      const outlineOffset = 2;
+      const totalOffset = outlineWidth + outlineOffset;
+      const viewportPadding = 10;
+      const minVisible = totalOffset + viewportPadding;
+
+      let scrollX = 0;
+      let scrollY = 0;
+
+      // Check top edge
+      if (rect.top < minVisible) {
+        scrollY = rect.top - minVisible;
+      }
+      // Check bottom edge
+      else if (rect.bottom > window.innerHeight - minVisible) {
+        scrollY = rect.bottom - (window.innerHeight - minVisible);
+      }
+
+      // Check left edge
+      if (rect.left < minVisible) {
+        scrollX = rect.left - minVisible;
+      }
+      // Check right edge
+      else if (rect.right > window.innerWidth - minVisible) {
+        scrollX = rect.right - (window.innerWidth - minVisible);
+      }
+
+      if (scrollX !== 0 || scrollY !== 0) {
+        window.scrollBy({
+          top: scrollY,
+          left: scrollX,
+          behavior: "smooth",
+        });
+      }
+
       // Only send update to popup if no element is locked
       if (!this.selectedElement) {
         clearTimeout(this.updateTimeout);
@@ -1270,6 +1308,44 @@ class CSSInspector {
     }
     element.classList.remove("css-inspector-highlight");
     element.classList.add("css-inspector-selected");
+
+    // Ensure the selected element is fully visible (accounting for outline offset)
+    // Manually calculate and apply scroll to show the full outline
+    const rect = element.getBoundingClientRect();
+    const outlineWidth = 3; // Selected has 3px outline
+    const outlineOffset = 2;
+    const totalOffset = outlineWidth + outlineOffset;
+    const viewportPadding = 10;
+    const minVisible = totalOffset + viewportPadding;
+
+    let scrollX = 0;
+    let scrollY = 0;
+
+    // Check top edge
+    if (rect.top < minVisible) {
+      scrollY = rect.top - minVisible;
+    }
+    // Check bottom edge
+    else if (rect.bottom > window.innerHeight - minVisible) {
+      scrollY = rect.bottom - (window.innerHeight - minVisible);
+    }
+
+    // Check left edge
+    if (rect.left < minVisible) {
+      scrollX = rect.left - minVisible;
+    }
+    // Check right edge
+    else if (rect.right > window.innerWidth - minVisible) {
+      scrollX = rect.right - (window.innerWidth - minVisible);
+    }
+
+    if (scrollX !== 0 || scrollY !== 0) {
+      window.scrollBy({
+        top: scrollY,
+        left: scrollX,
+        behavior: "smooth",
+      });
+    }
 
     // Update panel header to show locked element identifier
     this.updateLockedElementHeader(element);
@@ -1666,125 +1742,239 @@ class CSSInspector {
           <div id="spacing-preview-box-${Date.now()}" style="position: relative; width: 240px; height: 140px; display: flex; align-items: center; justify-content: center; overflow: visible; margin: 24px 0 32px 0;">
             <!-- 1. Margin (outermost) - Always shown -->
             <div style="position: absolute; inset: 0; background: rgba(255, 255, 255, 0.08); box-sizing: border-box; border-radius: 4px; overflow: hidden;">
-              ${
-                info.spacing.margin.top !== "0"
-                  ? `<div class="spacing-value" style="position: absolute; top: -20px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 500; color: #E5E5E5; font-family: 'Inter', sans-serif; cursor: pointer; white-space: nowrap; z-index: 10;" 
-                  title="margin-top"
-                  onmouseover="this.style.opacity='0.7';" 
-                  onmouseout="this.style.opacity='1';"
-                  onclick="(function(el, prop, val){navigator.clipboard.writeText(val); const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(boxRect.height+8)+'px;left:50%;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);setTimeout(()=>popover.remove(),1500);}})(this,'margin-top','${info.spacing.margin.top}')">${info.spacing.margin.top}</div>`
-                  : ""
-              }
-              ${
-                info.spacing.margin.right !== "0"
-                  ? `<div class="spacing-value" style="position: absolute; right: -35px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 500; color: #E5E5E5; font-family: 'Inter', sans-serif; cursor: pointer; white-space: nowrap; z-index: 10;" 
-                  title="margin-right"
-                  onmouseover="this.style.opacity='0.7';" 
-                  onmouseout="this.style.opacity='1';"
-                  onclick="(function(el, prop, val){navigator.clipboard.writeText(val); const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(boxRect.height+8)+'px;left:50%;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);setTimeout(()=>popover.remove(),1500);}})(this,'margin-right','${info.spacing.margin.right}')">${info.spacing.margin.right}</div>`
-                  : ""
-              }
-              ${
-                info.spacing.margin.bottom !== "0"
-                  ? `<div class="spacing-value" style="position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 500; color: #E5E5E5; font-family: 'Inter', sans-serif; cursor: pointer; white-space: nowrap; z-index: 10;" 
-                  title="margin-bottom"
-                  onmouseover="this.style.opacity='0.7';" 
-                  onmouseout="this.style.opacity='1';"
-                  onclick="(function(el, prop, val){navigator.clipboard.writeText(val); const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(boxRect.height+8)+'px;left:50%;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);setTimeout(()=>popover.remove(),1500);}})(this,'margin-bottom','${info.spacing.margin.bottom}')">${info.spacing.margin.bottom}</div>`
-                  : ""
-              }
-              ${
-                info.spacing.margin.left !== "0"
-                  ? `<div class="spacing-value" style="position: absolute; left: -35px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 500; color: #E5E5E5; font-family: 'Inter', sans-serif; cursor: pointer; white-space: nowrap; z-index: 10;" 
-                  title="margin-left"
-                  onmouseover="this.style.opacity='0.7';" 
-                  onmouseout="this.style.opacity='1';"
-                  onclick="(function(el, prop, val){navigator.clipboard.writeText(val); const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(boxRect.height+8)+'px;left:50%;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);setTimeout(()=>popover.remove(),1500);}})(this,'margin-left','${info.spacing.margin.left}')">${info.spacing.margin.left}</div>`
-                  : ""
-              }
-            </div>
+              <div class="spacing-value" style="position: absolute; top: -20px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 500; color: ${
+                info.spacing.margin.top !== "0" ? "#E5E5E5" : "#8B8B8B"
+              }; font-family: 'Inter', sans-serif; ${
+      info.spacing.margin.top !== "0" ? "cursor: pointer;" : "cursor: default;"
+    } white-space: nowrap; z-index: 10;" 
+                  ${
+                    info.spacing.margin.top !== "0"
+                      ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.top-boxRect.top+elRect.height+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'margin-top');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${info.spacing.margin.top}')"`
+                      : ""
+                  }>${
+      info.spacing.margin.top !== "0"
+        ? info.spacing.margin.top.replace(/px/g, "")
+        : "-"
+    }</div>
+              <div class="spacing-value" style="position: absolute; right: -35px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 500; color: ${
+                info.spacing.margin.right !== "0" ? "#E5E5E5" : "#8B8B8B"
+              }; font-family: 'Inter', sans-serif; ${
+      info.spacing.margin.right !== "0"
+        ? "cursor: pointer;"
+        : "cursor: default;"
+    } white-space: nowrap; z-index: 10;" 
+                  ${
+                    info.spacing.margin.right !== "0"
+                      ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.top-boxRect.top+(elRect.height/2))+'px;left:'+(elRect.right-boxRect.left+4)+'px;transform:translateY(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'margin-right');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${info.spacing.margin.right}')"`
+                      : ""
+                  }>${
+      info.spacing.margin.right !== "0"
+        ? info.spacing.margin.right.replace(/px/g, "")
+        : "-"
+    }</div>
+              <div class="spacing-value" style="position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 500; color: ${
+                info.spacing.margin.bottom !== "0" ? "#E5E5E5" : "#8B8B8B"
+              }; font-family: 'Inter', sans-serif; ${
+      info.spacing.margin.bottom !== "0"
+        ? "cursor: pointer;"
+        : "cursor: default;"
+    } white-space: nowrap; z-index: 10;" 
+                  ${
+                    info.spacing.margin.bottom !== "0"
+                      ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'margin-bottom');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${info.spacing.margin.bottom}')"`
+                      : ""
+                  }>${
+      info.spacing.margin.bottom !== "0"
+        ? info.spacing.margin.bottom.replace(/px/g, "")
+        : "-"
+    }</div>
+              <div class="spacing-value" style="position: absolute; left: -35px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 500; color: ${
+                info.spacing.margin.left !== "0" ? "#E5E5E5" : "#8B8B8B"
+              }; font-family: 'Inter', sans-serif; ${
+      info.spacing.margin.left !== "0" ? "cursor: pointer;" : "cursor: default;"
+    } white-space: nowrap; z-index: 10;" 
+                  ${
+                    info.spacing.margin.left !== "0"
+                      ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.top-boxRect.top+(elRect.height/2))+'px;left:'+(elRect.left-boxRect.left-4)+'px;transform:translateX(-100%) translateY(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'margin-left');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${info.spacing.margin.left}')"`
+                      : ""
+                  }>${
+      info.spacing.margin.left !== "0"
+        ? info.spacing.margin.left.replace(/px/g, "")
+        : "-"
+    }</div>
+          </div>
             
-            <!-- 2. Border-radius corners (if exists) -->
-            ${
-              info.border.radius !== "0px" && info.border.radius !== "0"
-                ? `
-                <!-- Top-left corner -->
-                <svg style="position: absolute; top: -2px; left: -2px; width: 20px; height: 20px; pointer-events: none; z-index: 15;" viewBox="0 0 20 20">
-                  <path d="M 0 20 Q 0 0 20 0" stroke="#8B8B8B" stroke-width="1.5" fill="none" stroke-linecap="round"/>
-                </svg>
-                <div style="position: absolute; top: 6px; left: 6px; font-size: 11px; font-weight: 500; color: #8B8B8B; font-family: 'Inter', sans-serif; cursor: pointer; z-index: 20;" title="border-radius" onclick="(function(el, val){navigator.clipboard.writeText(val); const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.textContent='border-radius'; popover.style.cssText='position:absolute;top:'+(boxRect.height+8)+'px;left:50%;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);setTimeout(()=>popover.remove(),1500);}})(this,'${
-                  info.border.radius
-                }')">${this.parseBorderRadius(info.border.radius)}</div>
-                <!-- Top-right corner -->
-                <svg style="position: absolute; top: -2px; right: -2px; width: 20px; height: 20px; pointer-events: none; z-index: 15;" viewBox="0 0 20 20">
-                  <path d="M 0 0 Q 20 0 20 20" stroke="#8B8B8B" stroke-width="1.5" fill="none" stroke-linecap="round"/>
-                </svg>
-                <div style="position: absolute; top: 6px; right: 6px; font-size: 11px; font-weight: 500; color: #8B8B8B; font-family: 'Inter', sans-serif; cursor: pointer; z-index: 20;" title="border-radius" onclick="(function(el, val){navigator.clipboard.writeText(val); const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.textContent='border-radius'; popover.style.cssText='position:absolute;top:'+(boxRect.height+8)+'px;left:50%;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);setTimeout(()=>popover.remove(),1500);}})(this,'${
-                  info.border.radius
-                }')">${this.parseBorderRadius(info.border.radius)}</div>
-                <!-- Bottom-right corner -->
-                <svg style="position: absolute; bottom: -2px; right: -2px; width: 20px; height: 20px; pointer-events: none; z-index: 15;" viewBox="0 0 20 20">
-                  <path d="M 20 0 Q 20 20 0 20" stroke="#8B8B8B" stroke-width="1.5" fill="none" stroke-linecap="round"/>
-                </svg>
-                <div style="position: absolute; bottom: 6px; right: 6px; font-size: 11px; font-weight: 500; color: #8B8B8B; font-family: 'Inter', sans-serif; cursor: pointer; z-index: 20;" title="border-radius" onclick="(function(el, val){navigator.clipboard.writeText(val); const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.textContent='border-radius'; popover.style.cssText='position:absolute;top:'+(boxRect.height+8)+'px;left:50%;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);setTimeout(()=>popover.remove(),1500);}})(this,'${
-                  info.border.radius
-                }')">${this.parseBorderRadius(info.border.radius)}</div>
-                <!-- Bottom-left corner -->
-                <svg style="position: absolute; bottom: -2px; left: -2px; width: 20px; height: 20px; pointer-events: none; z-index: 15;" viewBox="0 0 20 20">
-                  <path d="M 20 20 Q 0 20 0 0" stroke="#8B8B8B" stroke-width="1.5" fill="none" stroke-linecap="round"/>
-                </svg>
-                <div style="position: absolute; bottom: 6px; left: 6px; font-size: 11px; font-weight: 500; color: #8B8B8B; font-family: 'Inter', sans-serif; cursor: pointer; z-index: 20;" title="border-radius" onclick="(function(el, val){navigator.clipboard.writeText(val); const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.textContent='border-radius'; popover.style.cssText='position:absolute;top:'+(boxRect.height+8)+'px;left:50%;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);setTimeout(()=>popover.remove(),1500);}})(this,'${
-                  info.border.radius
-                }')">${this.parseBorderRadius(info.border.radius)}</div>
-                `
+            <!-- 2. Border-radius corners - Always shown -->
+            <!-- Top-left corner -->
+            <svg style="position: absolute; top: 0; left: 0; width: 18px; height: 18px; pointer-events: none; z-index: 16; ${
+              info.border.radius === "0px" || info.border.radius === "0"
+                ? "opacity: 0.3;"
                 : ""
-            }
+            }" viewBox="0 0 18 18">
+              <path d="M 0 18 Q 0 0 18 0" stroke="${
+                info.border.radius !== "0px" && info.border.radius !== "0"
+                  ? "#A5A5A5"
+                  : "#8B8B8B"
+              }" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            </svg>
+            <div style="position: absolute; top: 6px; left: 6px; font-size: 11px; font-weight: 500; color: #8B8B8B; font-family: 'Inter', sans-serif; ${
+              info.border.radius !== "0px" && info.border.radius !== "0"
+                ? "cursor: pointer;"
+                : "cursor: default;"
+            } z-index: 20;" ${
+      info.border.radius !== "0px" && info.border.radius !== "0"
+        ? `onmouseenter="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent='border-radius'; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this);" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${info.border.radius}')"`
+        : ""
+    }>${
+      info.border.radius !== "0px" && info.border.radius !== "0"
+        ? this.parseBorderRadius(info.border.radius)
+        : "-"
+    }</div>
+            <!-- Top-right corner -->
+            <svg style="position: absolute; top: 0; right: 0; width: 18px; height: 18px; pointer-events: none; z-index: 16; ${
+              info.border.radius === "0px" || info.border.radius === "0"
+                ? "opacity: 0.3;"
+                : ""
+            }" viewBox="0 0 18 18">
+              <path d="M 0 0 Q 18 0 18 18" stroke="${
+                info.border.radius !== "0px" && info.border.radius !== "0"
+                  ? "#A5A5A5"
+                  : "#8B8B8B"
+              }" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            </svg>
+            <div style="position: absolute; top: 6px; right: 6px; font-size: 11px; font-weight: 500; color: #8B8B8B; font-family: 'Inter', sans-serif; ${
+              info.border.radius !== "0px" && info.border.radius !== "0"
+                ? "cursor: pointer;"
+                : "cursor: default;"
+            } z-index: 20;" ${
+      info.border.radius !== "0px" && info.border.radius !== "0"
+        ? `onmouseenter="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent='border-radius'; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this);" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${info.border.radius}')"`
+        : ""
+    }>${
+      info.border.radius !== "0px" && info.border.radius !== "0"
+        ? this.parseBorderRadius(info.border.radius)
+        : "-"
+    }</div>
+            <!-- Bottom-right corner -->
+            <svg style="position: absolute; bottom: 0; right: 0; width: 18px; height: 18px; pointer-events: none; z-index: 16; ${
+              info.border.radius === "0px" || info.border.radius === "0"
+                ? "opacity: 0.3;"
+                : ""
+            }" viewBox="0 0 18 18">
+              <path d="M 18 0 Q 18 18 0 18" stroke="${
+                info.border.radius !== "0px" && info.border.radius !== "0"
+                  ? "#A5A5A5"
+                  : "#8B8B8B"
+              }" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            </svg>
+            <div style="position: absolute; bottom: 6px; right: 6px; font-size: 11px; font-weight: 500; color: #8B8B8B; font-family: 'Inter', sans-serif; ${
+              info.border.radius !== "0px" && info.border.radius !== "0"
+                ? "cursor: pointer;"
+                : "cursor: default;"
+            } z-index: 20;" ${
+      info.border.radius !== "0px" && info.border.radius !== "0"
+        ? `onmouseenter="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent='border-radius'; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this);" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${info.border.radius}')"`
+        : ""
+    }>${
+      info.border.radius !== "0px" && info.border.radius !== "0"
+        ? this.parseBorderRadius(info.border.radius)
+        : "-"
+    }</div>
+            <!-- Bottom-left corner -->
+            <svg style="position: absolute; bottom: 0; left: 0; width: 18px; height: 18px; pointer-events: none; z-index: 16; ${
+              info.border.radius === "0px" || info.border.radius === "0"
+                ? "opacity: 0.3;"
+                : ""
+            }" viewBox="0 0 18 18">
+              <path d="M 18 18 Q 0 18 0 0" stroke="${
+                info.border.radius !== "0px" && info.border.radius !== "0"
+                  ? "#A5A5A5"
+                  : "#8B8B8B"
+              }" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            </svg>
+            <div style="position: absolute; bottom: 6px; left: 6px; font-size: 11px; font-weight: 500; color: #8B8B8B; font-family: 'Inter', sans-serif; ${
+              info.border.radius !== "0px" && info.border.radius !== "0"
+                ? "cursor: pointer;"
+                : "cursor: default;"
+            } z-index: 20;" ${
+      info.border.radius !== "0px" && info.border.radius !== "0"
+        ? `onmouseenter="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent='border-radius'; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this);" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${info.border.radius}')"`
+        : ""
+    }>${
+      info.border.radius !== "0px" && info.border.radius !== "0"
+        ? this.parseBorderRadius(info.border.radius)
+        : "-"
+    }</div>
             
             <!-- 3. Padding Container - Always shown -->
-            <div style="position: absolute; inset: 35px; box-sizing: border-box; border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 4px; background: #0D0D0D;">
-              ${
-                info.spacing.padding.top !== "0"
-                  ? `<div class="spacing-value" style="position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 500; color: #E5E5E5; font-family: 'Inter', sans-serif; cursor: pointer; white-space: nowrap; z-index: 10;" 
-                  title="padding-top"
-                  onmouseover="this.style.opacity='0.7';" 
-                  onmouseout="this.style.opacity='1';"
-                  onclick="(function(el, prop, val){navigator.clipboard.writeText(val); const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(boxRect.height+8)+'px;left:50%;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);setTimeout(()=>popover.remove(),1500);}})(this,'padding-top','${info.spacing.padding.top}')">${info.spacing.padding.top}</div>`
-                  : ""
-              }
-              ${
-                info.spacing.padding.right !== "0"
-                  ? `<div class="spacing-value" style="position: absolute; right: -35px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 500; color: #E5E5E5; font-family: 'Inter', sans-serif; cursor: pointer; white-space: nowrap; z-index: 10;" 
-                  title="padding-right"
-                  onmouseover="this.style.opacity='0.7';" 
-                  onmouseout="this.style.opacity='1';"
-                  onclick="(function(el, prop, val){navigator.clipboard.writeText(val); const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(boxRect.height+8)+'px;left:50%;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);setTimeout(()=>popover.remove(),1500);}})(this,'padding-right','${info.spacing.padding.right}')">${info.spacing.padding.right}</div>`
-                  : ""
-              }
-              ${
-                info.spacing.padding.bottom !== "0"
-                  ? `<div class="spacing-value" style="position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 500; color: #E5E5E5; font-family: 'Inter', sans-serif; cursor: pointer; white-space: nowrap; z-index: 10;" 
-                  title="padding-bottom"
-                  onmouseover="this.style.opacity='0.7';" 
-                  onmouseout="this.style.opacity='1';"
-                  onclick="(function(el, prop, val){navigator.clipboard.writeText(val); const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(boxRect.height+8)+'px;left:50%;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);setTimeout(()=>popover.remove(),1500);}})(this,'padding-bottom','${info.spacing.padding.bottom}')">${info.spacing.padding.bottom}</div>`
-                  : ""
-              }
-              ${
-                info.spacing.padding.left !== "0"
-                  ? `<div class="spacing-value" style="position: absolute; left: -35px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 500; color: #E5E5E5; font-family: 'Inter', sans-serif; cursor: pointer; white-space: nowrap; z-index: 10;" 
-                  title="padding-left"
-                  onmouseover="this.style.opacity='0.7';" 
-                  onmouseout="this.style.opacity='1';"
-                  onclick="(function(el, prop, val){navigator.clipboard.writeText(val); const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(boxRect.height+8)+'px;left:50%;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);setTimeout(()=>popover.remove(),1500);}})(this,'padding-left','${info.spacing.padding.left}')">${info.spacing.padding.left}</div>`
-                  : ""
-              }
+            <div style="position: absolute; inset: 25px 30px; box-sizing: border-box; border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 4px; background: #0D0D0D;">
+              <div class="spacing-value" style="position: absolute; top: 4px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 500; color: ${
+                info.spacing.padding.top !== "0" ? "#E5E5E5" : "#8B8B8B"
+              }; font-family: 'Inter', sans-serif; ${
+      info.spacing.padding.top !== "0" ? "cursor: pointer;" : "cursor: default;"
+    } white-space: nowrap; z-index: 10;" 
+                  ${
+                    info.spacing.padding.top !== "0"
+                      ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.top-boxRect.top+elRect.height+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'padding-top');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${info.spacing.padding.top}')"`
+                      : ""
+                  }>${
+      info.spacing.padding.top !== "0"
+        ? info.spacing.padding.top.replace(/px/g, "")
+        : "-"
+    }</div>
+              <div class="spacing-value" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 500; color: ${
+                info.spacing.padding.right !== "0" ? "#E5E5E5" : "#8B8B8B"
+              }; font-family: 'Inter', sans-serif; ${
+      info.spacing.padding.right !== "0"
+        ? "cursor: pointer;"
+        : "cursor: default;"
+    } white-space: nowrap; z-index: 10;" 
+                  ${
+                    info.spacing.padding.right !== "0"
+                      ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.top-boxRect.top+(elRect.height/2))+'px;left:'+(elRect.right-boxRect.left+4)+'px;transform:translateY(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'padding-right');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${info.spacing.padding.right}')"`
+                      : ""
+                  }>${
+      info.spacing.padding.right !== "0"
+        ? info.spacing.padding.right.replace(/px/g, "")
+        : "-"
+    }</div>
+              <div class="spacing-value" style="position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 500; color: ${
+                info.spacing.padding.bottom !== "0" ? "#E5E5E5" : "#8B8B8B"
+              }; font-family: 'Inter', sans-serif; ${
+      info.spacing.padding.bottom !== "0"
+        ? "cursor: pointer;"
+        : "cursor: default;"
+    } white-space: nowrap; z-index: 10;" 
+                  ${
+                    info.spacing.padding.bottom !== "0"
+                      ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'padding-bottom');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${info.spacing.padding.bottom}')"`
+                      : ""
+                  }>${
+      info.spacing.padding.bottom !== "0"
+        ? info.spacing.padding.bottom.replace(/px/g, "")
+        : "-"
+    }</div>
+              <div class="spacing-value" style="position: absolute; left: 8px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 500; color: ${
+                info.spacing.padding.left !== "0" ? "#E5E5E5" : "#8B8B8B"
+              }; font-family: 'Inter', sans-serif; ${
+      info.spacing.padding.left !== "0"
+        ? "cursor: pointer;"
+        : "cursor: default;"
+    } white-space: nowrap; z-index: 10;" 
+                  ${
+                    info.spacing.padding.left !== "0"
+                      ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.top-boxRect.top+(elRect.height/2))+'px;left:'+(elRect.left-boxRect.left-4)+'px;transform:translateX(-100%) translateY(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'padding-left');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${info.spacing.padding.left}')"`
+                      : ""
+                  }>${
+      info.spacing.padding.left !== "0"
+        ? info.spacing.padding.left.replace(/px/g, "")
+        : "-"
+    }</div>
               
               <!-- 4. Content (width x height) - Always shown -->
-              <div style="position: absolute; inset: 0; background: #FFFFFF; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #0D0D0D; font-size: 11px; font-weight: 500; font-family: 'Inter', sans-serif; box-sizing: border-box; cursor: pointer;" onclick="navigator.clipboard.writeText('${
+              <div style="position: absolute; inset: 28px 45px; background: #FFFFFF; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #0D0D0D; font-size: 11px; font-weight: 500; font-family: 'Inter', sans-serif; box-sizing: border-box; cursor: pointer;" onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent='width × height'; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this);" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${
                 info.dimensions.width
-              } × ${
-      info.dimensions.height
-    }'); this.style.opacity='0.7'; setTimeout(() => this.style.opacity='1', 200);" title="width × height">
+              } × ${info.dimensions.height}')">
                 ${info.dimensions.width} × ${info.dimensions.height}
           </div>
           </div>
@@ -2042,15 +2232,15 @@ class CSSInspector {
   }
 
   parseBorderRadius(radius) {
-    if (!radius || radius === "0" || radius === "0px") return "0px";
-    // Extract the first value if it's a multi-value radius (e.g., "8px 4px" -> "8px")
+    if (!radius || radius === "0" || radius === "0px") return "0";
+    // Extract the first value if it's a multi-value radius (e.g., "8px 4px" -> "8")
     // For simplicity in the preview, we'll use the first value
-    const match = radius.match(/^([\d.]+px)/);
+    const match = radius.match(/^([\d.]+)px/);
     if (match) {
       return match[1];
     }
-    // If it's a percentage or other format, return as-is
-    return radius;
+    // If it's a percentage or other format, return as-is (without px)
+    return radius.replace(/px/g, "");
   }
 
   calculateContrast(color1, color2) {
