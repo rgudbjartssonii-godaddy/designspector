@@ -6,6 +6,8 @@ class CSSInspector {
     this.selectedElement = null;
     this.hoveredElement = null;
     this.updateTimeout = null;
+    this.hoverOverlay = null;
+    this.selectedOverlay = null;
     this.init();
   }
 
@@ -109,6 +111,9 @@ class CSSInspector {
               .forEach((el) => {
                 el.classList.remove("css-inspector-selected");
               });
+            // Remove overlays
+            instance.removeOverlay("hover");
+            instance.removeOverlay("selected");
             instance.selectedElement = null;
             instance.hoveredElement = null;
             console.log("[CSS Inspector] Panel removed");
@@ -201,8 +206,23 @@ class CSSInspector {
     // Enable click to lock elements
     document.addEventListener("click", this.boundHandleClick, true);
 
+    // Update overlays on scroll
+    this.boundHandleScroll = this.handleScroll.bind(this);
+    window.addEventListener("scroll", this.boundHandleScroll, true);
+    window.addEventListener("resize", this.boundHandleScroll, true);
+
     // Add styles to document
     this.injectInspectorStyles();
+  }
+
+  handleScroll() {
+    // Update overlays when page scrolls or resizes
+    if (this.hoveredElement) {
+      this.updateOverlay("hover", this.hoveredElement);
+    }
+    if (this.selectedElement) {
+      this.updateOverlay("selected", this.selectedElement);
+    }
   }
 
   deactivateInspector() {
@@ -229,6 +249,10 @@ class CSSInspector {
         true
       );
     }
+    if (this.boundHandleScroll) {
+      window.removeEventListener("scroll", this.boundHandleScroll, true);
+      window.removeEventListener("resize", this.boundHandleScroll, true);
+    }
 
     // Remove ALL highlight classes
     document.querySelectorAll(".css-inspector-highlight").forEach((el) => {
@@ -241,6 +265,85 @@ class CSSInspector {
     this.selectedElement = null;
     this.hoveredElement = null;
     this.isActive = false;
+
+    // Remove overlays
+    this.removeOverlay("hover");
+    this.removeOverlay("selected");
+  }
+
+  createOverlay(type, element) {
+    const rect = element.getBoundingClientRect();
+    const outlineWidth = type === "selected" ? 3 : 2;
+    const outlineOffset = 2;
+    const totalExtension = outlineWidth + outlineOffset;
+
+    const overlay = document.createElement("div");
+    overlay.className = `css-inspector-overlay css-inspector-overlay-${type}`;
+    overlay.style.cssText = `
+      position: fixed !important;
+      left: ${rect.left - totalExtension}px !important;
+      top: ${rect.top - totalExtension}px !important;
+      width: ${rect.width + totalExtension * 2}px !important;
+      height: ${rect.height + totalExtension * 2}px !important;
+      border: ${outlineWidth}px ${type === "selected" ? "solid" : "dashed"} ${
+      type === "selected" ? "#10B981" : "#7241FF"
+    } !important;
+      pointer-events: none !important;
+      z-index: 2147483646 !important;
+      box-sizing: border-box !important;
+    `;
+
+    document.body.appendChild(overlay);
+    return overlay;
+  }
+
+  updateOverlay(type, element) {
+    if (!element) {
+      this.removeOverlay(type);
+      return;
+    }
+
+    const overlay =
+      type === "selected" ? this.selectedOverlay : this.hoverOverlay;
+    if (overlay && overlay.parentNode) {
+      const rect = element.getBoundingClientRect();
+      const outlineWidth = type === "selected" ? 3 : 2;
+      const outlineOffset = 2;
+      const totalExtension = outlineWidth + outlineOffset;
+
+      overlay.style.left = `${rect.left - totalExtension}px`;
+      overlay.style.top = `${rect.top - totalExtension}px`;
+      overlay.style.width = `${rect.width + totalExtension * 2}px`;
+      overlay.style.height = `${rect.height + totalExtension * 2}px`;
+    } else {
+      const newOverlay = this.createOverlay(type, element);
+      if (type === "selected") {
+        this.selectedOverlay = newOverlay;
+      } else {
+        this.hoverOverlay = newOverlay;
+      }
+    }
+  }
+
+  removeOverlay(type) {
+    const overlay =
+      type === "selected" ? this.selectedOverlay : this.hoverOverlay;
+    if (overlay && overlay.parentNode) {
+      overlay.parentNode.removeChild(overlay);
+    }
+    // Also remove any orphaned overlays with the same class (in case they weren't properly cleaned up)
+    document
+      .querySelectorAll(`.css-inspector-overlay-${type}`)
+      .forEach((el) => {
+        if (el.parentNode) {
+          el.parentNode.removeChild(el);
+        }
+      });
+    if (type === "selected") {
+      this.selectedOverlay = null;
+    } else {
+      this.hoverOverlay = null;
+    }
   }
 
   injectInspectorStyles() {
@@ -359,6 +462,9 @@ class CSSInspector {
           document.querySelectorAll(".css-inspector-selected").forEach((el) => {
             el.classList.remove("css-inspector-selected");
           });
+          // Remove overlays
+          this.removeOverlay("hover");
+          this.removeOverlay("selected");
           this.selectedElement = null;
           this.hoveredElement = null;
         }
@@ -1163,50 +1269,74 @@ class CSSInspector {
       this.hoveredElement !== this.selectedElement &&
       this.hoveredElement !== element
     ) {
-      this.hoveredElement.classList.remove("css-inspector-highlight");
+      this.removeOverlay("hover");
     }
 
     // Always allow highlighting on hover (even when element is locked)
     // But only update panel if no element is locked
     if (element !== this.selectedElement) {
       this.hoveredElement = element;
-      element.classList.add("css-inspector-highlight");
+      this.updateOverlay("hover", element);
 
-      // Ensure the element is fully visible (accounting for outline offset)
-      // Manually calculate and apply scroll to show the full outline
+      // Ensure the element is fully visible (accounting for outline offset and inspector panel)
       const rect = element.getBoundingClientRect();
       const outlineWidth = 2;
       const outlineOffset = 2;
-      const totalOffset = outlineWidth + outlineOffset;
       const viewportPadding = 10;
-      const minVisible = totalOffset + viewportPadding;
+      const inspectorPanelWidth = 380; // Panel width from CSS
+      const inspectorPanelRightMargin = 20; // Panel right margin from CSS
+      const effectiveViewportRight =
+        window.innerWidth - inspectorPanelWidth - inspectorPanelRightMargin;
+      const totalExtension = outlineWidth + outlineOffset;
 
-      let scrollX = 0;
-      let scrollY = 0;
+      const currentScrollX = window.scrollX || window.pageXOffset || 0;
+      const currentScrollY = window.scrollY || window.pageYOffset || 0;
 
-      // Check top edge
-      if (rect.top < minVisible) {
-        scrollY = rect.top - minVisible;
+      // Calculate outline bounds in viewport coordinates
+      const outlineLeft = rect.left - totalExtension;
+      const outlineRight = rect.right + totalExtension;
+      const outlineTop = rect.top - totalExtension;
+      const outlineBottom = rect.bottom + totalExtension;
+
+      // Calculate absolute document coordinates of outline edges
+      const outlineDocLeft = rect.left + currentScrollX - totalExtension;
+      const outlineDocRight = rect.right + currentScrollX + totalExtension;
+      const outlineDocTop = rect.top + currentScrollY - totalExtension;
+      const outlineDocBottom = rect.bottom + currentScrollY + totalExtension;
+
+      // Calculate desired scroll positions
+      let newScrollX = currentScrollX;
+      let newScrollY = currentScrollY;
+
+      // Left edge: if outline extends beyond viewport left, scroll right
+      if (outlineLeft < viewportPadding) {
+        newScrollX = outlineDocLeft - viewportPadding;
       }
-      // Check bottom edge
-      else if (rect.bottom > window.innerHeight - minVisible) {
-        scrollY = rect.bottom - (window.innerHeight - minVisible);
+      // Right edge: if outline extends beyond effective viewport right, scroll left
+      else if (outlineRight > effectiveViewportRight - viewportPadding) {
+        newScrollX =
+          outlineDocRight - (effectiveViewportRight - viewportPadding);
       }
 
-      // Check left edge
-      if (rect.left < minVisible) {
-        scrollX = rect.left - minVisible;
+      // Top edge: if outline extends beyond viewport top, scroll down
+      if (outlineTop < viewportPadding) {
+        newScrollY = outlineDocTop - viewportPadding;
       }
-      // Check right edge
-      else if (rect.right > window.innerWidth - minVisible) {
-        scrollX = rect.right - (window.innerWidth - minVisible);
+      // Bottom edge: if outline extends beyond viewport bottom, scroll up
+      else if (outlineBottom > window.innerHeight - viewportPadding) {
+        newScrollY = outlineDocBottom - (window.innerHeight - viewportPadding);
       }
 
-      if (scrollX !== 0 || scrollY !== 0) {
-        window.scrollBy({
-          top: scrollY,
-          left: scrollX,
-          behavior: "smooth",
+      // Ensure scroll positions are non-negative
+      newScrollX = Math.max(0, newScrollX);
+      newScrollY = Math.max(0, newScrollY);
+
+      // Apply scroll if position changed
+      if (newScrollX !== currentScrollX || newScrollY !== currentScrollY) {
+        window.scrollTo(newScrollX, newScrollY);
+        // Update overlay after scroll
+        requestAnimationFrame(() => {
+          this.updateOverlay("hover", element);
         });
       }
 
@@ -1231,7 +1361,7 @@ class CSSInspector {
 
     // Remove highlight from hovered element (but keep selected element visible)
     if (element !== this.selectedElement) {
-      element.classList.remove("css-inspector-highlight");
+      this.removeOverlay("hover");
     }
 
     if (this.hoveredElement === element) {
@@ -1297,53 +1427,75 @@ class CSSInspector {
 
     // Remove previous selection highlight
     if (this.selectedElement && this.selectedElement !== element) {
-      this.selectedElement.classList.remove("css-inspector-selected");
+      this.removeOverlay("selected");
     }
 
     // Lock (select) the clicked element
     this.selectedElement = element;
     if (this.hoveredElement === element) {
-      this.hoveredElement.classList.remove("css-inspector-highlight");
+      this.removeOverlay("hover");
       this.hoveredElement = null;
     }
-    element.classList.remove("css-inspector-highlight");
-    element.classList.add("css-inspector-selected");
+    this.updateOverlay("selected", element);
 
-    // Ensure the selected element is fully visible (accounting for outline offset)
-    // Manually calculate and apply scroll to show the full outline
+    // Ensure the selected element is fully visible (accounting for outline offset and inspector panel)
     const rect = element.getBoundingClientRect();
     const outlineWidth = 3; // Selected has 3px outline
     const outlineOffset = 2;
-    const totalOffset = outlineWidth + outlineOffset;
     const viewportPadding = 10;
-    const minVisible = totalOffset + viewportPadding;
+    const inspectorPanelWidth = 380; // Panel width from CSS
+    const inspectorPanelRightMargin = 20; // Panel right margin from CSS
+    const effectiveViewportRight =
+      window.innerWidth - inspectorPanelWidth - inspectorPanelRightMargin;
+    const totalExtension = outlineWidth + outlineOffset;
 
-    let scrollX = 0;
-    let scrollY = 0;
+    const currentScrollX = window.scrollX || window.pageXOffset || 0;
+    const currentScrollY = window.scrollY || window.pageYOffset || 0;
 
-    // Check top edge
-    if (rect.top < minVisible) {
-      scrollY = rect.top - minVisible;
+    // Calculate outline bounds in viewport coordinates
+    const outlineLeft = rect.left - totalExtension;
+    const outlineRight = rect.right + totalExtension;
+    const outlineTop = rect.top - totalExtension;
+    const outlineBottom = rect.bottom + totalExtension;
+
+    // Calculate absolute document coordinates of outline edges
+    const outlineDocLeft = rect.left + currentScrollX - totalExtension;
+    const outlineDocRight = rect.right + currentScrollX + totalExtension;
+    const outlineDocTop = rect.top + currentScrollY - totalExtension;
+    const outlineDocBottom = rect.bottom + currentScrollY + totalExtension;
+
+    // Calculate desired scroll positions
+    let newScrollX = currentScrollX;
+    let newScrollY = currentScrollY;
+
+    // Left edge: if outline extends beyond viewport left, scroll right
+    if (outlineLeft < viewportPadding) {
+      newScrollX = outlineDocLeft - viewportPadding;
     }
-    // Check bottom edge
-    else if (rect.bottom > window.innerHeight - minVisible) {
-      scrollY = rect.bottom - (window.innerHeight - minVisible);
+    // Right edge: if outline extends beyond effective viewport right, scroll left
+    else if (outlineRight > effectiveViewportRight - viewportPadding) {
+      newScrollX = outlineDocRight - (effectiveViewportRight - viewportPadding);
     }
 
-    // Check left edge
-    if (rect.left < minVisible) {
-      scrollX = rect.left - minVisible;
+    // Top edge: if outline extends beyond viewport top, scroll down
+    if (outlineTop < viewportPadding) {
+      newScrollY = outlineDocTop - viewportPadding;
     }
-    // Check right edge
-    else if (rect.right > window.innerWidth - minVisible) {
-      scrollX = rect.right - (window.innerWidth - minVisible);
+    // Bottom edge: if outline extends beyond viewport bottom, scroll up
+    else if (outlineBottom > window.innerHeight - viewportPadding) {
+      newScrollY = outlineDocBottom - (window.innerHeight - viewportPadding);
     }
 
-    if (scrollX !== 0 || scrollY !== 0) {
-      window.scrollBy({
-        top: scrollY,
-        left: scrollX,
-        behavior: "smooth",
+    // Ensure scroll positions are non-negative
+    newScrollX = Math.max(0, newScrollX);
+    newScrollY = Math.max(0, newScrollY);
+
+    // Apply scroll if position changed
+    if (newScrollX !== currentScrollX || newScrollY !== currentScrollY) {
+      window.scrollTo(newScrollX, newScrollY);
+      // Update overlay after scroll
+      requestAnimationFrame(() => {
+        this.updateOverlay("selected", element);
       });
     }
 
@@ -1487,7 +1639,7 @@ class CSSInspector {
 
   unlockElement() {
     if (this.selectedElement) {
-      this.selectedElement.classList.remove("css-inspector-selected");
+      this.removeOverlay("selected");
       this.selectedElement = null;
     }
 
@@ -1737,14 +1889,13 @@ class CSSInspector {
           </div>
         
         <!-- CSS Peeper Style Box Model Preview -->
-        <div id="spacing-preview-container-${Date.now()}" style="margin-bottom: 16px; padding: 0; background: transparent; border: none; position: relative; width: 100%; min-height: 180px; display: flex; flex-direction: column; align-items: center; overflow: visible;">
+        <div id="spacing-preview-container-${Date.now()}" style="margin-bottom: 16px; padding: 0; background: transparent; border: none; position: relative; width: 100%; min-height: 200px; display: flex; flex-direction: column; align-items: center; overflow: visible;">
           <!-- Fixed-size preview container -->
-          <div id="spacing-preview-box-${Date.now()}" style="position: relative; width: 240px; height: 140px; display: flex; align-items: center; justify-content: center; overflow: visible; margin: 24px 0 32px 0;">
-            <!-- 1. Margin (outermost) - Always shown -->
-            <div style="position: absolute; inset: 0; background: rgba(255, 255, 255, 0.08); box-sizing: border-box; border-radius: 4px; overflow: hidden;">
-              <div class="spacing-value" style="position: absolute; top: -20px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 500; color: ${
-                info.spacing.margin.top !== "0" ? "#E5E5E5" : "#8B8B8B"
-              }; font-family: 'Inter', sans-serif; ${
+          <div id="spacing-preview-box-${Date.now()}" style="position: relative; width: 240px; height: 140px; display: flex; align-items: center; justify-content: center; overflow: visible; margin: 32px 50px 40px 50px;">
+            <!-- Margin values - positioned outside the preview box -->
+            <div class="spacing-value" style="position: absolute; top: -24px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 500; color: ${
+              info.spacing.margin.top !== "0" ? "#E5E5E5" : "#8B8B8B"
+            }; font-family: 'Inter', sans-serif; ${
       info.spacing.margin.top !== "0" ? "cursor: pointer;" : "cursor: default;"
     } white-space: nowrap; z-index: 10;" 
                   ${
@@ -1756,9 +1907,9 @@ class CSSInspector {
         ? info.spacing.margin.top.replace(/px/g, "")
         : "-"
     }</div>
-              <div class="spacing-value" style="position: absolute; right: -35px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 500; color: ${
-                info.spacing.margin.right !== "0" ? "#E5E5E5" : "#8B8B8B"
-              }; font-family: 'Inter', sans-serif; ${
+            <div class="spacing-value" style="position: absolute; right: -40px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 500; color: ${
+              info.spacing.margin.right !== "0" ? "#E5E5E5" : "#8B8B8B"
+            }; font-family: 'Inter', sans-serif; ${
       info.spacing.margin.right !== "0"
         ? "cursor: pointer;"
         : "cursor: default;"
@@ -1772,9 +1923,9 @@ class CSSInspector {
         ? info.spacing.margin.right.replace(/px/g, "")
         : "-"
     }</div>
-              <div class="spacing-value" style="position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 500; color: ${
-                info.spacing.margin.bottom !== "0" ? "#E5E5E5" : "#8B8B8B"
-              }; font-family: 'Inter', sans-serif; ${
+            <div class="spacing-value" style="position: absolute; bottom: -24px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 500; color: ${
+              info.spacing.margin.bottom !== "0" ? "#E5E5E5" : "#8B8B8B"
+            }; font-family: 'Inter', sans-serif; ${
       info.spacing.margin.bottom !== "0"
         ? "cursor: pointer;"
         : "cursor: default;"
@@ -1788,9 +1939,9 @@ class CSSInspector {
         ? info.spacing.margin.bottom.replace(/px/g, "")
         : "-"
     }</div>
-              <div class="spacing-value" style="position: absolute; left: -35px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 500; color: ${
-                info.spacing.margin.left !== "0" ? "#E5E5E5" : "#8B8B8B"
-              }; font-family: 'Inter', sans-serif; ${
+            <div class="spacing-value" style="position: absolute; left: -40px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 500; color: ${
+              info.spacing.margin.left !== "0" ? "#E5E5E5" : "#8B8B8B"
+            }; font-family: 'Inter', sans-serif; ${
       info.spacing.margin.left !== "0" ? "cursor: pointer;" : "cursor: default;"
     } white-space: nowrap; z-index: 10;" 
                   ${
@@ -1802,6 +1953,9 @@ class CSSInspector {
         ? info.spacing.margin.left.replace(/px/g, "")
         : "-"
     }</div>
+            
+            <!-- 1. Margin (outermost) - Always shown -->
+            <div style="position: absolute; inset: 0; background: rgba(255, 255, 255, 0.08); box-sizing: border-box; border-radius: 4px; overflow: hidden;">
           </div>
             
             <!-- 2. Border-radius corners - Always shown -->
