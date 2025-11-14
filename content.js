@@ -154,7 +154,7 @@ class CSSInspector {
       } else if (message.action === "getStats") {
         const colors = instance.extractColors();
         const typography = instance.extractTypography();
-        sendResponse({
+        sendResponse({ 
           colorCount: colors.length,
           typographyCount: typography.length,
         });
@@ -210,7 +210,7 @@ class CSSInspector {
     this.boundHandleScroll = this.handleScroll.bind(this);
     window.addEventListener("scroll", this.boundHandleScroll, true);
     window.addEventListener("resize", this.boundHandleScroll, true);
-
+    
     // Add styles to document
     this.injectInspectorStyles();
   }
@@ -261,7 +261,7 @@ class CSSInspector {
     document.querySelectorAll(".css-inspector-selected").forEach((el) => {
       el.classList.remove("css-inspector-selected");
     });
-
+    
     this.selectedElement = null;
     this.hoveredElement = null;
     this.isActive = false;
@@ -1240,7 +1240,7 @@ class CSSInspector {
 
   handleMouseOver(e) {
     if (!this.isActive) return;
-
+    
     // Don't process events for the document or html/body tags
     const element = e.target;
     if (
@@ -1275,7 +1275,7 @@ class CSSInspector {
     // Always allow highlighting on hover (even when element is locked)
     // But only update panel if no element is locked
     if (element !== this.selectedElement) {
-      this.hoveredElement = element;
+    this.hoveredElement = element;
       this.updateOverlay("hover", element);
 
       // Ensure the element is fully visible (accounting for outline offset and inspector panel)
@@ -1353,7 +1353,7 @@ class CSSInspector {
   handleMouseOut(e) {
     if (!this.isActive) return;
     const element = e.target;
-
+    
     // Don't clear selected element (it stays locked)
     if (element === this.selectedElement) {
       return;
@@ -1363,7 +1363,7 @@ class CSSInspector {
     if (element !== this.selectedElement) {
       this.removeOverlay("hover");
     }
-
+    
     if (this.hoveredElement === element) {
       this.hoveredElement = null;
       // If we have a selected element, don't trigger any updates - just keep showing it (locked)
@@ -1619,7 +1619,7 @@ class CSSInspector {
             <span style="opacity: 0.75;">${tagNameEscaped}</span>
       </div>
     `;
-      }
+  }
 
       if (websiteInfo) {
         websiteInfo.style.display = "none";
@@ -1653,7 +1653,7 @@ class CSSInspector {
   extractElementInfo(element, styles, rect) {
     const classList = Array.from(element.classList);
     const classString = classList.length > 0 ? "." + classList.join(".") : "";
-
+    
     return {
       tag: element.tagName.toLowerCase(),
       classes: classString,
@@ -1719,7 +1719,7 @@ class CSSInspector {
     // Get website name and URL
     const websiteName = document.title || "Untitled Page";
     const websiteUrl = window.location.href;
-
+    
     // Calculate contrast if we have background and text colors
     const contrast = this.calculateContrast(
       info.colors.color,
@@ -1954,24 +1954,21 @@ class CSSInspector {
         : "-"
     }</div>
             
-            <!-- 1. Margin (outermost) - Always shown -->
-            <div style="position: absolute; inset: 0; background: rgba(255, 255, 255, 0.08); box-sizing: border-box; border-radius: 4px; overflow: hidden;">
+            <!-- 3. Margin (outermost) - Always shown -->
+            <div style="position: absolute; inset: 0; background: rgba(255, 255, 255, 0.08); box-sizing: border-box; border-radius: 8px; overflow: hidden;">
+              <!-- Corner strokes using CSS borders -->
+              <!-- Top-left corner -->
+              <div style="position: absolute; top: 0; left: 0; width: 16px; height: 16px; border-top: 2.5px solid #A5A5A5; border-left: 2.5px solid #A5A5A5; border-radius: 8px 0 0 0; pointer-events: none; z-index: 1; opacity: ${info.border.radius === "0px" || info.border.radius === "0" ? "0.3" : "1"};"></div>
+              <!-- Top-right corner -->
+              <div style="position: absolute; top: 0; right: 0; width: 16px; height: 16px; border-top: 2.5px solid #A5A5A5; border-right: 2.5px solid #A5A5A5; border-radius: 0 8px 0 0; pointer-events: none; z-index: 1; opacity: ${info.border.radius === "0px" || info.border.radius === "0" ? "0.3" : "1"};"></div>
+              <!-- Bottom-right corner -->
+              <div style="position: absolute; bottom: 0; right: 0; width: 16px; height: 16px; border-bottom: 2.5px solid #A5A5A5; border-right: 2.5px solid #A5A5A5; border-radius: 0 0 8px 0; pointer-events: none; z-index: 1; opacity: ${info.border.radius === "0px" || info.border.radius === "0" ? "0.3" : "1"};"></div>
+              <!-- Bottom-left corner -->
+              <div style="position: absolute; bottom: 0; left: 0; width: 16px; height: 16px; border-bottom: 2.5px solid #A5A5A5; border-left: 2.5px solid #A5A5A5; border-radius: 0 0 0 8px; pointer-events: none; z-index: 1; opacity: ${info.border.radius === "0px" || info.border.radius === "0" ? "0.3" : "1"};"></div>
           </div>
             
-            <!-- 2. Border-radius corners - Always shown -->
-            <!-- Top-left corner -->
-            <svg style="position: absolute; top: 0; left: 0; width: 18px; height: 18px; pointer-events: none; z-index: 16; ${
-              info.border.radius === "0px" || info.border.radius === "0"
-                ? "opacity: 0.3;"
-                : ""
-            }" viewBox="0 0 18 18">
-              <path d="M 0 18 Q 0 0 18 0" stroke="${
-                info.border.radius !== "0px" && info.border.radius !== "0"
-                  ? "#A5A5A5"
-                  : "#8B8B8B"
-              }" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-            </svg>
-            <div style="position: absolute; top: 6px; left: 6px; font-size: 11px; font-weight: 500; color: #8B8B8B; font-family: 'Inter', sans-serif; ${
+            <!-- Border-radius corner value labels -->
+            <div style="position: absolute; top: 8px; left: 8px; font-size: 11px; font-weight: 500; color: #8B8B8B; font-family: 'Inter', sans-serif; ${
               info.border.radius !== "0px" && info.border.radius !== "0"
                 ? "cursor: pointer;"
                 : "cursor: default;"
@@ -1984,19 +1981,7 @@ class CSSInspector {
         ? this.parseBorderRadius(info.border.radius)
         : "-"
     }</div>
-            <!-- Top-right corner -->
-            <svg style="position: absolute; top: 0; right: 0; width: 18px; height: 18px; pointer-events: none; z-index: 16; ${
-              info.border.radius === "0px" || info.border.radius === "0"
-                ? "opacity: 0.3;"
-                : ""
-            }" viewBox="0 0 18 18">
-              <path d="M 0 0 Q 18 0 18 18" stroke="${
-                info.border.radius !== "0px" && info.border.radius !== "0"
-                  ? "#A5A5A5"
-                  : "#8B8B8B"
-              }" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-            </svg>
-            <div style="position: absolute; top: 6px; right: 6px; font-size: 11px; font-weight: 500; color: #8B8B8B; font-family: 'Inter', sans-serif; ${
+            <div style="position: absolute; top: 8px; right: 8px; font-size: 11px; font-weight: 500; color: #8B8B8B; font-family: 'Inter', sans-serif; ${
               info.border.radius !== "0px" && info.border.radius !== "0"
                 ? "cursor: pointer;"
                 : "cursor: default;"
@@ -2009,19 +1994,7 @@ class CSSInspector {
         ? this.parseBorderRadius(info.border.radius)
         : "-"
     }</div>
-            <!-- Bottom-right corner -->
-            <svg style="position: absolute; bottom: 0; right: 0; width: 18px; height: 18px; pointer-events: none; z-index: 16; ${
-              info.border.radius === "0px" || info.border.radius === "0"
-                ? "opacity: 0.3;"
-                : ""
-            }" viewBox="0 0 18 18">
-              <path d="M 18 0 Q 18 18 0 18" stroke="${
-                info.border.radius !== "0px" && info.border.radius !== "0"
-                  ? "#A5A5A5"
-                  : "#8B8B8B"
-              }" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-            </svg>
-            <div style="position: absolute; bottom: 6px; right: 6px; font-size: 11px; font-weight: 500; color: #8B8B8B; font-family: 'Inter', sans-serif; ${
+            <div style="position: absolute; bottom: 8px; right: 8px; font-size: 11px; font-weight: 500; color: #8B8B8B; font-family: 'Inter', sans-serif; ${
               info.border.radius !== "0px" && info.border.radius !== "0"
                 ? "cursor: pointer;"
                 : "cursor: default;"
@@ -2034,19 +2007,7 @@ class CSSInspector {
         ? this.parseBorderRadius(info.border.radius)
         : "-"
     }</div>
-            <!-- Bottom-left corner -->
-            <svg style="position: absolute; bottom: 0; left: 0; width: 18px; height: 18px; pointer-events: none; z-index: 16; ${
-              info.border.radius === "0px" || info.border.radius === "0"
-                ? "opacity: 0.3;"
-                : ""
-            }" viewBox="0 0 18 18">
-              <path d="M 18 18 Q 0 18 0 0" stroke="${
-                info.border.radius !== "0px" && info.border.radius !== "0"
-                  ? "#A5A5A5"
-                  : "#8B8B8B"
-              }" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-            </svg>
-            <div style="position: absolute; bottom: 6px; left: 6px; font-size: 11px; font-weight: 500; color: #8B8B8B; font-family: 'Inter', sans-serif; ${
+            <div style="position: absolute; bottom: 8px; left: 8px; font-size: 11px; font-weight: 500; color: #8B8B8B; font-family: 'Inter', sans-serif; ${
               info.border.radius !== "0px" && info.border.radius !== "0"
                 ? "cursor: pointer;"
                 : "cursor: default;"
@@ -2060,8 +2021,8 @@ class CSSInspector {
         : "-"
     }</div>
             
-            <!-- 3. Padding Container - Always shown -->
-            <div style="position: absolute; inset: 25px 30px; box-sizing: border-box; border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 4px; background: #0D0D0D;">
+            <!-- 2. Padding Container - Always shown -->
+            <div style="position: absolute; inset: 25px 30px; box-sizing: border-box; border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 8px; background: #0D0D0D;">
               <div class="spacing-value" style="position: absolute; top: 4px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 500; color: ${
                 info.spacing.padding.top !== "0" ? "#E5E5E5" : "#8B8B8B"
               }; font-family: 'Inter', sans-serif; ${
@@ -2125,8 +2086,8 @@ class CSSInspector {
         : "-"
     }</div>
               
-              <!-- 4. Content (width x height) - Always shown -->
-              <div style="position: absolute; inset: 28px 45px; background: #FFFFFF; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #0D0D0D; font-size: 11px; font-weight: 500; font-family: 'Inter', sans-serif; box-sizing: border-box; cursor: pointer;" onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent='width × height'; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this);" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${
+              <!-- 1. Content (width x height) - Always shown -->
+              <div style="position: absolute; inset: 28px 45px; background: #FFFFFF; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #0D0D0D; font-size: 11px; font-weight: 500; font-family: 'Inter', sans-serif; box-sizing: border-box; cursor: pointer;" onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent='width × height'; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:#2A2A2A;color:#E5E5E5;padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this);" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${
                 info.dimensions.width
               } × ${info.dimensions.height}')">
                 ${info.dimensions.width} × ${info.dimensions.height}
@@ -2233,7 +2194,7 @@ class CSSInspector {
 
   extractColors() {
     const colors = new Map();
-
+    
     const allElements = document.querySelectorAll("*");
 
     allElements.forEach((element) => {
@@ -2271,7 +2232,7 @@ class CSSInspector {
             instances: 0,
             categories: new Set(),
           };
-          existing.instances++;
+            existing.instances++;
           existing.categories.add("background");
           colors.set(hex, existing);
         }
@@ -2295,9 +2256,9 @@ class CSSInspector {
           existing.instances++;
           existing.categories.add("border");
           colors.set(hex, existing);
+          }
         }
-      }
-    });
+      });
 
     return Array.from(colors.values())
       .map((color) => ({
@@ -2351,7 +2312,7 @@ class CSSInspector {
 
   rgbToHex(rgb) {
     if (!rgb || rgb === "transparent") return null;
-
+    
     // Handle rgb() format
     const rgbMatch = rgb.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
     if (rgbMatch) {
@@ -2374,14 +2335,14 @@ class CSSInspector {
     if (rgb.startsWith("#")) {
       return rgb;
     }
-
+    
     // Try to use CSS color name
     const s = new Option().style;
     s.color = rgb;
     if (s.color !== "") {
       return this.rgbToHex(s.color);
     }
-
+    
     return null;
   }
 
@@ -2413,7 +2374,7 @@ class CSSInspector {
     }
 
     const ratio = (lighter + 0.05) / (darker + 0.05);
-
+    
     let level = "";
     if (ratio >= 7) {
       level = "aaa";
@@ -2450,8 +2411,8 @@ class CSSInspector {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     return result
       ? {
-          r: parseInt(result[1], 16),
-          g: parseInt(result[2], 16),
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
           b: parseInt(result[3], 16),
         }
       : null;
@@ -2479,7 +2440,7 @@ function initializeInspector() {
       "[CSS Inspector] Inspector instance initialized, ready:",
       inspectorReady
     );
-  } else {
+} else {
     console.log("[CSS Inspector] Inspector instance already exists");
   }
   return inspector;
