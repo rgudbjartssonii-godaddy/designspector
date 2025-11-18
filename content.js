@@ -265,18 +265,45 @@ class CSSInspector {
     
     // Re-render panel if it exists
     if (this.inspectorPanel) {
+      // Save scroll position before re-rendering
+      const panelContent = this.inspectorPanel.querySelector('#panel-content');
+      const savedScrollTop = panelContent ? panelContent.scrollTop : 0;
+      
       if (this.isActive) {
         this.switchPanelToInspectorMode();
+        // Restore scroll position after re-rendering
+        if (panelContent && savedScrollTop > 0) {
+          setTimeout(() => {
+            const newPanelContent = this.inspectorPanel.querySelector('#panel-content');
+            if (newPanelContent) {
+              newPanelContent.scrollTop = savedScrollTop;
+            }
+          }, 0);
+        }
         // If there's a selected element, update its display with new theme
         // Use setTimeout to ensure the panel is fully rendered first
         // Skip animation for instant theme change
         if (this.selectedElement) {
           setTimeout(() => {
             this.updateInspectorPanel(this.selectedElement, true, true);
+            // Restore scroll position again after element info is updated
+            const newPanelContent = this.inspectorPanel.querySelector('#panel-content');
+            if (newPanelContent && savedScrollTop > 0) {
+              newPanelContent.scrollTop = savedScrollTop;
+            }
           }, 0);
         }
       } else {
         this.switchPanelToOverviewMode();
+        // Restore scroll position after re-rendering
+        if (panelContent && savedScrollTop > 0) {
+          setTimeout(() => {
+            const newPanelContent = this.inspectorPanel.querySelector('#panel-content');
+            if (newPanelContent) {
+              newPanelContent.scrollTop = savedScrollTop;
+            }
+          }, 0);
+        }
       }
     }
   }
@@ -2065,6 +2092,7 @@ class CSSInspector {
     const isLightText = textLuminance > 0.5;
 
     // Invert background based on text color: dark text = light bg, light text = dark bg
+    // Always ensure good contrast regardless of theme
     let previewBg;
     if (
       this.isValidColor(info.colors.backgroundColor) &&
@@ -2078,16 +2106,26 @@ class CSSInspector {
         (isLightText && bgLuminance > 0.5) ||
         (!isLightText && bgLuminance <= 0.5)
       ) {
-        // Poor contrast - invert the background
-        previewBg = isLightText ? colors.bgPrimary : "#ffffff";
+        // Poor contrast - use theme-appropriate inverted background
+        // For light text, use dark background; for dark text, use light background
+        previewBg = isLightText ? "#0D0D0D" : "#FFFFFF";
       } else {
         // Good contrast - use element's actual background
         previewBg = info.colors.backgroundColor;
       }
     } else {
       // No background - use inverted color based on text
-      previewBg = isLightText ? colors.bgPrimary : "#ffffff";
+      // Always use fixed colors that contrast well: dark for light text, light for dark text
+      previewBg = isLightText ? "#0D0D0D" : "#FFFFFF";
     }
+
+    // Calculate background color display value and text color for readability
+    const bgColorDisplay = (info.colors.backgroundColor && 
+                            info.colors.backgroundColor !== "rgba(0, 0, 0, 0)" && 
+                            info.colors.backgroundColor !== "transparent")
+      ? info.colors.backgroundColor
+      : "#FFFFFF";
+    const bgColorTextColor = this.getLuminance(bgColorDisplay) > 0.5 ? "#000" : "#FFF";
 
     return `
       <div style="margin-bottom: 20px;">
@@ -2439,7 +2477,7 @@ class CSSInspector {
         <div style="margin-bottom: 10px;">
           <h4 style="margin: 0; font-size: 13px; font-weight: 600; color: ${colors.textPrimary}; font-family: 'Inter', sans-serif;">Colors</h4>
           </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: ${contrast.ratio ? '12px' : '0'};">
           <div style="display: flex; flex-direction: column; gap: 8px;">
             <div style="color: ${colors.textSecondary}; font-size: 11px; font-family: 'Inter', sans-serif; font-weight: 400;">Text</div>
             <div style="padding: 12px; background: ${
@@ -2457,17 +2495,10 @@ class CSSInspector {
       </div>
           <div style="display: flex; flex-direction: column; gap: 8px;">
             <div style="color: ${colors.textSecondary}; font-size: 11px; font-family: 'Inter', sans-serif; font-weight: 400;">Background</div>
-            <div style="padding: 12px; background: ${
-              info.colors.backgroundColor || "#FFFFFF"
-            }; border-radius: 6px; border: 1px solid ${colors.border}; cursor: pointer; transition: all 0.2s; height: 48px; display: flex; align-items: center; justify-content: space-between;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'" onclick="navigator.clipboard.writeText('${this.rgbToHex(
+            <div style="padding: 12px; background: ${bgColorDisplay}; border-radius: 6px; border: 1px solid ${colors.border}; cursor: pointer; transition: all 0.2s; height: 48px; display: flex; align-items: center; justify-content: space-between;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'" onclick="navigator.clipboard.writeText('${this.rgbToHex(
               info.colors.backgroundColor || "#FFFFFF"
             )}'); this.querySelector('.copy-hint').style.opacity='1'; setTimeout(() => this.querySelector('.copy-hint').style.opacity='0', 1000);">
-              <div style="color: ${
-                this.getLuminance(info.colors.backgroundColor || "#FFFFFF") >
-                0.5
-                  ? "#000"
-                  : "#FFF"
-              }; font-weight: 600; font-size: 13px; font-family: 'Inter', sans-serif; display: flex; align-items: center; gap: 8px;">
+              <div style="color: ${bgColorTextColor}; font-weight: 600; font-size: 13px; font-family: 'Inter', sans-serif; display: flex; align-items: center; gap: 8px;">
                 ${this.rgbToHex(info.colors.backgroundColor || "#FFFFFF")}
                 <span class="copy-hint" style="opacity: 0; font-size: 10px; transition: opacity 0.2s;">✓</span>
               </div>
@@ -2496,19 +2527,19 @@ class CSSInspector {
           `
               : ""
           }
-          ${
-            contrast.ratio
-              ? `
-          <div style="padding: 10px 12px; background: ${colors.bgSecondary}; border: 1px solid ${colors.border}; border-radius: 6px; display: flex; align-items: center; justify-content: space-between;">
-            <span style="color: ${colors.textSecondary}; font-size: 12px; font-family: 'Inter', sans-serif;">Contrast Ratio</span>
-            <span style="padding: 6px 10px; border-radius: 4px; font-weight: 600; font-size: 12px; background: ${contrastBg}; color: white; font-family: 'Inter', sans-serif;">
-              ${contrast.ratio}:1 ${contrast.level.toUpperCase()}
-            </span>
-          </div>
-          `
-              : ""
-          }
         </div>
+        ${
+          contrast.ratio
+            ? `
+        <div style="padding: 10px 12px; background: ${colors.bgSecondary}; border: 1px solid ${colors.border}; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; width: 100%;">
+          <span style="color: ${colors.textSecondary}; font-size: 12px; font-family: 'Inter', sans-serif;">Contrast Ratio</span>
+          <span style="padding: 6px 10px; border-radius: 4px; font-weight: 600; font-size: 12px; background: ${contrastBg}; color: white; font-family: 'Inter', sans-serif;">
+            ${contrast.ratio}:1 ${contrast.level.toUpperCase()}
+          </span>
+        </div>
+        `
+            : ""
+        }
       </div>
       `
           : ""
