@@ -9,6 +9,8 @@ class CSSInspector {
     this.hoverOverlay = null;
     this.selectedOverlay = null;
     this.theme = 'dark'; // Will be set properly in init()
+    this.toastElement = null;
+    this.toastTimeout = null;
     this.init();
   }
 
@@ -25,6 +27,8 @@ class CSSInspector {
     inspector = inspectorInstance;
     if (typeof window !== "undefined") {
       window.cssInspector = inspectorInstance;
+      window.inspectorInstance = inspectorInstance;
+      window.inspector = inspectorInstance;
     }
     console.log(
       "[CSS Inspector] Inspector instance created and stored globally"
@@ -642,10 +646,10 @@ class CSSInspector {
           e.stopPropagation();
           e.stopImmediatePropagation();
           // Close panel completely - remove it and disable inspector
-          if (this.inspectorPanel) {
-            this.inspectorPanel.remove();
-            this.inspectorPanel = null;
-          }
+    if (this.inspectorPanel) {
+      this.inspectorPanel.remove();
+      this.inspectorPanel = null;
+    }
           // Disable inspector without recreating panel
           this.isActive = false;
           if (this.boundHandleMouseOver) {
@@ -1014,11 +1018,11 @@ class CSSInspector {
                 <circle cx="4" cy="12" r="1.5" fill="${colors.textSecondary}"/>
                 <circle cx="12" cy="12" r="1.5" fill="${colors.textSecondary}"/>
               </svg>
-            </div>
+        </div>
             <div style="display: flex; background: ${colors.segmentBg}; border-radius: 6px; padding: 2px; gap: 2px;">
               <button id="panel-segment-overview" style="padding: 6px 12px; border: none; background: ${colors.segmentBg}; color: ${colors.textSecondary}; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 4px; cursor: pointer; transition: all 0.2s; user-select: none;" onclick="(function(inst){const colors=inst.getThemeColors();const overviewBtn=document.getElementById('panel-segment-overview');const inspectorBtn=document.getElementById('panel-segment-inspector');inspectorBtn.style.background=colors.segmentBg;inspectorBtn.style.color=colors.textSecondary;overviewBtn.style.background=colors.segmentActive;overviewBtn.style.color=colors.textPrimary;inst.setInspectorState(false);})(window.inspectorInstance || window.inspector);">Overview</button>
               <button id="panel-segment-inspector" style="padding: 6px 12px; border: none; background: ${colors.segmentActive}; color: ${colors.textPrimary}; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 4px; cursor: pointer; transition: all 0.2s; user-select: none;" onclick="(function(inst){const colors=inst.getThemeColors();const overviewBtn=document.getElementById('panel-segment-overview');const inspectorBtn=document.getElementById('panel-segment-inspector');overviewBtn.style.background=colors.segmentBg;overviewBtn.style.color=colors.textSecondary;inspectorBtn.style.background=colors.segmentActive;inspectorBtn.style.color=colors.textPrimary;inst.setInspectorState(true);})(window.inspectorInstance || window.inspector);">Inspector</button>
-            </div>
+      </div>
           </div>
           <div style="display: flex; align-items: center; gap: 8px;">
             <button id="theme-switcher" style="background: transparent; border: none; cursor: pointer; color: ${colors.textSecondary}; padding: 4px; border-radius: 4px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;" onmouseover="this.style.background='${colors.bgHover}'; this.style.color='${colors.textPrimary}'" onmouseout="this.style.background='transparent'; this.style.color='${colors.textSecondary}'" title="${this.theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}">
@@ -1475,19 +1479,32 @@ class CSSInspector {
             navigator.clipboard
               .writeText(fontFamily)
               .then(() => {
-                const hint = el.querySelector(".copy-hint");
-                if (hint) {
-                  hint.style.opacity = "1";
-                  setTimeout(() => {
-                    hint.style.opacity = "0";
-                  }, 1000);
-                }
+                this.showToast('Font family copied', el);
               })
               .catch((err) => {
                 console.warn(
                   "[Designspector] Failed to copy font family:",
                   err
                 );
+              });
+          }
+        });
+      });
+
+      // Add copy listeners for all copyable elements
+      document.querySelectorAll("[data-copy-value]").forEach((el) => {
+        el.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const value = el.dataset.copyValue;
+          const message = el.dataset.copyMessage || 'Copied';
+          if (value) {
+            navigator.clipboard
+              .writeText(value)
+              .then(() => {
+                this.showToast(message, el);
+              })
+              .catch((err) => {
+                console.error("[Designspector] Failed to copy:", err);
               });
           }
         });
@@ -2133,22 +2150,16 @@ class CSSInspector {
           <h4 style="margin: 0; font-size: 13px; font-weight: 600; color: ${colors.textPrimary}; font-family: 'Inter', sans-serif;">Size</h4>
       </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-          <div style="padding: 12px; background: ${colors.bgSecondary}; border: 1px solid ${colors.border}; border-radius: 6px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='${hoverBg}'" onmouseout="this.style.background='${colors.bgSecondary}'" onclick="navigator.clipboard.writeText('${
-            info.dimensions.width
-          }px'); this.querySelector('.copy-hint').style.opacity='1'; setTimeout(() => this.querySelector('.copy-hint').style.opacity='0', 1000);">
+          <div style="padding: 12px; background: ${colors.bgSecondary}; border: 1px solid ${colors.border}; border-radius: 6px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='${hoverBg}'" onmouseout="this.style.background='${colors.bgSecondary}'" data-copy-value="${info.dimensions.width}px" data-copy-message="Width copied">
             <div style="color: ${colors.textSecondary}; font-size: 11px; font-family: 'Inter', sans-serif; margin-bottom: 4px;">Width</div>
-            <div style="color: ${colors.textPrimary}; font-weight: 600; font-size: 18px; font-family: 'Inter', sans-serif; display: flex; align-items: center; gap: 6px;">
+            <div style="color: ${colors.textPrimary}; font-weight: 600; font-size: 18px; font-family: 'Inter', sans-serif;">
               ${info.dimensions.width}px
-              <span class="copy-hint" style="opacity: 0; font-size: 11px; color: ${colors.textTertiary}; transition: opacity 0.2s;">✓ Copied</span>
           </div>
           </div>
-          <div style="padding: 12px; background: ${colors.bgSecondary}; border: 1px solid ${colors.border}; border-radius: 6px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='${hoverBg}'" onmouseout="this.style.background='${colors.bgSecondary}'" onclick="navigator.clipboard.writeText('${
-            info.dimensions.height
-          }px'); this.querySelector('.copy-hint').style.opacity='1'; setTimeout(() => this.querySelector('.copy-hint').style.opacity='0', 1000);">
+          <div style="padding: 12px; background: ${colors.bgSecondary}; border: 1px solid ${colors.border}; border-radius: 6px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='${hoverBg}'" onmouseout="this.style.background='${colors.bgSecondary}'" data-copy-value="${info.dimensions.height}px" data-copy-message="Height copied">
             <div style="color: ${colors.textSecondary}; font-size: 11px; font-family: 'Inter', sans-serif; margin-bottom: 4px;">Height</div>
-            <div style="color: ${colors.textPrimary}; font-weight: 600; font-size: 18px; font-family: 'Inter', sans-serif; display: flex; align-items: center; gap: 6px;">
+            <div style="color: ${colors.textPrimary}; font-weight: 600; font-size: 18px; font-family: 'Inter', sans-serif;">
               ${info.dimensions.height}px
-              <span class="copy-hint" style="opacity: 0; font-size: 11px; color: ${colors.textTertiary}; transition: opacity 0.2s;">✓ Copied</span>
             </div>
           </div>
         </div>
@@ -2189,53 +2200,41 @@ class CSSInspector {
                 .replace(/>/g, "&gt;") || "Font"
             }
           </div>
-          <span class="copy-hint" style="position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); opacity: 0; font-size: 11px; color: ${colors.textTertiary}; transition: opacity 0.2s; font-family: 'Inter', sans-serif; pointer-events: none;">✓ Copied</span>
           </div>
         <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
-          <div style="padding: 8px 10px; background: ${colors.bgSecondary}; border: 1px solid ${colors.border}; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-align: center;" onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}'" onmouseout="this.style.background='${colors.bgSecondary}'; this.style.borderColor='${colors.border}'" onclick="navigator.clipboard.writeText('${
-            info.typography.fontSize
-          }'); this.querySelector('.copy-hint').style.opacity='1'; setTimeout(() => this.querySelector('.copy-hint').style.opacity='0', 1000);">
+          <div style="padding: 8px 10px; background: ${colors.bgSecondary}; border: 1px solid ${colors.border}; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-align: center;" onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}'" onmouseout="this.style.background='${colors.bgSecondary}'; this.style.borderColor='${colors.border}'" data-copy-value="${info.typography.fontSize}" data-copy-message="Font size copied">
             <div style="color: ${colors.textSecondary}; font-size: 10px; font-family: 'Inter', sans-serif; margin-bottom: 4px; font-weight: 400;">Size</div>
             <div style="color: ${colors.textPrimary}; font-weight: 500; font-family: 'Inter', sans-serif; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 4px;">
               <span>${parseFloat(info.typography.fontSize).toFixed(2)}px</span>
-              <span class="copy-hint" style="opacity: 0; font-size: 9px; color: ${colors.textTertiary}; transition: opacity 0.2s;">✓</span>
           </div>
           </div>
-          <div style="padding: 8px 10px; background: ${colors.bgSecondary}; border: 1px solid ${colors.border}; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-align: center;" onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}'" onmouseout="this.style.background='${colors.bgSecondary}'; this.style.borderColor='${colors.border}'" onclick="navigator.clipboard.writeText('${
-            info.typography.fontWeight
-          }'); this.querySelector('.copy-hint').style.opacity='1'; setTimeout(() => this.querySelector('.copy-hint').style.opacity='0', 1000);">
+          <div style="padding: 8px 10px; background: ${colors.bgSecondary}; border: 1px solid ${colors.border}; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-align: center;" onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}'" onmouseout="this.style.background='${colors.bgSecondary}'; this.style.borderColor='${colors.border}'" data-copy-value="${info.typography.fontWeight}" data-copy-message="Font weight copied">
             <div style="color: ${colors.textSecondary}; font-size: 10px; font-family: 'Inter', sans-serif; margin-bottom: 4px; font-weight: 400;">Weight</div>
             <div style="color: ${colors.textPrimary}; font-weight: 500; font-family: 'Inter', sans-serif; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 4px;">
               <span>${info.typography.fontWeight}</span>
-              <span class="copy-hint" style="opacity: 0; font-size: 9px; color: ${colors.textTertiary}; transition: opacity 0.2s;">✓</span>
           </div>
         </div>
-          <div style="padding: 8px 10px; background: ${colors.bgSecondary}; border: 1px solid ${colors.border}; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-align: center;" onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}'" onmouseout="this.style.background='${colors.bgSecondary}'; this.style.borderColor='${colors.border}'" onclick="navigator.clipboard.writeText('${
-            info.typography.lineHeight
-          }'); this.querySelector('.copy-hint').style.opacity='1'; setTimeout(() => this.querySelector('.copy-hint').style.opacity='0', 1000);">
+          <div style="padding: 8px 10px; background: ${colors.bgSecondary}; border: 1px solid ${colors.border}; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-align: center;" onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}'" onmouseout="this.style.background='${colors.bgSecondary}'; this.style.borderColor='${colors.border}'" data-copy-value="${info.typography.lineHeight}" data-copy-message="Line height copied">
             <div style="color: ${colors.textSecondary}; font-size: 10px; font-family: 'Inter', sans-serif; margin-bottom: 4px; font-weight: 400;">Line</div>
             <div style="color: ${colors.textPrimary}; font-weight: 500; font-family: 'Inter', sans-serif; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 4px;">
               <span>${info.typography.lineHeight}</span>
-              <span class="copy-hint" style="opacity: 0; font-size: 9px; color: ${colors.textTertiary}; transition: opacity 0.2s;">✓</span>
       </div>
               </div>
           ${
             info.typography.letterSpacing !== "normal"
               ? `
-          <div style="padding: 8px 10px; background: ${colors.bgSecondary}; border: 1px solid ${colors.border}; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-align: center;" onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}'" onmouseout="this.style.background='${colors.bgSecondary}'; this.style.borderColor='${colors.border}'" onclick="navigator.clipboard.writeText('${info.typography.letterSpacing}'); this.querySelector('.copy-hint').style.opacity='1'; setTimeout(() => this.querySelector('.copy-hint').style.opacity='0', 1000);">
+          <div style="padding: 8px 10px; background: ${colors.bgSecondary}; border: 1px solid ${colors.border}; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-align: center;" onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}'" onmouseout="this.style.background='${colors.bgSecondary}'; this.style.borderColor='${colors.border}'" data-copy-value="${info.typography.letterSpacing}" data-copy-message="Letter spacing copied">
             <div style="color: ${colors.textSecondary}; font-size: 10px; font-family: 'Inter', sans-serif; margin-bottom: 4px; font-weight: 400;">Letter</div>
             <div style="color: ${colors.textPrimary}; font-weight: 500; font-family: 'Inter', sans-serif; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 4px;">
               <span>${info.typography.letterSpacing}</span>
-              <span class="copy-hint" style="opacity: 0; font-size: 9px; color: ${colors.textTertiary}; transition: opacity 0.2s;">✓</span>
             </div>
           </div>
           `
               : `
-          <div style="padding: 8px 10px; background: ${colors.bgSecondary}; border: 1px solid ${colors.border}; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-align: center;" onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}'" onmouseout="this.style.background='${colors.bgSecondary}'; this.style.borderColor='${colors.border}'" onclick="navigator.clipboard.writeText('0px'); this.querySelector('.copy-hint').style.opacity='1'; setTimeout(() => this.querySelector('.copy-hint').style.opacity='0', 1000);">
+          <div style="padding: 8px 10px; background: ${colors.bgSecondary}; border: 1px solid ${colors.border}; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-align: center;" onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}'" onmouseout="this.style.background='${colors.bgSecondary}'; this.style.borderColor='${colors.border}'" data-copy-value="0px" data-copy-message="Letter spacing copied">
             <div style="color: ${colors.textSecondary}; font-size: 10px; font-family: 'Inter', sans-serif; margin-bottom: 4px; font-weight: 400;">Letter</div>
             <div style="color: ${colors.textPrimary}; font-weight: 500; font-family: 'Inter', sans-serif; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 4px;">
               <span>0px</span>
-              <span class="copy-hint" style="opacity: 0; font-size: 9px; color: ${colors.textTertiary}; transition: opacity 0.2s;">✓</span>
         </div>
         </div>
           `
@@ -2263,7 +2262,7 @@ class CSSInspector {
     } white-space: nowrap; z-index: 10;" 
                   ${
                     info.spacing.margin.top !== "0"
-                      ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.top-boxRect.top+elRect.height+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'margin-top');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${info.spacing.margin.top}')"`
+                      ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.top-boxRect.top+elRect.height+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'margin');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.spacing.margin.top}" data-copy-message="Margin top copied"`
                       : ""
                   }>${
       info.spacing.margin.top !== "0"
@@ -2279,7 +2278,7 @@ class CSSInspector {
     } white-space: nowrap; z-index: 10;" 
                   ${
                     info.spacing.margin.right !== "0"
-                      ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.top-boxRect.top+(elRect.height/2))+'px;left:'+(elRect.right-boxRect.left+4)+'px;transform:translateY(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'margin-right');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${info.spacing.margin.right}')"`
+                      ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'margin');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.spacing.margin.right}" data-copy-message="Margin right copied"`
                       : ""
                   }>${
       info.spacing.margin.right !== "0"
@@ -2295,7 +2294,7 @@ class CSSInspector {
     } white-space: nowrap; z-index: 10;" 
                   ${
                     info.spacing.margin.bottom !== "0"
-                      ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'margin-bottom');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${info.spacing.margin.bottom}')"`
+                      ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'margin');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.spacing.margin.bottom}" data-copy-message="Margin bottom copied"`
                       : ""
                   }>${
       info.spacing.margin.bottom !== "0"
@@ -2309,7 +2308,7 @@ class CSSInspector {
     } white-space: nowrap; z-index: 10;" 
                   ${
                     info.spacing.margin.left !== "0"
-                      ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.top-boxRect.top+(elRect.height/2))+'px;left:'+(elRect.left-boxRect.left-4)+'px;transform:translateX(-100%) translateY(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'margin-left');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${info.spacing.margin.left}')"`
+                      ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'margin');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.spacing.margin.left}" data-copy-message="Margin left copied"`
                       : ""
                   }>${
       info.spacing.margin.left !== "0"
@@ -2337,7 +2336,7 @@ class CSSInspector {
                    : "cursor: default;"
                } z-index: 20; color: ${colors.textSecondary};" ${
       info.border.radius !== "0px" && info.border.radius !== "0"
-        ? `onmouseenter="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent='border-radius'; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this);" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${info.border.radius}')"`
+        ? `onmouseenter="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent='radius'; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this);" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.border.radius}" data-copy-message="Border radius copied"`
         : ""
     }>${
       info.border.radius !== "0px" && info.border.radius !== "0"
@@ -2350,7 +2349,7 @@ class CSSInspector {
                    : "cursor: default;"
                } z-index: 20; color: ${colors.textSecondary};" ${
       info.border.radius !== "0px" && info.border.radius !== "0"
-        ? `onmouseenter="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent='border-radius'; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this);" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${info.border.radius}')"`
+        ? `onmouseenter="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent='radius'; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this);" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.border.radius}" data-copy-message="Border radius copied"`
         : ""
     }>${
       info.border.radius !== "0px" && info.border.radius !== "0"
@@ -2363,7 +2362,7 @@ class CSSInspector {
                    : "cursor: default;"
                } z-index: 20; color: ${colors.textSecondary};" ${
       info.border.radius !== "0px" && info.border.radius !== "0"
-        ? `onmouseenter="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent='border-radius'; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this);" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${info.border.radius}')"`
+        ? `onmouseenter="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent='radius'; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this);" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.border.radius}" data-copy-message="Border radius copied"`
         : ""
     }>${
       info.border.radius !== "0px" && info.border.radius !== "0"
@@ -2376,7 +2375,7 @@ class CSSInspector {
                    : "cursor: default;"
                } z-index: 20; color: ${colors.textSecondary};" ${
       info.border.radius !== "0px" && info.border.radius !== "0"
-        ? `onmouseenter="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent='border-radius'; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this);" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${info.border.radius}')"`
+        ? `onmouseenter="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent='radius'; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this);" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.border.radius}" data-copy-message="Border radius copied"`
         : ""
     }>${
       info.border.radius !== "0px" && info.border.radius !== "0"
@@ -2393,7 +2392,7 @@ class CSSInspector {
     } white-space: nowrap; z-index: 10;" 
                   ${
                     info.spacing.padding.top !== "0"
-                      ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.top-boxRect.top+elRect.height+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'padding-top');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${info.spacing.padding.top}')"`
+                      ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.top-boxRect.top+elRect.height+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'padding');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.spacing.padding.top}" data-copy-message="Padding top copied"`
                       : ""
                   }>${
       info.spacing.padding.top !== "0"
@@ -2409,7 +2408,7 @@ class CSSInspector {
     } white-space: nowrap; z-index: 10;" 
                   ${
                     info.spacing.padding.right !== "0"
-                      ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.top-boxRect.top+(elRect.height/2))+'px;left:'+(elRect.right-boxRect.left+4)+'px;transform:translateY(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'padding-right');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${info.spacing.padding.right}')"`
+                      ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'padding');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.spacing.padding.right}" data-copy-message="Padding right copied"`
                       : ""
                   }>${
       info.spacing.padding.right !== "0"
@@ -2425,7 +2424,7 @@ class CSSInspector {
     } white-space: nowrap; z-index: 10;" 
                   ${
                     info.spacing.padding.bottom !== "0"
-                      ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'padding-bottom');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${info.spacing.padding.bottom}')"`
+                      ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'padding');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.spacing.padding.bottom}" data-copy-message="Padding bottom copied"`
                       : ""
                   }>${
       info.spacing.padding.bottom !== "0"
@@ -2441,7 +2440,7 @@ class CSSInspector {
     } white-space: nowrap; z-index: 10;" 
                   ${
                     info.spacing.padding.left !== "0"
-                      ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.top-boxRect.top+(elRect.height/2))+'px;left:'+(elRect.left-boxRect.left-4)+'px;transform:translateX(-100%) translateY(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'padding-left');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${info.spacing.padding.left}')"`
+                      ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'padding');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.spacing.padding.left}" data-copy-message="Padding left copied"`
                       : ""
                   }>${
       info.spacing.padding.left !== "0"
@@ -2450,11 +2449,9 @@ class CSSInspector {
     }</div>
               
             <!-- 1. Content (width x height) - Always shown -->
-            <div style="position: absolute; inset: 28px 45px; background: ${spacingBox1Bg}; border: 1px solid ${spacingBox1Border}; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: ${spacingBox1Text}; font-size: 11px; font-weight: 500; font-family: 'Inter', sans-serif; box-sizing: border-box; cursor: pointer;" onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent='width × height'; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this);" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" onclick="navigator.clipboard.writeText('${
-                info.dimensions.width
-              } × ${info.dimensions.height}')">
+            <div style="position: absolute; inset: 28px 45px; background: ${spacingBox1Bg}; border: 1px solid ${spacingBox1Border}; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: ${spacingBox1Text}; font-size: 11px; font-weight: 500; font-family: 'Inter', sans-serif; box-sizing: border-box; cursor: pointer;" onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent='width × height'; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this);" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.dimensions.width} × ${info.dimensions.height}" data-copy-message="Dimensions copied">
               ${info.dimensions.width} × ${info.dimensions.height}
-            </div>
+          </div>
           </div>
           </div>
         </div>
@@ -2482,25 +2479,19 @@ class CSSInspector {
             <div style="color: ${colors.textSecondary}; font-size: 11px; font-family: 'Inter', sans-serif; font-weight: 400;">Text</div>
             <div style="padding: 12px; background: ${
               info.colors.color
-            }; border-radius: 6px; border: 1px solid ${colors.border}; cursor: pointer; transition: all 0.2s; height: 48px; display: flex; align-items: center; justify-content: space-between;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'" onclick="navigator.clipboard.writeText('${this.rgbToHex(
-              info.colors.color
-            )}'); this.querySelector('.copy-hint').style.opacity='1'; setTimeout(() => this.querySelector('.copy-hint').style.opacity='0', 1000);">
+            }; border-radius: 6px; border: 1px solid ${colors.border}; cursor: pointer; transition: opacity 0.2s; height: 48px; display: flex; align-items: center; justify-content: space-between;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'" data-copy-value="${this.rgbToHex(info.colors.color)}" data-copy-message="Text color copied">
               <div style="color: ${
                 this.getLuminance(info.colors.color) > 0.5 ? "#000" : "#FFF"
               }; font-weight: 600; font-size: 13px; font-family: 'Inter', sans-serif; display: flex; align-items: center; gap: 8px;">
                 ${this.rgbToHex(info.colors.color)}
-                <span class="copy-hint" style="opacity: 0; font-size: 10px; transition: opacity 0.2s;">✓</span>
           </div>
         </div>
       </div>
           <div style="display: flex; flex-direction: column; gap: 8px;">
             <div style="color: ${colors.textSecondary}; font-size: 11px; font-family: 'Inter', sans-serif; font-weight: 400;">Background</div>
-            <div style="padding: 12px; background: ${bgColorDisplay}; border-radius: 6px; border: 1px solid ${colors.border}; cursor: pointer; transition: all 0.2s; height: 48px; display: flex; align-items: center; justify-content: space-between;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'" onclick="navigator.clipboard.writeText('${this.rgbToHex(
-              info.colors.backgroundColor || "#FFFFFF"
-            )}'); this.querySelector('.copy-hint').style.opacity='1'; setTimeout(() => this.querySelector('.copy-hint').style.opacity='0', 1000);">
+            <div style="padding: 12px; background: ${bgColorDisplay}; border-radius: 6px; border: 1px solid ${colors.border}; cursor: pointer; transition: opacity 0.2s; height: 48px; display: flex; align-items: center; justify-content: space-between;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'" data-copy-value="${this.rgbToHex(info.colors.backgroundColor || "#FFFFFF")}" data-copy-message="Background color copied">
               <div style="color: ${bgColorTextColor}; font-weight: 600; font-size: 13px; font-family: 'Inter', sans-serif; display: flex; align-items: center; gap: 8px;">
                 ${this.rgbToHex(info.colors.backgroundColor || "#FFFFFF")}
-                <span class="copy-hint" style="opacity: 0; font-size: 10px; transition: opacity 0.2s;">✓</span>
               </div>
             </div>
           </div>
@@ -2511,16 +2502,13 @@ class CSSInspector {
             <div style="color: ${colors.textSecondary}; font-size: 11px; font-family: 'Inter', sans-serif; font-weight: 400;">Border</div>
             <div style="padding: 12px; background: ${
               info.colors.borderColor
-            }; border-radius: 6px; border: 1px solid ${colors.border}; cursor: pointer; transition: all 0.2s; height: 48px; display: flex; align-items: center; justify-content: space-between;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'" onclick="navigator.clipboard.writeText('${this.rgbToHex(
-                  info.colors.borderColor
-                )}'); this.querySelector('.copy-hint').style.opacity='1'; setTimeout(() => this.querySelector('.copy-hint').style.opacity='0', 1000);">
+            }; border-radius: 6px; border: 1px solid ${colors.border}; cursor: pointer; transition: opacity 0.2s; height: 48px; display: flex; align-items: center; justify-content: space-between;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'" data-copy-value="${this.rgbToHex(info.colors.borderColor)}" data-copy-message="Border color copied">
               <div style="color: ${
                 this.getLuminance(info.colors.borderColor) > 0.5
                   ? "#000"
                   : "#FFF"
               }; font-weight: 600; font-size: 13px; font-family: 'Inter', sans-serif; display: flex; align-items: center; gap: 8px;">
                 ${this.rgbToHex(info.colors.borderColor)}
-                <span class="copy-hint" style="opacity: 0; font-size: 10px; transition: opacity 0.2s;">✓</span>
               </div>
             </div>
           </div>
@@ -2554,6 +2542,16 @@ class CSSInspector {
     const allElements = document.querySelectorAll("*");
 
     allElements.forEach((element) => {
+      // Skip inspector panel and overlay elements
+      if (
+        element.id === "css-inspector-panel" ||
+        element.closest("#css-inspector-panel") ||
+        element.classList.contains("css-inspector-overlay") ||
+        element.classList.contains("css-inspector-highlight")
+      ) {
+        return;
+      }
+
       const styles = window.getComputedStyle(element);
 
       // Text color
@@ -2569,7 +2567,7 @@ class CSSInspector {
             instances: 0,
             categories: new Set(),
           };
-          existing.instances++;
+            existing.instances++;
           existing.categories.add("typography");
           colors.set(hex, existing);
         }
@@ -2631,6 +2629,16 @@ class CSSInspector {
     const allElements = document.querySelectorAll("*");
 
     allElements.forEach((element) => {
+      // Skip inspector panel and overlay elements
+      if (
+        element.id === "css-inspector-panel" ||
+        element.closest("#css-inspector-panel") ||
+        element.classList.contains("css-inspector-overlay") ||
+        element.classList.contains("css-inspector-highlight")
+      ) {
+        return;
+      }
+
       const styles = window.getComputedStyle(element);
 
       // Skip elements with no visible text or zero dimensions
@@ -2760,6 +2768,122 @@ class CSSInspector {
     });
 
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+
+  showToast(message, clickedElement) {
+    if (!this.inspectorPanel) return;
+    
+    const colors = this.getThemeColors();
+    
+    // Clear any existing timeout
+    if (this.toastTimeout) {
+      clearTimeout(this.toastTimeout);
+      this.toastTimeout = null;
+    }
+    
+    // Find the header element (locked-element-info) - always visible when copying
+    const headerElement = this.inspectorPanel.querySelector("#locked-element-info");
+    
+    if (!headerElement) {
+      console.warn('[CSS Inspector] Header element not found for toast positioning');
+      return;
+    }
+    
+    const headerRect = headerElement.getBoundingClientRect();
+    
+    // Parse message to extract property name (remove "copied" suffix)
+    const propertyName = message.replace(/\s+copied$/i, '');
+    const isDark = this.theme === 'dark';
+    const copiedColor = isDark ? '#FFFFFF' : '#000000';
+    const propertyColor = isDark ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)';
+    
+    // Check if toast already exists and is in the DOM
+    let toast = this.toastElement;
+    const isNewToast = !toast || !toast.parentNode;
+    
+    // Remove any orphaned toasts from DOM (safety check)
+    if (toast && !toast.parentNode) {
+      this.toastElement = null;
+      toast = null;
+    }
+    
+    // Also check for any existing toasts in DOM and remove them
+    const existingToasts = document.querySelectorAll('.copy-toast');
+    existingToasts.forEach(t => {
+      if (t !== this.toastElement) {
+        t.remove();
+      }
+    });
+    
+    if (isNewToast) {
+      // Create new toast element
+      toast = document.createElement('div');
+      toast.className = 'copy-toast';
+      this.toastElement = toast;
+      
+      // Position toast directly below the header
+      const toastTop = headerRect.bottom + 8;
+      const toastLeft = headerRect.left + (headerRect.width / 2);
+      
+      toast.style.cssText = `
+        position: fixed;
+        top: ${toastTop}px;
+        left: ${toastLeft}px;
+        transform: translateX(-50%) translateY(-10px);
+        background: ${colors.bgTertiary};
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-family: 'Inter', sans-serif;
+        font-weight: 500;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+        z-index: 2147483648;
+        pointer-events: none;
+        transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+        opacity: 0;
+        border: 1px solid ${colors.border};
+        white-space: nowrap;
+        display: flex;
+        align-items: center;
+      `;
+      
+      document.body.appendChild(toast);
+      
+      // Animate in - use double requestAnimationFrame to ensure DOM is ready
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          toast.style.transform = `translateX(-50%) translateY(0)`;
+          toast.style.opacity = '1';
+        });
+      });
+    } else {
+      // Update existing toast - update position in case header moved
+      const toastTop = headerRect.bottom + 8;
+      const toastLeft = headerRect.left + (headerRect.width / 2);
+      toast.style.top = `${toastTop}px`;
+      toast.style.left = `${toastLeft}px`;
+    }
+    
+    // Update toast content (instant, no width animation)
+    toast.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right: 6px; flex-shrink: 0;">
+        <path d="M13.5 4.5L6 12L2.5 8.5" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span style="color: ${copiedColor};">Copied: </span><span style="color: ${propertyColor};">${propertyName}</span>
+    `;
+    
+    // Set timeout to animate out and remove
+    this.toastTimeout = setTimeout(() => {
+      toast.style.transform = `translateX(-50%) translateY(-10px)`;
+      toast.style.opacity = '0';
+      setTimeout(() => {
+        if (toast.parentNode) {
+          toast.remove();
+        }
+        this.toastElement = null;
+        this.toastTimeout = null;
+      }, 300);
+    }, 2000);
   }
 
   hexToRgb(hex) {
