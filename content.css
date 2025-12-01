@@ -1,7 +1,7 @@
 /* CSS for inspector overlay and highlights */
 
 .css-inspector-highlight {
-  outline: 2px dashed #7241FF !important;
+  outline: 2px dashed #10B981 !important;
   outline-offset: 2px !important;
   cursor: pointer !important;
   position: relative !important;
