@@ -896,30 +896,24 @@ class CSSInspector {
       }; background: ${
       colors.headerBg
     }; border-radius: 8px 8px 0 0; flex-shrink: 0;">
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; gap: 12px;">
-          <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
-            <div id="panel-drag-handle" style="cursor: move; display: flex; align-items: center; padding: 4px; border-radius: 4px; transition: background 0.2s; user-select: none;" onmouseover="this.style.background='${
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; gap: 12px; position: relative;">
+          <div id="panel-drag-handle" style="cursor: move; display: flex; align-items: center; padding: 4px; border-radius: 4px; transition: background 0.2s; user-select: none; flex-shrink: 0;" onmouseover="this.style.background='${
               colors.bgHover
             }'" onmouseout="this.style.background='transparent'" title="Drag to move">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" style="width: 16px; height: 16px;">
                 <path fill="${colors.textSecondary}" d="M15 4a2 2 0 1 0 0 4 2 2 0 0 0 0-4M15 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4M15 16a2 2 0 1 0 0 4 2 2 0 0 0 0-4M9 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4M9 16a2 2 0 1 0 0 4 2 2 0 0 0 0-4M9 4a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/>
               </svg>
         </div>
-            <div style="display: flex; background: ${
-              colors.segmentBg
-            }; border-radius: 6px; padding: 2px; gap: 2px;">
-              <button id="panel-segment-overview" style="padding: 6px 12px; border: none; background: ${
+          <div style="display: flex; align-items: center; gap: 8px; position: absolute; left: 50%; transform: translateX(-50%);">
+              <button id="panel-segment-overview" style="padding: 6px 16px; border: none; background: ${
                 colors.segmentActive
               }; color: ${
       colors.textPrimary
-    }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 4px; cursor: pointer; transition: all 0.2s; user-select: none;" onclick="(function(inst){const colors=inst.getThemeColors();const overviewBtn=document.getElementById('panel-segment-overview');const inspectorBtn=document.getElementById('panel-segment-inspector');inspectorBtn.style.background=colors.segmentBg;inspectorBtn.style.color=colors.textSecondary;overviewBtn.style.background=colors.segmentActive;overviewBtn.style.color=colors.textPrimary;inst.setInspectorState(false);})(window.inspectorInstance || window.inspector);">Overview</button>
-              <button id="panel-segment-inspector" style="padding: 6px 12px; border: none; background: ${
-                colors.segmentBg
-              }; color: ${
+    }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 9999px; cursor: pointer; transition: all 0.2s; user-select: none; white-space: nowrap;" onclick="(function(inst){const colors=inst.getThemeColors();const overviewBtn=document.getElementById('panel-segment-overview');const inspectorBtn=document.getElementById('panel-segment-inspector');inspectorBtn.style.background='transparent';inspectorBtn.style.color=colors.textSecondary;overviewBtn.style.background=colors.segmentActive;overviewBtn.style.color=colors.textPrimary;inst.setInspectorState(false);})(window.inspectorInstance || window.inspector);">Overview</button>
+              <button id="panel-segment-inspector" style="padding: 6px 16px; border: none; background: transparent; color: ${
       colors.textSecondary
-    }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 4px; cursor: pointer; transition: all 0.2s; user-select: none;" onclick="(function(inst){const colors=inst.getThemeColors();const overviewBtn=document.getElementById('panel-segment-overview');const inspectorBtn=document.getElementById('panel-segment-inspector');overviewBtn.style.background=colors.segmentBg;overviewBtn.style.color=colors.textSecondary;inspectorBtn.style.background=colors.segmentActive;inspectorBtn.style.color=colors.textPrimary;inst.setInspectorState(true);})(window.inspectorInstance || window.inspector);">Inspector</button>
+    }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 9999px; cursor: pointer; transition: all 0.2s; user-select: none; white-space: nowrap;" onclick="(function(inst){const colors=inst.getThemeColors();const overviewBtn=document.getElementById('panel-segment-overview');const inspectorBtn=document.getElementById('panel-segment-inspector');overviewBtn.style.background='transparent';overviewBtn.style.color=colors.textSecondary;inspectorBtn.style.background=colors.segmentActive;inspectorBtn.style.color=colors.textPrimary;inst.setInspectorState(true);})(window.inspectorInstance || window.inspector);">Inspector</button>
       </div>
-          </div>
           <div style="display: flex; align-items: center; gap: 8px;">
             <button id="theme-switcher" style="background: transparent; border: none; cursor: pointer; color: ${
               colors.textSecondary
@@ -976,19 +970,18 @@ class CSSInspector {
       };" id="panel-content">
         <div id="overview-content">
           <!-- Segmented control for Colors/Fonts -->
-          <div style="display: flex; background: ${
+          <div id="overview-segment-container" style="display: flex; background: ${
             colors.segmentBg
-          }; border-radius: 6px; padding: 2px; gap: 2px; margin-bottom: 16px;">
-            <button id="overview-segment-colors" style="flex: 1; padding: 8px 12px; border: none; background: ${
+          }; border-radius: 6px; padding: 2px; gap: 2px; margin-bottom: 16px; position: relative;">
+            <div id="overview-segment-indicator" style="position: absolute; top: 2px; left: 2px; width: calc(50% - 2px); height: calc(100% - 4px); background: ${
               colors.segmentActive
-            }; color: ${
+            }; border-radius: 4px; transition: transform 0.3s ease-out; z-index: 0;"></div>
+            <button id="overview-segment-colors" style="flex: 1; padding: 8px 12px; border: none; background: transparent; color: ${
       colors.textPrimary
-    }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 4px; cursor: pointer; transition: all 0.2s; user-select: none;">Colors</button>
-            <button id="overview-segment-fonts" style="flex: 1; padding: 8px 12px; border: none; background: ${
-              colors.segmentBg
-            }; color: ${
+    }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 4px; cursor: pointer; transition: color 0.2s; user-select: none; position: relative; z-index: 1;">Colors</button>
+            <button id="overview-segment-fonts" style="flex: 1; padding: 8px 12px; border: none; background: transparent; color: ${
       colors.textSecondary
-    }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 4px; cursor: pointer; transition: all 0.2s; user-select: none;">Fonts</button>
+    }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 4px; cursor: pointer; transition: color 0.2s; user-select: none; position: relative; z-index: 1;">Fonts</button>
           </div>
           
           <!-- Content area that switches between colors and fonts -->
@@ -1030,14 +1023,14 @@ class CSSInspector {
       // Set initial state - Overview is active
       overviewBtn.style.background = colors.segmentActive;
       overviewBtn.style.color = colors.textPrimary;
-      inspectorBtn.style.background = colors.segmentBg;
+      inspectorBtn.style.background = "transparent";
       inspectorBtn.style.color = colors.textSecondary;
 
       // Add click handlers
       overviewBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         const colors = this.getThemeColors();
-        inspectorBtn.style.background = colors.segmentBg;
+        inspectorBtn.style.background = "transparent";
         inspectorBtn.style.color = colors.textSecondary;
         overviewBtn.style.background = colors.segmentActive;
         overviewBtn.style.color = colors.textPrimary;
@@ -1047,7 +1040,7 @@ class CSSInspector {
       inspectorBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         const colors = this.getThemeColors();
-        overviewBtn.style.background = colors.segmentBg;
+        overviewBtn.style.background = "transparent";
         overviewBtn.style.color = colors.textSecondary;
         inspectorBtn.style.background = colors.segmentActive;
         inspectorBtn.style.color = colors.textPrimary;
@@ -1060,15 +1053,16 @@ class CSSInspector {
     const fontsSegment = document.getElementById("overview-segment-fonts");
     const colorsView = document.getElementById("overview-colors-view");
     const fontsView = document.getElementById("overview-fonts-view");
+    const segmentIndicator = document.getElementById("overview-segment-indicator");
+    const segmentContainer = document.getElementById("overview-segment-container");
 
-    if (colorsSegment && fontsSegment && colorsView && fontsView) {
+    if (colorsSegment && fontsSegment && colorsView && fontsView && segmentIndicator && segmentContainer) {
       const colors = this.getThemeColors();
 
       // Initial state - Colors is active
-      colorsSegment.style.background = colors.segmentActive;
       colorsSegment.style.color = colors.textPrimary;
-      fontsSegment.style.background = colors.segmentBg;
       fontsSegment.style.color = colors.textSecondary;
+      segmentIndicator.style.transform = "translateX(0)";
 
       // Load initial colors view
       setTimeout(() => {
@@ -1079,10 +1073,9 @@ class CSSInspector {
       colorsSegment.addEventListener("click", (e) => {
         e.stopPropagation();
         const colors = this.getThemeColors();
-        fontsSegment.style.background = colors.segmentBg;
         fontsSegment.style.color = colors.textSecondary;
-        colorsSegment.style.background = colors.segmentActive;
         colorsSegment.style.color = colors.textPrimary;
+        segmentIndicator.style.transform = "translateX(0)";
         colorsView.style.display = "block";
         fontsView.style.display = "none";
         this.renderColorsView();
@@ -1092,10 +1085,15 @@ class CSSInspector {
       fontsSegment.addEventListener("click", (e) => {
         e.stopPropagation();
         const colors = this.getThemeColors();
-        colorsSegment.style.background = colors.segmentBg;
         colorsSegment.style.color = colors.textSecondary;
-        fontsSegment.style.background = colors.segmentActive;
         fontsSegment.style.color = colors.textPrimary;
+        // Move indicator to second position: button width + gap (2px)
+        const containerWidth = segmentContainer.offsetWidth;
+        const padding = 2; // Container padding
+        const gap = 2; // Gap between buttons
+        const availableWidth = containerWidth - (padding * 2);
+        const buttonWidth = availableWidth / 2;
+        segmentIndicator.style.transform = `translateX(${buttonWidth + gap}px)`;
         colorsView.style.display = "none";
         fontsView.style.display = "block";
         this.renderFontsView();
@@ -1153,30 +1151,24 @@ class CSSInspector {
       }; background: ${
       colors.headerBg
     }; border-radius: 8px 8px 0 0; flex-shrink: 0;">
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; gap: 12px;">
-          <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
-            <div id="panel-drag-handle" style="cursor: move; display: flex; align-items: center; padding: 4px; border-radius: 4px; transition: background 0.2s; user-select: none;" onmouseover="this.style.background='${
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; gap: 12px; position: relative;">
+          <div id="panel-drag-handle" style="cursor: move; display: flex; align-items: center; padding: 4px; border-radius: 4px; transition: background 0.2s; user-select: none; flex-shrink: 0;" onmouseover="this.style.background='${
               colors.bgHover
             }'" onmouseout="this.style.background='transparent'" title="Drag to move">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" style="width: 16px; height: 16px;">
                 <path fill="${colors.textSecondary}" d="M15 4a2 2 0 1 0 0 4 2 2 0 0 0 0-4M15 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4M15 16a2 2 0 1 0 0 4 2 2 0 0 0 0-4M9 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4M9 16a2 2 0 1 0 0 4 2 2 0 0 0 0-4M9 4a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/>
               </svg>
         </div>
-            <div style="display: flex; background: ${
-              colors.segmentBg
-            }; border-radius: 6px; padding: 2px; gap: 2px;">
-              <button id="panel-segment-overview" style="padding: 6px 12px; border: none; background: ${
-                colors.segmentBg
-              }; color: ${
+          <div style="display: flex; align-items: center; gap: 8px; position: absolute; left: 50%; transform: translateX(-50%);">
+              <button id="panel-segment-overview" style="padding: 6px 16px; border: none; background: transparent; color: ${
       colors.textSecondary
-    }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 4px; cursor: pointer; transition: all 0.2s; user-select: none;" onclick="(function(inst){const colors=inst.getThemeColors();const overviewBtn=document.getElementById('panel-segment-overview');const inspectorBtn=document.getElementById('panel-segment-inspector');inspectorBtn.style.background=colors.segmentBg;inspectorBtn.style.color=colors.textSecondary;overviewBtn.style.background=colors.segmentActive;overviewBtn.style.color=colors.textPrimary;inst.setInspectorState(false);})(window.inspectorInstance || window.inspector);">Overview</button>
-              <button id="panel-segment-inspector" style="padding: 6px 12px; border: none; background: ${
+    }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 9999px; cursor: pointer; transition: all 0.2s; user-select: none; white-space: nowrap;" onclick="(function(inst){const colors=inst.getThemeColors();const overviewBtn=document.getElementById('panel-segment-overview');const inspectorBtn=document.getElementById('panel-segment-inspector');inspectorBtn.style.background='transparent';inspectorBtn.style.color=colors.textSecondary;overviewBtn.style.background=colors.segmentActive;overviewBtn.style.color=colors.textPrimary;inst.setInspectorState(false);})(window.inspectorInstance || window.inspector);">Overview</button>
+              <button id="panel-segment-inspector" style="padding: 6px 16px; border: none; background: ${
                 colors.segmentActive
               }; color: ${
       colors.textPrimary
-    }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 4px; cursor: pointer; transition: all 0.2s; user-select: none;" onclick="(function(inst){const colors=inst.getThemeColors();const overviewBtn=document.getElementById('panel-segment-overview');const inspectorBtn=document.getElementById('panel-segment-inspector');overviewBtn.style.background=colors.segmentBg;overviewBtn.style.color=colors.textSecondary;inspectorBtn.style.background=colors.segmentActive;inspectorBtn.style.color=colors.textPrimary;inst.setInspectorState(true);})(window.inspectorInstance || window.inspector);">Inspector</button>
+    }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 9999px; cursor: pointer; transition: all 0.2s; user-select: none; white-space: nowrap;" onclick="(function(inst){const colors=inst.getThemeColors();const overviewBtn=document.getElementById('panel-segment-overview');const inspectorBtn=document.getElementById('panel-segment-inspector');overviewBtn.style.background='transparent';overviewBtn.style.color=colors.textSecondary;inspectorBtn.style.background=colors.segmentActive;inspectorBtn.style.color=colors.textPrimary;inst.setInspectorState(true);})(window.inspectorInstance || window.inspector);">Inspector</button>
       </div>
-          </div>
           <div style="display: flex; align-items: center; gap: 8px;">
             <button id="theme-switcher" style="background: transparent; border: none; cursor: pointer; color: ${
               colors.textSecondary
@@ -1255,14 +1247,14 @@ class CSSInspector {
       // Set initial state - Inspector is active
       inspectorBtn.style.background = colors.segmentActive;
       inspectorBtn.style.color = colors.textPrimary;
-      overviewBtn.style.background = colors.segmentBg;
+      overviewBtn.style.background = "transparent";
       overviewBtn.style.color = colors.textSecondary;
 
       // Add click handlers
       overviewBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         const colors = this.getThemeColors();
-        inspectorBtn.style.background = colors.segmentBg;
+        inspectorBtn.style.background = "transparent";
         inspectorBtn.style.color = colors.textSecondary;
         overviewBtn.style.background = colors.segmentActive;
         overviewBtn.style.color = colors.textPrimary;
@@ -1272,7 +1264,7 @@ class CSSInspector {
       inspectorBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         const colors = this.getThemeColors();
-        overviewBtn.style.background = colors.segmentBg;
+        overviewBtn.style.background = "transparent";
         overviewBtn.style.color = colors.textSecondary;
         inspectorBtn.style.background = colors.segmentActive;
         inspectorBtn.style.color = colors.textPrimary;
@@ -1342,9 +1334,56 @@ class CSSInspector {
       return;
     }
 
+    // Calculate total instances for percentage calculation
+    const totalInstances = colors.reduce((sum, color) => sum + color.instances, 0);
+
+    // Helper function to create circular ring SVG
+    const createRingSVG = (percentage, size = 20) => {
+      const radius = (size - 4) / 2;
+      const circumference = 2 * Math.PI * radius;
+      const offset = circumference - (percentage / 100) * circumference;
+      
+      // Inverted theme colors for rings
+      const isLightTheme = this.theme === "light";
+      const ringStrokeColor = isLightTheme ? "#0D0D0D" : "#E5E5E5"; // Main inverted color
+      const ringBgColor = isLightTheme ? "#4A4A4A" : "#F5F5F5"; // Lighter version of inverted color
+      const ringBgOpacity = isLightTheme ? "0.3" : "0.4";
+      
+      return `
+        <svg width="${size}" height="${size}" style="display: block;">
+          <circle
+            cx="${size / 2}"
+            cy="${size / 2}"
+            r="${radius}"
+            fill="none"
+            stroke="${ringBgColor}"
+            stroke-width="2"
+            opacity="${ringBgOpacity}"
+          />
+          <circle
+            cx="${size / 2}"
+            cy="${size / 2}"
+            r="${radius}"
+            fill="none"
+            stroke="${ringStrokeColor}"
+            stroke-width="2"
+            stroke-dasharray="${circumference}"
+            stroke-dashoffset="${offset}"
+            stroke-linecap="round"
+            transform="rotate(-90 ${size / 2} ${size / 2})"
+          />
+        </svg>
+      `;
+    };
+
     // Create color grid
     const colorGrid = colors
       .map((color) => {
+        // Calculate percentage
+        const percentage = totalInstances > 0 
+          ? ((color.instances / totalInstances) * 100).toFixed(1)
+          : "0";
+        
         return `
           <div style="background: ${
             themeColors.bgSecondary
@@ -1355,7 +1394,7 @@ class CSSInspector {
                onmouseout="this.style.background='${
                  themeColors.bgSecondary
                }'; this.style.borderColor='${themeColors.border}'"
-               data-copy-value="${color.hex}" data-copy-message="Color copied">
+               data-copy-value="${color.hex}" data-copy-message="${color.hex} copied">
             <div style="width: 100%; height: 80px; background: ${
               color.hex
             }; border-bottom: 1px solid ${themeColors.border};"></div>
@@ -1365,12 +1404,13 @@ class CSSInspector {
               }; font-family: 'Courier New', monospace; margin-bottom: 4px;">${
           color.hex
         }</div>
-              <div style="font-size: 11px; color: ${
-                themeColors.textSecondary
-              }; font-family: 'Inter', sans-serif;">
-                ${color.instances} ${
-          color.instances === 1 ? "instance" : "instances"
-        }
+              <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px;">
+                ${createRingSVG(parseFloat(percentage), 20)}
+                <div style="font-size: 11px; color: ${
+                  themeColors.textSecondary
+                }; font-family: 'Inter', sans-serif;">
+                  Usage: ${percentage}%
+                </div>
               </div>
               ${
                 color.categories && color.categories.length > 0
@@ -1426,6 +1466,148 @@ class CSSInspector {
     }, 0);
   }
 
+  // Parse Google Fonts link tags to extract actual font names being loaded
+  parseGoogleFontsFromLinks() {
+    const fonts = new Set();
+    try {
+      const links = document.querySelectorAll('link[href*="fonts.googleapis.com"]');
+      links.forEach(link => {
+        try {
+          const url = new URL(link.href);
+          // Handle both css and css2 API formats
+          const families = url.searchParams.getAll('family');
+          families.forEach(family => {
+            // Extract font name (before : or &)
+            // Examples: "EB+Garamond:wght@400;600" or "Roboto:wght@400;700"
+            const fontName = family.split(':')[0].split('&')[0].replace(/\+/g, ' ').trim();
+            if (fontName) {
+              fonts.add(fontName);
+            }
+          });
+        } catch (e) {
+          // Invalid URL, skip
+        }
+      });
+    } catch (e) {
+      // Error parsing links
+    }
+    return fonts;
+  }
+
+  // Normalize font name for comparison (hyphens/underscores to spaces, lowercase)
+  normalizeFontNameForComparison(fontName) {
+    return fontName.replace(/['"]/g, "").trim().toLowerCase().replace(/[-_]/g, " ");
+  }
+
+  getFontSourceUrl(fontFamily) {
+    const cleanFontName = fontFamily.replace(/['"]/g, "").trim();
+    const originalFontName = fontFamily.replace(/['"]/g, "").trim();
+    
+    // Parse Google Fonts from link tags (cache this for performance)
+    if (!this._googleFontsCache) {
+      this._googleFontsCache = this.parseGoogleFontsFromLinks();
+    }
+    const googleFontsSet = this._googleFontsCache;
+    
+    // Check for Typekit/Adobe Fonts scripts
+    const hasTypekit = document.querySelectorAll('script[src*="use.typekit.net"]').length > 0;
+    const hasAdobeFonts = document.querySelectorAll('link[href*="fonts.adobe.com"]').length > 0;
+    
+    // Check @font-face rules to find where font is loaded from
+    const styleSheets = Array.from(document.styleSheets);
+    let fontSource = null;
+    let detectedSourceType = null; // 'google' or 'adobe'
+    
+    try {
+      for (const sheet of styleSheets) {
+        try {
+          const rules = Array.from(sheet.cssRules || []);
+          for (const rule of rules) {
+            if (rule instanceof CSSFontFaceRule) {
+              const ruleFontFamily = rule.style.fontFamily.replace(/['"]/g, '').trim();
+              // Normalize both names for comparison (handles hyphens vs spaces)
+              const ruleFontNormalized = this.normalizeFontNameForComparison(ruleFontFamily);
+              const cleanFontNormalized = this.normalizeFontNameForComparison(cleanFontName);
+              
+              if (ruleFontNormalized === cleanFontNormalized || 
+                  ruleFontNormalized.includes(cleanFontNormalized) || 
+                  cleanFontNormalized.includes(ruleFontNormalized)) {
+                const src = rule.style.src;
+                if (src) {
+                  // Handle multiple URLs in src (comma-separated fallbacks)
+                  const urlMatches = src.match(/url\(['"]?([^'"]+)['"]?\)/g);
+                  if (urlMatches) {
+                    for (const urlMatch of urlMatches) {
+                      const url = urlMatch.match(/url\(['"]?([^'"]+)['"]?\)/)[1];
+                      
+                      // Determine source type from URL
+                      if (url.includes('fonts.gstatic.com') || url.includes('fonts.googleapis.com')) {
+                        detectedSourceType = 'google';
+                        break;
+                      } else if (url.includes('use.typekit.net') || url.includes('fonts.adobe.com') || url.includes('adobe.com')) {
+                        detectedSourceType = 'adobe';
+                        break;
+                      }
+                    }
+                    if (detectedSourceType) break;
+                  }
+                }
+              }
+            }
+          }
+          if (detectedSourceType) break;
+        } catch (e) {
+          // Cross-origin stylesheet, skip
+          continue;
+        }
+      }
+    } catch (e) {
+      // Error accessing stylesheets
+    }
+    
+    // Construct URL based on detected source type
+    if (detectedSourceType === 'google') {
+      // Normalize font name for comparison (hyphens/spaces)
+      const fontNameNormalized = this.normalizeFontNameForComparison(cleanFontName);
+      
+      // Check if font matches any in Google Fonts set (with normalized comparison)
+      const isInGoogleFonts = Array.from(googleFontsSet).some(font => {
+        const googleFontNormalized = this.normalizeFontNameForComparison(font);
+        return googleFontNormalized === fontNameNormalized;
+      });
+      
+      if (isInGoogleFonts) {
+        // Find the exact font name from the set (preserve casing from link tag)
+        const exactFontName = Array.from(googleFontsSet).find(font => {
+          const googleFontNormalized = this.normalizeFontNameForComparison(font);
+          return googleFontNormalized === fontNameNormalized;
+        }) || originalFontName;
+        
+        const cleanName = exactFontName.replace(/\s+/g, "+");
+        fontSource = `https://fonts.google.com/specimen/${cleanName}`;
+      }
+    } else if (detectedSourceType === 'adobe') {
+      // Adobe Fonts - construct URL
+      // Remove common suffixes like "pro", "std", etc. for URL
+      let baseName = cleanFontName.toLowerCase();
+      baseName = baseName.replace(/\s+(pro|std|display|text)$/i, '');
+      const cleanName = baseName.replace(/\s+/g, "-");
+      fontSource = `https://fonts.adobe.com/fonts/${cleanName}`;
+    } else if (hasTypekit || hasAdobeFonts) {
+      // If Typekit/Adobe is present but @font-face detection didn't work,
+      // try to match font name and assume it's from Adobe
+      // This handles cases where @font-face rules aren't accessible (cross-origin, etc.)
+      detectedSourceType = 'adobe';
+      let baseName = cleanFontName.toLowerCase();
+      baseName = baseName.replace(/\s+(pro|std|display|text)$/i, '');
+      const cleanName = baseName.replace(/\s+/g, "-");
+      fontSource = `https://fonts.adobe.com/fonts/${cleanName}`;
+    }
+    
+    // Return object with url and source type, or null if no source found
+    return fontSource ? { url: fontSource, source: detectedSourceType } : null;
+  }
+
   renderFontsView() {
     const fonts = this.extractTypography();
     const fontsView = document.getElementById("overview-fonts-view");
@@ -1442,6 +1624,48 @@ class CSSInspector {
       return;
     }
 
+    // Calculate total instances for percentage calculation
+    const totalInstances = fonts.reduce((sum, font) => sum + font.instances, 0);
+    
+    // Helper function to create circular ring SVG
+    const createRingSVG = (percentage, size = 20) => {
+      const radius = (size - 4) / 2;
+      const circumference = 2 * Math.PI * radius;
+      const offset = circumference - (percentage / 100) * circumference;
+      
+      // Inverted theme colors for rings
+      const isLightTheme = this.theme === "light";
+      const ringStrokeColor = isLightTheme ? "#0D0D0D" : "#E5E5E5"; // Main inverted color
+      const ringBgColor = isLightTheme ? "#4A4A4A" : "#F5F5F5"; // Lighter version of inverted color
+      const ringBgOpacity = isLightTheme ? "0.3" : "0.4";
+      
+      return `
+        <svg width="${size}" height="${size}" style="display: block;">
+          <circle
+            cx="${size / 2}"
+            cy="${size / 2}"
+            r="${radius}"
+            fill="none"
+            stroke="${ringBgColor}"
+            stroke-width="2"
+            opacity="${ringBgOpacity}"
+          />
+          <circle
+            cx="${size / 2}"
+            cy="${size / 2}"
+            r="${radius}"
+            fill="none"
+            stroke="${ringStrokeColor}"
+            stroke-width="2"
+            stroke-dasharray="${circumference}"
+            stroke-dashoffset="${offset}"
+            stroke-linecap="round"
+            transform="rotate(-90 ${size / 2} ${size / 2})"
+          />
+        </svg>
+      `;
+    };
+    
     // Create font list
     const fontList = fonts
       .map((font, index) => {
@@ -1453,72 +1677,60 @@ class CSSInspector {
             : index === 2
             ? "Tertiary"
             : "";
+        
+        // Calculate percentage
+        const percentage = totalInstances > 0 
+          ? ((font.instances / totalInstances) * 100).toFixed(1)
+          : "0";
+        
+        const fontSourceUrl = this.getFontSourceUrl(font.fontFamily);
+        
         return `
           <div style="background: ${
             themeColors.bgSecondary
           }; border: 1px solid ${
           themeColors.border
         }; border-radius: 6px; padding: 16px; margin-bottom: 12px;">
-            <div style="display: flex; align-items: flex-start; gap: 16px; margin-bottom: 12px;">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
               ${
                 label
-                  ? `<span style="font-size: 11px; font-weight: 600; color: ${themeColors.textSecondary}; text-transform: uppercase; letter-spacing: 0.5px; min-width: 60px; font-family: 'Inter', sans-serif; padding-top: 8px;">${label}</span>`
+                  ? `<div style="font-size: 11px; font-weight: 600; color: ${themeColors.textSecondary}; text-transform: uppercase; letter-spacing: 0.5px; font-family: 'Inter', sans-serif;">${label}</div>`
                   : ""
               }
-              <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
-                <div style="font-family: ${
+              <div style="font-family: ${
                   font.fontFamily
                 }; font-size: 48px; line-height: 1; color: ${
           themeColors.textPrimary
-        }; font-weight: 400;">
-                  Aa
+        }; font-weight: 400; text-align: center;">
+                  Ag
                 </div>
-                <div style="font-size: 12px; color: ${
-                  themeColors.textSecondary
-                }; font-family: 'Inter', sans-serif; text-align: center;">
-                  ${font.fontFamily}
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; margin-top: 4px;">
+                  <div style="display: flex; align-items: center; justify-content: center; font-size: 13px; color: ${
+                    themeColors.textPrimary
+                  }; font-family: 'Inter', sans-serif; font-weight: 500;">
+                    <span style="cursor: pointer; padding: 4px 8px; border-radius: 4px; transition: background 0.2s;" 
+                          onmouseover="this.style.background='${themeColors.bgHover}'" 
+                          onmouseout="this.style.background='transparent'"
+                          data-copy-value="${font.fontFamily}" 
+                          data-copy-message="Font family copied">${font.fontFamily}</span>
+                  </div>
+                  ${
+                    fontSourceUrl
+                      ? `<a href="${fontSourceUrl.url}" target="_blank" rel="noopener noreferrer" style="font-size: 11px; color: ${themeColors.textSecondary}; text-decoration: none; transition: color 0.2s;" onmouseover="this.style.color='${themeColors.textPrimary}'" onmouseout="this.style.color='${themeColors.textSecondary}'">
+                          View on ${fontSourceUrl.source === 'google' ? 'Google Fonts' : 'Adobe Fonts'}
+                        </a>`
+                      : ""
+                  }
                 </div>
-              </div>
+                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 6px;">
+                  ${createRingSVG(parseFloat(percentage), 20)}
+                  <div style="font-size: 11px; color: ${
+                    themeColors.textSecondary
+                  }; font-family: 'Inter', sans-serif; text-align: center;">
+                    Usage: ${percentage}%
+                  </div>
+                </div>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 12px; font-family: 'Inter', sans-serif;">
-              <div>
-                <div style="color: ${
-                  themeColors.textSecondary
-                }; margin-bottom: 4px;">Font Family</div>
-                <div style="color: ${
-                  themeColors.textPrimary
-                }; font-weight: 500; font-family: 'Courier New', monospace;">${
-          font.fontFamily
-        }</div>
-              </div>
-              <div>
-                <div style="color: ${
-                  themeColors.textSecondary
-                }; margin-bottom: 4px;">Usage</div>
-                <div style="color: ${
-                  themeColors.textPrimary
-                }; font-weight: 500;">${font.instances} ${
-          font.instances === 1 ? "instance" : "instances"
-        }</div>
-              </div>
-            </div>
-            ${
-              font.variantCount > 0
-                ? `
-              <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid ${
-                themeColors.border
-              };">
-                <div style="font-size: 11px; color: ${
-                  themeColors.textSecondary
-                }; font-family: 'Inter', sans-serif;">
-                  ${font.variantCount} unique ${
-                    font.variantCount === 1 ? "variant" : "variants"
-                  } (size/weight combinations)
-                </div>
-              </div>
-            `
-                : ""
-            }
           </div>
         `;
       })
@@ -1536,6 +1748,26 @@ class CSSInspector {
         ${fontList}
       </div>
     `;
+
+    // Add event listeners for copy functionality
+    setTimeout(() => {
+      const copyElements = fontsView.querySelectorAll("[data-copy-value]");
+      copyElements.forEach((el) => {
+        el.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          const value = el.getAttribute("data-copy-value");
+          const message = el.getAttribute("data-copy-message") || "Copied";
+          try {
+            await navigator.clipboard.writeText(value);
+            if (this.showToast) {
+              this.showToast(message, el);
+            }
+          } catch (err) {
+            console.error("Failed to copy:", err);
+          }
+        });
+      });
+    }, 0);
   }
 
   openColorsWindow(colors) {
@@ -1756,10 +1988,12 @@ class CSSInspector {
                   <span class="info-value">${font.fontFamily}</span>
                 </div>
                 <div class="info-item">
-                  <span class="info-label">Variants:</span>
-                  <span class="info-value">${font.variantCount} unique ${
-                font.variantCount === 1 ? "variant" : "variants"
-              }</span>
+                  <span class="info-label">Sizes:</span>
+                  <span class="info-value">${font.sizes && font.sizes.length > 0 ? font.sizes.map(s => `${s}px`).join(", ") : "N/A"}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Weights:</span>
+                  <span class="info-value">${font.weights && font.weights.length > 0 ? font.weights.join(", ") : "N/A"}</span>
                 </div>
               </div>
               <div class="instances">
@@ -3241,25 +3475,45 @@ class CSSInspector {
         fontFamilyMap.set(fontFamily, {
           fontFamily: fontFamily,
           instances: 0,
-          variants: new Set(), // Track unique variants (size/weight combinations) for reference
+          sizes: new Set(), // Track unique font sizes
+          weights: new Set(), // Track unique font weights
         });
       }
 
       const entry = fontFamilyMap.get(fontFamily);
       entry.instances++;
 
-      // Track variant for reference (but don't use it for grouping)
-      const variant = `${styles.fontSize}|${styles.fontWeight}`;
-      entry.variants.add(variant);
+      // Track sizes and weights separately
+      const fontSize = styles.fontSize;
+      const fontWeight = styles.fontWeight;
+      
+      // Parse and normalize font size (remove 'px' for sorting)
+      const sizeValue = parseFloat(fontSize);
+      if (!isNaN(sizeValue)) {
+        entry.sizes.add(sizeValue);
+      }
+      
+      // Parse and normalize font weight
+      const weightValue = fontWeight === "normal" ? 400 : fontWeight === "bold" ? 700 : parseInt(fontWeight);
+      if (!isNaN(weightValue)) {
+        entry.weights.add(weightValue);
+      }
     });
 
     // Return font families sorted by usage
     return Array.from(fontFamilyMap.values())
-      .map((font) => ({
-        fontFamily: font.fontFamily,
-        instances: font.instances,
-        variantCount: font.variants.size,
-      }))
+      .map((font) => {
+        // Sort sizes and weights for display
+        const sortedSizes = Array.from(font.sizes).sort((a, b) => a - b);
+        const sortedWeights = Array.from(font.weights).sort((a, b) => a - b);
+        
+        return {
+          fontFamily: font.fontFamily,
+          instances: font.instances,
+          sizes: sortedSizes,
+          weights: sortedWeights,
+        };
+      })
       .sort((a, b) => b.instances - a.instances);
   }
 
@@ -3465,9 +3719,9 @@ class CSSInspector {
         top: ${toastTop}px;
         left: ${toastLeft}px;
         transform: translateX(-50%) translateY(-10px);
-        background: ${colors.bgTertiary};
-        padding: 8px 12px;
-        border-radius: 6px;
+        background: ${colors.panelBg};
+        padding: 8px 16px;
+        border-radius: 9999px;
         font-size: 13px;
         font-family: 'Inter', sans-serif;
         font-weight: 500;
