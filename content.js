@@ -328,7 +328,13 @@ class CSSInspector {
           }, 0);
         }
       } else {
-        this.switchPanelToOverviewMode();
+        // Save which overview tab is active before re-rendering
+        const colorsView = this.inspectorPanel.querySelector("#overview-colors-view");
+        const fontsView = this.inspectorPanel.querySelector("#overview-fonts-view");
+        const activeTab = fontsView && fontsView.style.display !== "none" ? "fonts" : "colors";
+        
+        this.switchPanelToOverviewMode(activeTab);
+        
         // Restore scroll position after re-rendering
         if (panelContent && savedScrollTop > 0) {
           setTimeout(() => {
@@ -872,7 +878,7 @@ class CSSInspector {
     }
   }
 
-  switchPanelToOverviewMode() {
+  switchPanelToOverviewMode(activeTab = "colors") {
     if (!this.inspectorPanel) return;
 
     // Clear selected element when switching to overview
@@ -1059,15 +1065,40 @@ class CSSInspector {
     if (colorsSegment && fontsSegment && colorsView && fontsView && segmentIndicator && segmentContainer) {
       const colors = this.getThemeColors();
 
-      // Initial state - Colors is active
-      colorsSegment.style.color = colors.textPrimary;
-      fontsSegment.style.color = colors.textSecondary;
-      segmentIndicator.style.transform = "translateX(0)";
-
-      // Load initial colors view
+      // Set initial state based on activeTab parameter
+      // Disable transition temporarily to prevent animation on theme switch
+      segmentIndicator.style.transition = "none";
+      
+      if (activeTab === "fonts") {
+        colorsSegment.style.color = colors.textSecondary;
+        fontsSegment.style.color = colors.textPrimary;
+        const containerWidth = segmentContainer.offsetWidth;
+        const padding = 2;
+        const gap = 2;
+        const availableWidth = containerWidth - (padding * 2);
+        const buttonWidth = availableWidth / 2;
+        segmentIndicator.style.transform = `translateX(${buttonWidth + gap}px)`;
+        colorsView.style.display = "none";
+        fontsView.style.display = "block";
+        setTimeout(() => {
+          this.renderFontsView();
+        }, 0);
+      } else {
+        // Colors is active (default)
+        colorsSegment.style.color = colors.textPrimary;
+        fontsSegment.style.color = colors.textSecondary;
+        segmentIndicator.style.transform = "translateX(0)";
+        colorsView.style.display = "block";
+        fontsView.style.display = "none";
+        setTimeout(() => {
+          this.renderColorsView();
+        }, 0);
+      }
+      
+      // Re-enable transition after a brief delay
       setTimeout(() => {
-        this.renderColorsView();
-      }, 0);
+        segmentIndicator.style.transition = "transform 0.3s ease-out";
+      }, 50);
 
       // Colors segment click
       colorsSegment.addEventListener("click", (e) => {
@@ -1334,56 +1365,9 @@ class CSSInspector {
       return;
     }
 
-    // Calculate total instances for percentage calculation
-    const totalInstances = colors.reduce((sum, color) => sum + color.instances, 0);
-
-    // Helper function to create circular ring SVG
-    const createRingSVG = (percentage, size = 20) => {
-      const radius = (size - 4) / 2;
-      const circumference = 2 * Math.PI * radius;
-      const offset = circumference - (percentage / 100) * circumference;
-      
-      // Inverted theme colors for rings
-      const isLightTheme = this.theme === "light";
-      const ringStrokeColor = isLightTheme ? "#0D0D0D" : "#E5E5E5"; // Main inverted color
-      const ringBgColor = isLightTheme ? "#4A4A4A" : "#F5F5F5"; // Lighter version of inverted color
-      const ringBgOpacity = isLightTheme ? "0.3" : "0.4";
-      
-      return `
-        <svg width="${size}" height="${size}" style="display: block;">
-          <circle
-            cx="${size / 2}"
-            cy="${size / 2}"
-            r="${radius}"
-            fill="none"
-            stroke="${ringBgColor}"
-            stroke-width="2"
-            opacity="${ringBgOpacity}"
-          />
-          <circle
-            cx="${size / 2}"
-            cy="${size / 2}"
-            r="${radius}"
-            fill="none"
-            stroke="${ringStrokeColor}"
-            stroke-width="2"
-            stroke-dasharray="${circumference}"
-            stroke-dashoffset="${offset}"
-            stroke-linecap="round"
-            transform="rotate(-90 ${size / 2} ${size / 2})"
-          />
-        </svg>
-      `;
-    };
-
     // Create color grid
     const colorGrid = colors
       .map((color) => {
-        // Calculate percentage
-        const percentage = totalInstances > 0 
-          ? ((color.instances / totalInstances) * 100).toFixed(1)
-          : "0";
-        
         return `
           <div style="background: ${
             themeColors.bgSecondary
@@ -1404,14 +1388,6 @@ class CSSInspector {
               }; font-family: 'Courier New', monospace; margin-bottom: 4px;">${
           color.hex
         }</div>
-              <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px;">
-                ${createRingSVG(parseFloat(percentage), 20)}
-                <div style="font-size: 11px; color: ${
-                  themeColors.textSecondary
-                }; font-family: 'Inter', sans-serif;">
-                  Usage: ${percentage}%
-                </div>
-              </div>
               ${
                 color.categories && color.categories.length > 0
                   ? `
@@ -1624,52 +1600,11 @@ class CSSInspector {
       return;
     }
 
-    // Calculate total instances for percentage calculation
-    const totalInstances = fonts.reduce((sum, font) => sum + font.instances, 0);
-    
-    // Helper function to create circular ring SVG
-    const createRingSVG = (percentage, size = 20) => {
-      const radius = (size - 4) / 2;
-      const circumference = 2 * Math.PI * radius;
-      const offset = circumference - (percentage / 100) * circumference;
-      
-      // Inverted theme colors for rings
-      const isLightTheme = this.theme === "light";
-      const ringStrokeColor = isLightTheme ? "#0D0D0D" : "#E5E5E5"; // Main inverted color
-      const ringBgColor = isLightTheme ? "#4A4A4A" : "#F5F5F5"; // Lighter version of inverted color
-      const ringBgOpacity = isLightTheme ? "0.3" : "0.4";
-      
-      return `
-        <svg width="${size}" height="${size}" style="display: block;">
-          <circle
-            cx="${size / 2}"
-            cy="${size / 2}"
-            r="${radius}"
-            fill="none"
-            stroke="${ringBgColor}"
-            stroke-width="2"
-            opacity="${ringBgOpacity}"
-          />
-          <circle
-            cx="${size / 2}"
-            cy="${size / 2}"
-            r="${radius}"
-            fill="none"
-            stroke="${ringStrokeColor}"
-            stroke-width="2"
-            stroke-dasharray="${circumference}"
-            stroke-dashoffset="${offset}"
-            stroke-linecap="round"
-            transform="rotate(-90 ${size / 2} ${size / 2})"
-          />
-        </svg>
-      `;
-    };
-    
     // Create font list
     const fontList = fonts
       .map((font, index) => {
-        const label =
+        // Determine usage label (Primary, Secondary, Tertiary)
+        let label =
           index === 0
             ? "Primary"
             : index === 1
@@ -1678,10 +1613,12 @@ class CSSInspector {
             ? "Tertiary"
             : "";
         
-        // Calculate percentage
-        const percentage = totalInstances > 0 
-          ? ((font.instances / totalInstances) * 100).toFixed(1)
-          : "0";
+        // Check if font is a display font (maxFontSize > 60px)
+        const isDisplayFont = font.maxFontSize > 60;
+        if (isDisplayFont) {
+          // Add Display label (can be combined with Primary/Secondary/Tertiary)
+          label = label ? `${label} • Display` : "Display";
+        }
         
         const fontSourceUrl = this.getFontSourceUrl(font.fontFamily);
         
@@ -1721,14 +1658,6 @@ class CSSInspector {
                         </a>`
                       : ""
                   }
-                </div>
-                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 6px;">
-                  ${createRingSVG(parseFloat(percentage), 20)}
-                  <div style="font-size: 11px; color: ${
-                    themeColors.textSecondary
-                  }; font-family: 'Inter', sans-serif; text-align: center;">
-                    Usage: ${percentage}%
-                  </div>
                 </div>
             </div>
           </div>
@@ -3327,24 +3256,24 @@ class CSSInspector {
 
       const styles = window.getComputedStyle(element);
 
-      // Only process visible elements
+      // Only process visible elements (check rendering, not viewport position)
       const rect = element.getBoundingClientRect();
       const isVisible =
         rect.width > 0 &&
         rect.height > 0 &&
         styles.display !== "none" &&
         styles.visibility !== "hidden" &&
-        styles.opacity !== "0" &&
-        rect.top < window.innerHeight &&
-        rect.bottom > 0 &&
-        rect.left < window.innerWidth &&
-        rect.right > 0;
+        styles.opacity !== "0";
 
       if (!isVisible) {
         return;
       }
 
-      // Text color
+      // Calculate element area for weighting
+      const elementArea = rect.width * rect.height;
+
+      // Text color - weight by approximate text area
+      // Estimate text area as a fraction of element area (text typically doesn't fill entire element)
       if (
         styles.color &&
         styles.color !== "rgba(0, 0, 0, 0)" &&
@@ -3355,34 +3284,117 @@ class CSSInspector {
           const existing = colors.get(hex) || {
             hex,
             instances: 0,
+            area: 0,
             categories: new Set(),
           };
+          // For text, estimate area as 30-50% of element area (text doesn't fill entire element)
+          // Use font size to determine coverage: larger fonts = more coverage
+          const fontSize = parseFloat(styles.fontSize) || 16;
+          const textCoverageRatio = Math.min(0.5, Math.max(0.2, fontSize / 40)); // Between 20-50% based on font size
+          const estimatedTextArea = elementArea * textCoverageRatio;
             existing.instances++;
+          existing.area += estimatedTextArea;
           existing.categories.add("typography");
           colors.set(hex, existing);
         }
       }
 
-      // Background color
+      // Background color - calculate visible area (parent area minus child areas)
+      // Only count if element is large enough (filters out tiny decorative elements)
+      const minBackgroundArea = 1000; // Minimum 1000px² to count
       if (
+        elementArea >= minBackgroundArea &&
         styles.backgroundColor &&
         styles.backgroundColor !== "rgba(0, 0, 0, 0)" &&
         styles.backgroundColor !== "transparent"
       ) {
-        const hex = this.rgbToHex(styles.backgroundColor);
-        if (hex) {
-          const existing = colors.get(hex) || {
-            hex,
-            instances: 0,
-            categories: new Set(),
-          };
-          existing.instances++;
-          existing.categories.add("background");
-          colors.set(hex, existing);
+        // Calculate visible area by subtracting only direct children with different backgrounds
+        // This is more accurate than deep recursion which can over-subtract
+        const parentBgHex = this.rgbToHex(styles.backgroundColor);
+        if (!parentBgHex) {
+          return; // Skip if we can't convert the background color
+        }
+        const transparentHex = this.rgbToHex("rgba(0, 0, 0, 0)");
+        const transparentHex2 = this.rgbToHex("transparent");
+        
+        // Track all descendant elements with different backgrounds (not just direct children)
+        // Use a Set to avoid double-counting overlapping elements
+        const processedElements = new Set();
+        
+        const calculateDescendantAreaSum = (parentElement, parentBgHex) => {
+          let sum = 0;
+          
+          // Use a queue to process all descendants level by level
+          const queue = Array.from(parentElement.children);
+          
+          while (queue.length > 0) {
+            const child = queue.shift();
+            
+            // Skip if already processed (handles overlapping elements)
+            if (processedElements.has(child)) {
+              continue;
+            }
+            
+            const childStyles = window.getComputedStyle(child);
+            const childRect = child.getBoundingClientRect();
+            const childVisible = childRect.width > 0 && childRect.height > 0 &&
+              childStyles.display !== "none" && childStyles.visibility !== "hidden" &&
+              childStyles.opacity !== "0";
+            
+            if (!childVisible) {
+              continue;
+            }
+            
+            const childBg = childStyles.backgroundColor;
+            const childBgHex = this.rgbToHex(childBg);
+            
+            // If child has a different, non-transparent background, subtract its area
+            if (childBgHex && 
+                childBgHex !== transparentHex && 
+                childBgHex !== transparentHex2 &&
+                childBgHex !== parentBgHex) {
+              // Child has different background - subtract its full area
+              // Don't process its children (they cover the child, not the parent)
+              const childArea = childRect.width * childRect.height;
+              sum += childArea;
+              processedElements.add(child);
+          } else {
+              // Child has same/transparent/undefined background - add its children to queue
+              // (they might have backgrounds that cover the parent)
+              for (const grandchild of child.children) {
+                if (!processedElements.has(grandchild)) {
+                  queue.push(grandchild);
+                }
+              }
+            }
+          }
+          
+          return sum;
+        };
+        
+        // Calculate visible area = parent area - sum of all descendant areas with different backgrounds
+        const descendantAreaSum = calculateDescendantAreaSum(element, parentBgHex);
+        const visibleArea = Math.max(0, elementArea - descendantAreaSum);
+        
+        // Only count if visible area is significant
+        if (visibleArea > 0) {
+          const hex = this.rgbToHex(styles.backgroundColor);
+          if (hex) {
+            const existing = colors.get(hex) || {
+              hex,
+              instances: 0,
+              area: 0,
+              categories: new Set(),
+            };
+            existing.instances++;
+            existing.area += visibleArea;
+            existing.categories.add("background");
+            colors.set(hex, existing);
+          }
         }
       }
 
-      // Border color
+      // Border color - weight by border area
       const borderColor = styles.borderColor || styles.borderTopColor;
       if (
         borderColor &&
@@ -3395,9 +3407,14 @@ class CSSInspector {
           const existing = colors.get(hex) || {
             hex,
             instances: 0,
+            area: 0,
             categories: new Set(),
           };
+          // Calculate border area: perimeter × border width
+          const borderWidth = parseFloat(styles.borderWidth) || 1;
+          const borderArea = (rect.width * 2 + rect.height * 2) * borderWidth;
           existing.instances++;
+          existing.area += borderArea;
           existing.categories.add("border");
           colors.set(hex, existing);
         }
@@ -3408,9 +3425,10 @@ class CSSInspector {
       .map((color) => ({
         hex: color.hex,
         instances: color.instances,
+        area: color.area,
         categories: Array.from(color.categories),
       }))
-      .sort((a, b) => b.instances - a.instances);
+      .sort((a, b) => b.area - a.area); // Sort by area instead of instances
   }
 
   extractTypography() {
@@ -3436,16 +3454,12 @@ class CSSInspector {
         return;
       }
 
-      // Only process visible elements
+      // Only process visible elements (check rendering, not viewport position)
       const rect = element.getBoundingClientRect();
       const isVisible =
         rect.width > 0 &&
         rect.height > 0 &&
-        styles.opacity !== "0" &&
-        rect.top < window.innerHeight &&
-        rect.bottom > 0 &&
-        rect.left < window.innerWidth &&
-        rect.right > 0;
+        styles.opacity !== "0";
 
       if (!isVisible) {
         return;
@@ -3457,17 +3471,57 @@ class CSSInspector {
         .replace(/['"]/g, "")
         .trim();
 
+      // List of common system fonts to exclude
+      const systemFonts = new Set([
+        "initial",
+        "inherit",
+        "serif",
+        "sans-serif",
+        "monospace",
+        "cursive",
+        "fantasy",
+        "Times",
+        "Times New Roman",
+        "Arial",
+        "Helvetica",
+        "Helvetica Neue",
+        "Courier",
+        "Courier New",
+        "Georgia",
+        "Verdana",
+        "Tahoma",
+        "Trebuchet MS",
+        "Impact",
+        "Comic Sans MS",
+        "Lucida Console",
+        "Lucida Sans Unicode",
+        "Palatino",
+        "Garamond",
+        "Bookman",
+        "Avant Garde",
+        "Verdana",
+        "Geneva",
+        "Optima",
+        "Futura",
+        "Baskerville",
+        "Didot",
+        "Bodoni",
+        "Hoefler Text",
+        "American Typewriter",
+        "Andale Mono",
+        "Monaco",
+        "Menlo",
+        "Consolas",
+        "Liberation Sans",
+        "Liberation Serif",
+        "Liberation Mono",
+        "DejaVu Sans",
+        "DejaVu Serif",
+        "DejaVu Sans Mono"
+      ]);
+
       // Skip generic/system fonts
-      if (
-        !fontFamily ||
-        fontFamily === "initial" ||
-        fontFamily === "inherit" ||
-        fontFamily === "serif" ||
-        fontFamily === "sans-serif" ||
-        fontFamily === "monospace" ||
-        fontFamily === "cursive" ||
-        fontFamily === "fantasy"
-      ) {
+      if (!fontFamily || systemFonts.has(fontFamily)) {
         return;
       }
 
@@ -3475,6 +3529,7 @@ class CSSInspector {
         fontFamilyMap.set(fontFamily, {
           fontFamily: fontFamily,
           instances: 0,
+          maxFontSize: 0, // Track maximum font size for display font detection
           sizes: new Set(), // Track unique font sizes
           weights: new Set(), // Track unique font weights
         });
@@ -3483,8 +3538,13 @@ class CSSInspector {
       const entry = fontFamilyMap.get(fontFamily);
       entry.instances++;
 
+      // Track font size for display font detection
+      const fontSize = parseFloat(styles.fontSize) || 16;
+      if (fontSize > entry.maxFontSize) {
+        entry.maxFontSize = fontSize;
+      }
+
       // Track sizes and weights separately
-      const fontSize = styles.fontSize;
       const fontWeight = styles.fontWeight;
       
       // Parse and normalize font size (remove 'px' for sorting)
@@ -3500,7 +3560,7 @@ class CSSInspector {
       }
     });
 
-    // Return font families sorted by usage
+    // Return font families sorted by text area (visual prominence)
     return Array.from(fontFamilyMap.values())
       .map((font) => {
         // Sort sizes and weights for display
@@ -3510,11 +3570,12 @@ class CSSInspector {
         return {
           fontFamily: font.fontFamily,
           instances: font.instances,
+          maxFontSize: font.maxFontSize,
           sizes: sortedSizes,
           weights: sortedWeights,
         };
       })
-      .sort((a, b) => b.instances - a.instances);
+      .sort((a, b) => b.instances - a.instances); // Sort by instance count
   }
 
   isValidColor(color) {

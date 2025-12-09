@@ -22,7 +22,7 @@ chrome.action.onClicked.addListener((tab) => {
           // Send the toggle message again
           chrome.tabs.sendMessage(tab.id, { action: 'togglePanel' }, (response) => {
             if (chrome.runtime.lastError) {
-              console.error('[CSS Inspector] Error toggling panel after injection:', chrome.runtime.lastError);
+              console.error('[CSS Inspector] Error toggling panel after injection:', chrome.runtime.lastError.message);
             } else {
               console.log('[CSS Inspector] Toggle message sent successfully, response:', response);
             }
