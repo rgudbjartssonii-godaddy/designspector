@@ -11,6 +11,10 @@ class CSSInspector {
     this.theme = "dark"; // Will be set properly in init()
     this.toastElement = null;
     this.toastTimeout = null;
+    this.isScrolling = false;
+    this.scrollEndTimeout = null;
+    this.scrollAnimationFrame = null;
+    this.lastMouseDownPos = null;
     this.init();
   }
 
@@ -442,7 +446,7 @@ class CSSInspector {
     document.addEventListener("mouseover", this.boundHandleMouseOver, true);
     document.addEventListener("mouseout", this.boundHandleMouseOut, true);
 
-    // Prevent mousedown to stop page interactions early
+    // Track mousedown to distinguish between clicks and drags (for scrolling)
     document.addEventListener("mousedown", this.boundHandleMouseDown, true);
 
     // Enable click to lock elements
@@ -458,13 +462,34 @@ class CSSInspector {
   }
 
   handleScroll() {
-    // Update overlays when page scrolls or resizes
-    if (this.hoveredElement) {
-      this.updateOverlay("hover", this.hoveredElement);
+    // Mark that user is actively scrolling
+    this.isScrolling = true;
+    
+    // Clear existing timeout
+    if (this.scrollEndTimeout) {
+      clearTimeout(this.scrollEndTimeout);
     }
-    if (this.selectedElement) {
-      this.updateOverlay("selected", this.selectedElement);
+    
+    // Set flag to false after scrolling stops (debounce)
+    this.scrollEndTimeout = setTimeout(() => {
+      this.isScrolling = false;
+    }, 150);
+    
+    // Throttle overlay updates using requestAnimationFrame
+    if (this.scrollAnimationFrame) {
+      cancelAnimationFrame(this.scrollAnimationFrame);
     }
+    
+    this.scrollAnimationFrame = requestAnimationFrame(() => {
+      // Update overlays when page scrolls or resizes
+      if (this.hoveredElement) {
+        this.updateOverlay("hover", this.hoveredElement);
+      }
+      if (this.selectedElement) {
+        this.updateOverlay("selected", this.selectedElement);
+      }
+      this.scrollAnimationFrame = null;
+    });
   }
 
   deactivateInspector() {
@@ -2178,82 +2203,29 @@ class CSSInspector {
     // Always allow highlighting on hover (even when element is locked)
     // But only update panel if no element is locked
     if (element !== this.selectedElement) {
-    this.hoveredElement = element;
-      this.updateOverlay("hover", element);
+      this.hoveredElement = element;
+      
+      // Skip expensive operations during active scrolling for better performance
+      if (!this.isScrolling) {
+        this.updateOverlay("hover", element);
 
-      // Ensure the element is fully visible (accounting for outline offset and inspector panel)
-      const rect = element.getBoundingClientRect();
-      const outlineWidth = 2;
-      const outlineOffset = 2;
-      const viewportPadding = 10;
-      const inspectorPanelWidth = 380; // Panel width from CSS
-      const inspectorPanelRightMargin = 20; // Panel right margin from CSS
-      const effectiveViewportRight =
-        window.innerWidth - inspectorPanelWidth - inspectorPanelRightMargin;
-      const totalExtension = outlineWidth + outlineOffset;
+        // Update header to show hovered element identifier (with lower opacity dot)
+        if (!this.selectedElement) {
+          this.updateLockedElementHeader(element, false); // false = not locked, just hovered
+        }
 
-      const currentScrollX = window.scrollX || window.pageXOffset || 0;
-      const currentScrollY = window.scrollY || window.pageYOffset || 0;
-
-      // Calculate outline bounds in viewport coordinates
-      const outlineLeft = rect.left - totalExtension;
-      const outlineRight = rect.right + totalExtension;
-      const outlineTop = rect.top - totalExtension;
-      const outlineBottom = rect.bottom + totalExtension;
-
-      // Calculate absolute document coordinates of outline edges
-      const outlineDocLeft = rect.left + currentScrollX - totalExtension;
-      const outlineDocRight = rect.right + currentScrollX + totalExtension;
-      const outlineDocTop = rect.top + currentScrollY - totalExtension;
-      const outlineDocBottom = rect.bottom + currentScrollY + totalExtension;
-
-      // Calculate desired scroll positions
-      let newScrollX = currentScrollX;
-      let newScrollY = currentScrollY;
-
-      // Left edge: if outline extends beyond viewport left, scroll right
-      if (outlineLeft < viewportPadding) {
-        newScrollX = outlineDocLeft - viewportPadding;
-      }
-      // Right edge: if outline extends beyond effective viewport right, scroll left
-      else if (outlineRight > effectiveViewportRight - viewportPadding) {
-        newScrollX =
-          outlineDocRight - (effectiveViewportRight - viewportPadding);
-      }
-
-      // Top edge: if outline extends beyond viewport top, scroll down
-      if (outlineTop < viewportPadding) {
-        newScrollY = outlineDocTop - viewportPadding;
-      }
-      // Bottom edge: if outline extends beyond viewport bottom, scroll up
-      else if (outlineBottom > window.innerHeight - viewportPadding) {
-        newScrollY = outlineDocBottom - (window.innerHeight - viewportPadding);
-      }
-
-      // Ensure scroll positions are non-negative
-      newScrollX = Math.max(0, newScrollX);
-      newScrollY = Math.max(0, newScrollY);
-
-      // Apply scroll if position changed
-      if (newScrollX !== currentScrollX || newScrollY !== currentScrollY) {
-        window.scrollTo(newScrollX, newScrollY);
-        // Update overlay after scroll
+        // Only send update to popup if no element is locked
+        if (!this.selectedElement) {
+          clearTimeout(this.updateTimeout);
+          this.updateTimeout = setTimeout(() => {
+            this.sendElementUpdateToPopup(element, false);
+          }, 50);
+        }
+      } else {
+        // During scrolling, just update overlay position (lightweight)
         requestAnimationFrame(() => {
           this.updateOverlay("hover", element);
         });
-      }
-
-      // Update header to show hovered element identifier (with lower opacity dot)
-      if (!this.selectedElement) {
-        this.updateLockedElementHeader(element, false); // false = not locked, just hovered
-      }
-
-      // Only send update to popup if no element is locked
-      if (!this.selectedElement) {
-        clearTimeout(this.updateTimeout);
-        this.updateTimeout = setTimeout(() => {
-          this.sendElementUpdateToPopup(element, false);
-        }, 50);
       }
     }
   }
@@ -2303,11 +2275,12 @@ class CSSInspector {
       return;
     }
 
-    // Prevent default behavior early (at mousedown) to stop any page interactions
-    // This prevents text selection, drag operations, and other mousedown behaviors
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
+    // Track mousedown position to detect drag vs click
+    this.lastMouseDownPos = {
+      x: e.clientX,
+      y: e.clientY,
+      time: Date.now()
+    };
   }
 
   handleClick(e) {
@@ -2329,11 +2302,28 @@ class CSSInspector {
       return;
     }
 
-    // Prevent default behavior for ALL elements when inspecting
-    // to avoid any page interactions (navigation, form submission, text selection, etc.)
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
+    // Detect if this was a drag gesture vs a click
+    // If mouse moved significantly (>5px) or took too long (>500ms), it's likely a drag
+    const isDrag = this.lastMouseDownPos && (
+      Math.abs(e.clientX - this.lastMouseDownPos.x) > 5 ||
+      Math.abs(e.clientY - this.lastMouseDownPos.y) > 5 ||
+      (Date.now() - this.lastMouseDownPos.time) > 500
+    );
+
+    // Only prevent default for actual clicks, not drag gestures (which are used for scrolling)
+    if (!isDrag) {
+      // Prevent default behavior for clicks to avoid page interactions
+      // (navigation, form submission, text selection, etc.)
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    } else {
+      // For drags, just stop propagation but allow default behavior (scrolling)
+      e.stopPropagation();
+      // Clear the mousedown position since this was a drag
+      this.lastMouseDownPos = null;
+      return; // Don't process drags as clicks
+    }
 
     // Check if this is the same element that's already being displayed (before we update selectedElement)
     // If so, skip animation to avoid re-animating the same content
@@ -2345,6 +2335,9 @@ class CSSInspector {
     if (this.selectedElement && this.selectedElement !== element) {
       this.removeOverlay("selected");
     }
+
+    // Clear mousedown position since we processed this as a click
+    this.lastMouseDownPos = null;
 
     // Lock (select) the clicked element
     this.selectedElement = element;
