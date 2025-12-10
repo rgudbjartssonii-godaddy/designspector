@@ -167,7 +167,7 @@ class CSSInspector {
       } else if (message.action === "getStats") {
         const colors = instance.extractColors();
         const typography = instance.extractTypography();
-        sendResponse({ 
+        sendResponse({
           colorCount: colors.length,
           typographyCount: typography.length,
         });
@@ -333,12 +333,17 @@ class CSSInspector {
         }
       } else {
         // Save which overview tab is active before re-rendering
-        const colorsView = this.inspectorPanel.querySelector("#overview-colors-view");
-        const fontsView = this.inspectorPanel.querySelector("#overview-fonts-view");
-        const activeTab = fontsView && fontsView.style.display !== "none" ? "fonts" : "colors";
-        
+        const colorsView = this.inspectorPanel.querySelector(
+          "#overview-colors-view"
+        );
+        const fontsView = this.inspectorPanel.querySelector(
+          "#overview-fonts-view"
+        );
+        const activeTab =
+          fontsView && fontsView.style.display !== "none" ? "fonts" : "colors";
+
         this.switchPanelToOverviewMode(activeTab);
-        
+
         // Restore scroll position after re-rendering
         if (panelContent && savedScrollTop > 0) {
           setTimeout(() => {
@@ -456,7 +461,7 @@ class CSSInspector {
     this.boundHandleScroll = this.handleScroll.bind(this);
     window.addEventListener("scroll", this.boundHandleScroll, true);
     window.addEventListener("resize", this.boundHandleScroll, true);
-    
+
     // Add styles to document
     this.injectInspectorStyles();
   }
@@ -464,22 +469,22 @@ class CSSInspector {
   handleScroll() {
     // Mark that user is actively scrolling
     this.isScrolling = true;
-    
+
     // Clear existing timeout
     if (this.scrollEndTimeout) {
       clearTimeout(this.scrollEndTimeout);
     }
-    
+
     // Set flag to false after scrolling stops (debounce)
     this.scrollEndTimeout = setTimeout(() => {
       this.isScrolling = false;
     }, 150);
-    
+
     // Throttle overlay updates using requestAnimationFrame
     if (this.scrollAnimationFrame) {
       cancelAnimationFrame(this.scrollAnimationFrame);
     }
-    
+
     this.scrollAnimationFrame = requestAnimationFrame(() => {
       // Update overlays when page scrolls or resizes
       if (this.hoveredElement) {
@@ -489,6 +494,85 @@ class CSSInspector {
         this.updateOverlay("selected", this.selectedElement);
       }
       this.scrollAnimationFrame = null;
+    });
+  }
+
+  updatePanelHeight() {
+    if (!this.inspectorPanel) return;
+
+    // Get the panel content element
+    const panelContent = this.inspectorPanel.querySelector("#panel-content");
+    if (!panelContent) return;
+
+    // Get current height first (before changing anything)
+    const currentHeight =
+      this.inspectorPanel.offsetHeight || this.inspectorPanel.scrollHeight;
+
+    // Temporarily disable transition and set to auto to measure
+    this.inspectorPanel.style.setProperty("transition", "none", "important");
+    this.inspectorPanel.style.setProperty("height", "auto", "important");
+
+    // Measure the actual content height
+    const contentHeight = panelContent.scrollHeight;
+    const headerElement = this.inspectorPanel.querySelector("div:first-child");
+    const headerHeight = headerElement ? headerElement.offsetHeight : 0;
+    const totalHeight = contentHeight + headerHeight;
+
+    // Get max height (80vh)
+    const maxHeight = window.innerHeight * 0.8;
+
+    // Set height to content height, but not exceeding max-height
+    const finalHeight = Math.min(totalHeight, maxHeight);
+
+    // If the height hasn't changed, don't animate
+    if (Math.abs(currentHeight - finalHeight) < 1) {
+      this.inspectorPanel.style.setProperty(
+        "height",
+        `${finalHeight}px`,
+        "important"
+      );
+      // Re-enable transition (CSS will handle it)
+      this.inspectorPanel.style.setProperty("transition", "", "important");
+      // If content exceeds max height, ensure scrolling works
+      if (totalHeight > maxHeight) {
+        this.inspectorPanel.style.overflowY = "auto";
+      } else {
+        this.inspectorPanel.style.overflowY = "hidden";
+      }
+      return;
+    }
+
+    // Set current height explicitly first (to establish a starting point for transition)
+    this.inspectorPanel.style.setProperty(
+      "height",
+      `${currentHeight}px`,
+      "important"
+    );
+
+    // Re-enable transition
+    this.inspectorPanel.style.setProperty(
+      "transition",
+      "height 0.45s cubic-bezier(0.88, 0, 0.12, 1)",
+      "important"
+    );
+
+    // Force a reflow
+    this.inspectorPanel.offsetHeight;
+
+    // Use requestAnimationFrame to trigger the transition
+    requestAnimationFrame(() => {
+      this.inspectorPanel.style.setProperty(
+        "height",
+        `${finalHeight}px`,
+        "important"
+      );
+
+      // If content exceeds max height, ensure scrolling works
+      if (totalHeight > maxHeight) {
+        this.inspectorPanel.style.overflowY = "auto";
+      } else {
+        this.inspectorPanel.style.overflowY = "hidden";
+      }
     });
   }
 
@@ -729,10 +813,10 @@ class CSSInspector {
           e.stopPropagation();
           e.stopImmediatePropagation();
           // Close panel completely - remove it and disable inspector
-    if (this.inspectorPanel) {
-      this.inspectorPanel.remove();
-      this.inspectorPanel = null;
-    }
+          if (this.inspectorPanel) {
+            this.inspectorPanel.remove();
+            this.inspectorPanel = null;
+          }
           // Disable inspector without recreating panel
           this.isActive = false;
           if (this.boundHandleMouseOver) {
@@ -929,10 +1013,12 @@ class CSSInspector {
     }; border-radius: 8px 8px 0 0; flex-shrink: 0;">
         <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; gap: 12px; position: relative;">
           <div id="panel-drag-handle" style="cursor: move; display: flex; align-items: center; padding: 4px; border-radius: 4px; transition: background 0.2s; user-select: none; flex-shrink: 0;" onmouseover="this.style.background='${
-              colors.bgHover
-            }'" onmouseout="this.style.background='transparent'" title="Drag to move">
+            colors.bgHover
+          }'" onmouseout="this.style.background='transparent'" title="Drag to move">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" style="width: 16px; height: 16px;">
-                <path fill="${colors.textSecondary}" d="M15 4a2 2 0 1 0 0 4 2 2 0 0 0 0-4M15 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4M15 16a2 2 0 1 0 0 4 2 2 0 0 0 0-4M9 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4M9 16a2 2 0 1 0 0 4 2 2 0 0 0 0-4M9 4a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/>
+                <path fill="${
+                  colors.textSecondary
+                }" d="M15 4a2 2 0 1 0 0 4 2 2 0 0 0 0-4M15 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4M15 16a2 2 0 1 0 0 4 2 2 0 0 0 0-4M9 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4M9 16a2 2 0 1 0 0 4 2 2 0 0 0 0-4M9 4a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/>
               </svg>
         </div>
           <div style="display: flex; align-items: center; gap: 8px; position: absolute; left: 50%; transform: translateX(-50%);">
@@ -942,8 +1028,8 @@ class CSSInspector {
       colors.textPrimary
     }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 9999px; cursor: pointer; transition: all 0.2s; user-select: none; white-space: nowrap;" onclick="(function(inst){const colors=inst.getThemeColors();const overviewBtn=document.getElementById('panel-segment-overview');const inspectorBtn=document.getElementById('panel-segment-inspector');inspectorBtn.style.background='transparent';inspectorBtn.style.color=colors.textSecondary;overviewBtn.style.background=colors.segmentActive;overviewBtn.style.color=colors.textPrimary;inst.setInspectorState(false);})(window.inspectorInstance || window.inspector);">Overview</button>
               <button id="panel-segment-inspector" style="padding: 6px 16px; border: none; background: transparent; color: ${
-      colors.textSecondary
-    }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 9999px; cursor: pointer; transition: all 0.2s; user-select: none; white-space: nowrap;" onclick="(function(inst){const colors=inst.getThemeColors();const overviewBtn=document.getElementById('panel-segment-overview');const inspectorBtn=document.getElementById('panel-segment-inspector');overviewBtn.style.background='transparent';overviewBtn.style.color=colors.textSecondary;inspectorBtn.style.background=colors.segmentActive;inspectorBtn.style.color=colors.textPrimary;inst.setInspectorState(true);})(window.inspectorInstance || window.inspector);">Inspector</button>
+                colors.textSecondary
+              }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 9999px; cursor: pointer; transition: all 0.2s; user-select: none; white-space: nowrap;" onclick="(function(inst){const colors=inst.getThemeColors();const overviewBtn=document.getElementById('panel-segment-overview');const inspectorBtn=document.getElementById('panel-segment-inspector');overviewBtn.style.background='transparent';overviewBtn.style.color=colors.textSecondary;inspectorBtn.style.background=colors.segmentActive;inspectorBtn.style.color=colors.textPrimary;inst.setInspectorState(true);})(window.inspectorInstance || window.inspector);">Inspector</button>
       </div>
           <div style="display: flex; align-items: center; gap: 8px;">
             <button id="theme-switcher" style="background: transparent; border: none; cursor: pointer; color: ${
@@ -1006,13 +1092,13 @@ class CSSInspector {
           }; border-radius: 6px; padding: 2px; gap: 2px; margin-bottom: 16px; position: relative;">
             <div id="overview-segment-indicator" style="position: absolute; top: 2px; left: 2px; width: calc(50% - 2px); height: calc(100% - 4px); background: ${
               colors.segmentActive
-            }; border-radius: 4px; transition: transform 0.3s ease-out; z-index: 0;"></div>
+            }; border-radius: 4px; z-index: 0;"></div>
             <button id="overview-segment-colors" style="flex: 1; padding: 8px 12px; border: none; background: transparent; color: ${
-      colors.textPrimary
-    }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 4px; cursor: pointer; transition: color 0.2s; user-select: none; position: relative; z-index: 1;">Colors</button>
+              colors.textPrimary
+            }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 4px; cursor: pointer; transition: color 0.2s; user-select: none; position: relative; z-index: 1;">Colors</button>
             <button id="overview-segment-fonts" style="flex: 1; padding: 8px 12px; border: none; background: transparent; color: ${
-      colors.textSecondary
-    }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 4px; cursor: pointer; transition: color 0.2s; user-select: none; position: relative; z-index: 1;">Fonts</button>
+              colors.textSecondary
+            }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 4px; cursor: pointer; transition: color 0.2s; user-select: none; position: relative; z-index: 1;">Fonts</button>
           </div>
           
           <!-- Content area that switches between colors and fonts -->
@@ -1084,23 +1170,34 @@ class CSSInspector {
     const fontsSegment = document.getElementById("overview-segment-fonts");
     const colorsView = document.getElementById("overview-colors-view");
     const fontsView = document.getElementById("overview-fonts-view");
-    const segmentIndicator = document.getElementById("overview-segment-indicator");
-    const segmentContainer = document.getElementById("overview-segment-container");
+    const segmentIndicator = document.getElementById(
+      "overview-segment-indicator"
+    );
+    const segmentContainer = document.getElementById(
+      "overview-segment-container"
+    );
 
-    if (colorsSegment && fontsSegment && colorsView && fontsView && segmentIndicator && segmentContainer) {
+    if (
+      colorsSegment &&
+      fontsSegment &&
+      colorsView &&
+      fontsView &&
+      segmentIndicator &&
+      segmentContainer
+    ) {
       const colors = this.getThemeColors();
 
       // Set initial state based on activeTab parameter
       // Disable transition temporarily to prevent animation on theme switch
       segmentIndicator.style.transition = "none";
-      
+
       if (activeTab === "fonts") {
         colorsSegment.style.color = colors.textSecondary;
         fontsSegment.style.color = colors.textPrimary;
         const containerWidth = segmentContainer.offsetWidth;
         const padding = 2;
         const gap = 2;
-        const availableWidth = containerWidth - (padding * 2);
+        const availableWidth = containerWidth - padding * 2;
         const buttonWidth = availableWidth / 2;
         segmentIndicator.style.transform = `translateX(${buttonWidth + gap}px)`;
         colorsView.style.display = "none";
@@ -1119,10 +1216,11 @@ class CSSInspector {
           this.renderColorsView();
         }, 0);
       }
-      
+
       // Re-enable transition after a brief delay
       setTimeout(() => {
-        segmentIndicator.style.transition = "transform 0.3s ease-out";
+        segmentIndicator.style.transition =
+          "transform 0.45s cubic-bezier(0.88, 0, 0.12, 1)";
       }, 50);
 
       // Colors segment click
@@ -1135,6 +1233,7 @@ class CSSInspector {
         colorsView.style.display = "block";
         fontsView.style.display = "none";
         this.renderColorsView();
+        // Height will be updated by renderColorsView
       });
 
       // Fonts segment click
@@ -1147,12 +1246,13 @@ class CSSInspector {
         const containerWidth = segmentContainer.offsetWidth;
         const padding = 2; // Container padding
         const gap = 2; // Gap between buttons
-        const availableWidth = containerWidth - (padding * 2);
+        const availableWidth = containerWidth - padding * 2;
         const buttonWidth = availableWidth / 2;
         segmentIndicator.style.transform = `translateX(${buttonWidth + gap}px)`;
         colorsView.style.display = "none";
         fontsView.style.display = "block";
         this.renderFontsView();
+        // Height will be updated by renderFontsView
       });
 
       // Re-render active view after theme change (check which view is visible)
@@ -1209,16 +1309,18 @@ class CSSInspector {
     }; border-radius: 8px 8px 0 0; flex-shrink: 0;">
         <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; gap: 12px; position: relative;">
           <div id="panel-drag-handle" style="cursor: move; display: flex; align-items: center; padding: 4px; border-radius: 4px; transition: background 0.2s; user-select: none; flex-shrink: 0;" onmouseover="this.style.background='${
-              colors.bgHover
-            }'" onmouseout="this.style.background='transparent'" title="Drag to move">
+            colors.bgHover
+          }'" onmouseout="this.style.background='transparent'" title="Drag to move">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" style="width: 16px; height: 16px;">
-                <path fill="${colors.textSecondary}" d="M15 4a2 2 0 1 0 0 4 2 2 0 0 0 0-4M15 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4M15 16a2 2 0 1 0 0 4 2 2 0 0 0 0-4M9 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4M9 16a2 2 0 1 0 0 4 2 2 0 0 0 0-4M9 4a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/>
+                <path fill="${
+                  colors.textSecondary
+                }" d="M15 4a2 2 0 1 0 0 4 2 2 0 0 0 0-4M15 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4M15 16a2 2 0 1 0 0 4 2 2 0 0 0 0-4M9 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4M9 16a2 2 0 1 0 0 4 2 2 0 0 0 0-4M9 4a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/>
               </svg>
         </div>
           <div style="display: flex; align-items: center; gap: 8px; position: absolute; left: 50%; transform: translateX(-50%);">
               <button id="panel-segment-overview" style="padding: 6px 16px; border: none; background: transparent; color: ${
-      colors.textSecondary
-    }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 9999px; cursor: pointer; transition: all 0.2s; user-select: none; white-space: nowrap;" onclick="(function(inst){const colors=inst.getThemeColors();const overviewBtn=document.getElementById('panel-segment-overview');const inspectorBtn=document.getElementById('panel-segment-inspector');inspectorBtn.style.background='transparent';inspectorBtn.style.color=colors.textSecondary;overviewBtn.style.background=colors.segmentActive;overviewBtn.style.color=colors.textPrimary;inst.setInspectorState(false);})(window.inspectorInstance || window.inspector);">Overview</button>
+                colors.textSecondary
+              }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 9999px; cursor: pointer; transition: all 0.2s; user-select: none; white-space: nowrap;" onclick="(function(inst){const colors=inst.getThemeColors();const overviewBtn=document.getElementById('panel-segment-overview');const inspectorBtn=document.getElementById('panel-segment-inspector');inspectorBtn.style.background='transparent';inspectorBtn.style.color=colors.textSecondary;overviewBtn.style.background=colors.segmentActive;overviewBtn.style.color=colors.textPrimary;inst.setInspectorState(false);})(window.inspectorInstance || window.inspector);">Overview</button>
               <button id="panel-segment-inspector" style="padding: 6px 16px; border: none; background: ${
                 colors.segmentActive
               }; color: ${
@@ -1352,6 +1454,11 @@ class CSSInspector {
     if (this.selectedElement) {
       this.updateLockedElementHeader(this.selectedElement, true);
     }
+
+    // Update panel height after content is rendered (will be called again by renderColorsView/renderFontsView)
+    setTimeout(() => {
+      this.updatePanelHeight();
+    }, 100);
   }
 
   loadPanelStats() {
@@ -1403,7 +1510,9 @@ class CSSInspector {
                onmouseout="this.style.background='${
                  themeColors.bgSecondary
                }'; this.style.borderColor='${themeColors.border}'"
-               data-copy-value="${color.hex}" data-copy-message="${color.hex} copied">
+               data-copy-value="${color.hex}" data-copy-message="${
+          color.hex
+        } copied">
             <div style="width: 100%; height: 80px; background: ${
               color.hex
             }; border-bottom: 1px solid ${themeColors.border};"></div>
@@ -1447,6 +1556,11 @@ class CSSInspector {
       </div>
     `;
 
+    // Update panel height after content is rendered
+    setTimeout(() => {
+      this.updatePanelHeight();
+    }, 0);
+
     // Add event listeners for copy functionality
     setTimeout(() => {
       const copyElements = colorsView.querySelectorAll("[data-copy-value]");
@@ -1471,16 +1585,22 @@ class CSSInspector {
   parseGoogleFontsFromLinks() {
     const fonts = new Set();
     try {
-      const links = document.querySelectorAll('link[href*="fonts.googleapis.com"]');
-      links.forEach(link => {
+      const links = document.querySelectorAll(
+        'link[href*="fonts.googleapis.com"]'
+      );
+      links.forEach((link) => {
         try {
           const url = new URL(link.href);
           // Handle both css and css2 API formats
-          const families = url.searchParams.getAll('family');
-          families.forEach(family => {
+          const families = url.searchParams.getAll("family");
+          families.forEach((family) => {
             // Extract font name (before : or &)
             // Examples: "EB+Garamond:wght@400;600" or "Roboto:wght@400;700"
-            const fontName = family.split(':')[0].split('&')[0].replace(/\+/g, ' ').trim();
+            const fontName = family
+              .split(":")[0]
+              .split("&")[0]
+              .replace(/\+/g, " ")
+              .trim();
             if (fontName) {
               fonts.add(fontName);
             }
@@ -1497,56 +1617,77 @@ class CSSInspector {
 
   // Normalize font name for comparison (hyphens/underscores to spaces, lowercase)
   normalizeFontNameForComparison(fontName) {
-    return fontName.replace(/['"]/g, "").trim().toLowerCase().replace(/[-_]/g, " ");
+    return fontName
+      .replace(/['"]/g, "")
+      .trim()
+      .toLowerCase()
+      .replace(/[-_]/g, " ");
   }
 
   getFontSourceUrl(fontFamily) {
     const cleanFontName = fontFamily.replace(/['"]/g, "").trim();
     const originalFontName = fontFamily.replace(/['"]/g, "").trim();
-    
+
     // Parse Google Fonts from link tags (cache this for performance)
     if (!this._googleFontsCache) {
       this._googleFontsCache = this.parseGoogleFontsFromLinks();
     }
     const googleFontsSet = this._googleFontsCache;
-    
+
     // Check for Typekit/Adobe Fonts scripts
-    const hasTypekit = document.querySelectorAll('script[src*="use.typekit.net"]').length > 0;
-    const hasAdobeFonts = document.querySelectorAll('link[href*="fonts.adobe.com"]').length > 0;
-    
+    const hasTypekit =
+      document.querySelectorAll('script[src*="use.typekit.net"]').length > 0;
+    const hasAdobeFonts =
+      document.querySelectorAll('link[href*="fonts.adobe.com"]').length > 0;
+
     // Check @font-face rules to find where font is loaded from
     const styleSheets = Array.from(document.styleSheets);
     let fontSource = null;
     let detectedSourceType = null; // 'google' or 'adobe'
-    
+
     try {
       for (const sheet of styleSheets) {
         try {
           const rules = Array.from(sheet.cssRules || []);
           for (const rule of rules) {
             if (rule instanceof CSSFontFaceRule) {
-              const ruleFontFamily = rule.style.fontFamily.replace(/['"]/g, '').trim();
+              const ruleFontFamily = rule.style.fontFamily
+                .replace(/['"]/g, "")
+                .trim();
               // Normalize both names for comparison (handles hyphens vs spaces)
-              const ruleFontNormalized = this.normalizeFontNameForComparison(ruleFontFamily);
-              const cleanFontNormalized = this.normalizeFontNameForComparison(cleanFontName);
-              
-              if (ruleFontNormalized === cleanFontNormalized || 
-                  ruleFontNormalized.includes(cleanFontNormalized) || 
-                  cleanFontNormalized.includes(ruleFontNormalized)) {
+              const ruleFontNormalized =
+                this.normalizeFontNameForComparison(ruleFontFamily);
+              const cleanFontNormalized =
+                this.normalizeFontNameForComparison(cleanFontName);
+
+              if (
+                ruleFontNormalized === cleanFontNormalized ||
+                ruleFontNormalized.includes(cleanFontNormalized) ||
+                cleanFontNormalized.includes(ruleFontNormalized)
+              ) {
                 const src = rule.style.src;
                 if (src) {
                   // Handle multiple URLs in src (comma-separated fallbacks)
                   const urlMatches = src.match(/url\(['"]?([^'"]+)['"]?\)/g);
                   if (urlMatches) {
                     for (const urlMatch of urlMatches) {
-                      const url = urlMatch.match(/url\(['"]?([^'"]+)['"]?\)/)[1];
-                      
+                      const url = urlMatch.match(
+                        /url\(['"]?([^'"]+)['"]?\)/
+                      )[1];
+
                       // Determine source type from URL
-                      if (url.includes('fonts.gstatic.com') || url.includes('fonts.googleapis.com')) {
-                        detectedSourceType = 'google';
+                      if (
+                        url.includes("fonts.gstatic.com") ||
+                        url.includes("fonts.googleapis.com")
+                      ) {
+                        detectedSourceType = "google";
                         break;
-                      } else if (url.includes('use.typekit.net') || url.includes('fonts.adobe.com') || url.includes('adobe.com')) {
-                        detectedSourceType = 'adobe';
+                      } else if (
+                        url.includes("use.typekit.net") ||
+                        url.includes("fonts.adobe.com") ||
+                        url.includes("adobe.com")
+                      ) {
+                        detectedSourceType = "adobe";
                         break;
                       }
                     }
@@ -1565,46 +1706,49 @@ class CSSInspector {
     } catch (e) {
       // Error accessing stylesheets
     }
-    
+
     // Construct URL based on detected source type
-    if (detectedSourceType === 'google') {
+    if (detectedSourceType === "google") {
       // Normalize font name for comparison (hyphens/spaces)
-      const fontNameNormalized = this.normalizeFontNameForComparison(cleanFontName);
-      
+      const fontNameNormalized =
+        this.normalizeFontNameForComparison(cleanFontName);
+
       // Check if font matches any in Google Fonts set (with normalized comparison)
-      const isInGoogleFonts = Array.from(googleFontsSet).some(font => {
+      const isInGoogleFonts = Array.from(googleFontsSet).some((font) => {
         const googleFontNormalized = this.normalizeFontNameForComparison(font);
         return googleFontNormalized === fontNameNormalized;
       });
-      
+
       if (isInGoogleFonts) {
         // Find the exact font name from the set (preserve casing from link tag)
-        const exactFontName = Array.from(googleFontsSet).find(font => {
-          const googleFontNormalized = this.normalizeFontNameForComparison(font);
-          return googleFontNormalized === fontNameNormalized;
-        }) || originalFontName;
-        
+        const exactFontName =
+          Array.from(googleFontsSet).find((font) => {
+            const googleFontNormalized =
+              this.normalizeFontNameForComparison(font);
+            return googleFontNormalized === fontNameNormalized;
+          }) || originalFontName;
+
         const cleanName = exactFontName.replace(/\s+/g, "+");
         fontSource = `https://fonts.google.com/specimen/${cleanName}`;
       }
-    } else if (detectedSourceType === 'adobe') {
+    } else if (detectedSourceType === "adobe") {
       // Adobe Fonts - construct URL
       // Remove common suffixes like "pro", "std", etc. for URL
       let baseName = cleanFontName.toLowerCase();
-      baseName = baseName.replace(/\s+(pro|std|display|text)$/i, '');
+      baseName = baseName.replace(/\s+(pro|std|display|text)$/i, "");
       const cleanName = baseName.replace(/\s+/g, "-");
       fontSource = `https://fonts.adobe.com/fonts/${cleanName}`;
     } else if (hasTypekit || hasAdobeFonts) {
       // If Typekit/Adobe is present but @font-face detection didn't work,
       // try to match font name and assume it's from Adobe
       // This handles cases where @font-face rules aren't accessible (cross-origin, etc.)
-      detectedSourceType = 'adobe';
+      detectedSourceType = "adobe";
       let baseName = cleanFontName.toLowerCase();
-      baseName = baseName.replace(/\s+(pro|std|display|text)$/i, '');
+      baseName = baseName.replace(/\s+(pro|std|display|text)$/i, "");
       const cleanName = baseName.replace(/\s+/g, "-");
       fontSource = `https://fonts.adobe.com/fonts/${cleanName}`;
     }
-    
+
     // Return object with url and source type, or null if no source found
     return fontSource ? { url: fontSource, source: detectedSourceType } : null;
   }
@@ -1637,16 +1781,16 @@ class CSSInspector {
             : index === 2
             ? "Tertiary"
             : "";
-        
+
         // Check if font is a display font (maxFontSize > 60px)
         const isDisplayFont = font.maxFontSize > 60;
         if (isDisplayFont) {
           // Add Display label (can be combined with Primary/Secondary/Tertiary)
           label = label ? `${label} • Display` : "Display";
         }
-        
+
         const fontSourceUrl = this.getFontSourceUrl(font.fontFamily);
-        
+
         return `
           <div style="background: ${
             themeColors.bgSecondary
@@ -1660,8 +1804,8 @@ class CSSInspector {
                   : ""
               }
               <div style="font-family: ${
-                  font.fontFamily
-                }; font-size: 48px; line-height: 1; color: ${
+                font.fontFamily
+              }; font-size: 48px; line-height: 1; color: ${
           themeColors.textPrimary
         }; font-weight: 400; text-align: center;">
                   Ag
@@ -1671,15 +1815,31 @@ class CSSInspector {
                     themeColors.textPrimary
                   }; font-family: 'Inter', sans-serif; font-weight: 500;">
                     <span style="cursor: pointer; padding: 4px 8px; border-radius: 4px; transition: background 0.2s;" 
-                          onmouseover="this.style.background='${themeColors.bgHover}'" 
+                          onmouseover="this.style.background='${
+                            themeColors.bgHover
+                          }'" 
                           onmouseout="this.style.background='transparent'"
                           data-copy-value="${font.fontFamily}" 
-                          data-copy-message="Font family copied">${font.fontFamily}</span>
+                          data-copy-message="Font family copied">${
+                            font.fontFamily
+                          }</span>
                   </div>
                   ${
                     fontSourceUrl
-                      ? `<a href="${fontSourceUrl.url}" target="_blank" rel="noopener noreferrer" style="font-size: 11px; color: ${themeColors.textSecondary}; text-decoration: none; transition: color 0.2s;" onmouseover="this.style.color='${themeColors.textPrimary}'" onmouseout="this.style.color='${themeColors.textSecondary}'">
-                          View on ${fontSourceUrl.source === 'google' ? 'Google Fonts' : 'Adobe Fonts'}
+                      ? `<a href="${
+                          fontSourceUrl.url
+                        }" target="_blank" rel="noopener noreferrer" style="font-size: 11px; color: ${
+                          themeColors.textSecondary
+                        }; text-decoration: none; transition: color 0.2s;" onmouseover="this.style.color='${
+                          themeColors.textPrimary
+                        }'" onmouseout="this.style.color='${
+                          themeColors.textSecondary
+                        }'">
+                          View on ${
+                            fontSourceUrl.source === "google"
+                              ? "Google Fonts"
+                              : "Adobe Fonts"
+                          }
                         </a>`
                       : ""
                   }
@@ -1702,6 +1862,11 @@ class CSSInspector {
         ${fontList}
       </div>
     `;
+
+    // Update panel height after content is rendered
+    setTimeout(() => {
+      this.updatePanelHeight();
+    }, 0);
 
     // Add event listeners for copy functionality
     setTimeout(() => {
@@ -1943,11 +2108,19 @@ class CSSInspector {
                 </div>
                 <div class="info-item">
                   <span class="info-label">Sizes:</span>
-                  <span class="info-value">${font.sizes && font.sizes.length > 0 ? font.sizes.map(s => `${s}px`).join(", ") : "N/A"}</span>
+                  <span class="info-value">${
+                    font.sizes && font.sizes.length > 0
+                      ? font.sizes.map((s) => `${s}px`).join(", ")
+                      : "N/A"
+                  }</span>
                 </div>
                 <div class="info-item">
                   <span class="info-label">Weights:</span>
-                  <span class="info-value">${font.weights && font.weights.length > 0 ? font.weights.join(", ") : "N/A"}</span>
+                  <span class="info-value">${
+                    font.weights && font.weights.length > 0
+                      ? font.weights.join(", ")
+                      : "N/A"
+                  }</span>
                 </div>
               </div>
               <div class="instances">
@@ -2025,6 +2198,10 @@ class CSSInspector {
         infoDiv.innerHTML = this.formatElementInfo(elementInfo, true, hasText);
         infoDiv.style.opacity = "1";
         infoDiv.style.transform = "translateY(0)";
+        // Update panel height for instant updates
+        setTimeout(() => {
+          this.updatePanelHeight();
+        }, 0);
       } else {
         // Smooth fade out transition
         infoDiv.style.transition =
@@ -2046,6 +2223,8 @@ class CSSInspector {
               "opacity 0.2s ease-out, transform 0.2s ease-out";
             infoDiv.style.opacity = "1";
             infoDiv.style.transform = "translateY(0)";
+            // Update panel height after content is updated
+            this.updatePanelHeight();
           });
         }, 150);
       }
@@ -2168,7 +2347,7 @@ class CSSInspector {
 
   handleMouseOver(e) {
     if (!this.isActive) return;
-    
+
     // Don't process events for the document or html/body tags
     const element = e.target;
     if (
@@ -2204,7 +2383,7 @@ class CSSInspector {
     // But only update panel if no element is locked
     if (element !== this.selectedElement) {
       this.hoveredElement = element;
-      
+
       // Skip expensive operations during active scrolling for better performance
       if (!this.isScrolling) {
         this.updateOverlay("hover", element);
@@ -2233,7 +2412,7 @@ class CSSInspector {
   handleMouseOut(e) {
     if (!this.isActive) return;
     const element = e.target;
-    
+
     // Don't clear selected element (it stays locked)
     if (element === this.selectedElement) {
       return;
@@ -2243,7 +2422,7 @@ class CSSInspector {
     if (element !== this.selectedElement) {
       this.removeOverlay("hover");
     }
-    
+
     if (this.hoveredElement === element) {
       this.hoveredElement = null;
       // If we have a selected element, don't trigger any updates - just keep showing it (locked)
@@ -2279,7 +2458,7 @@ class CSSInspector {
     this.lastMouseDownPos = {
       x: e.clientX,
       y: e.clientY,
-      time: Date.now()
+      time: Date.now(),
     };
   }
 
@@ -2304,11 +2483,11 @@ class CSSInspector {
 
     // Detect if this was a drag gesture vs a click
     // If mouse moved significantly (>5px) or took too long (>500ms), it's likely a drag
-    const isDrag = this.lastMouseDownPos && (
-      Math.abs(e.clientX - this.lastMouseDownPos.x) > 5 ||
-      Math.abs(e.clientY - this.lastMouseDownPos.y) > 5 ||
-      (Date.now() - this.lastMouseDownPos.time) > 500
-    );
+    const isDrag =
+      this.lastMouseDownPos &&
+      (Math.abs(e.clientX - this.lastMouseDownPos.x) > 5 ||
+        Math.abs(e.clientY - this.lastMouseDownPos.y) > 5 ||
+        Date.now() - this.lastMouseDownPos.time > 500);
 
     // Only prevent default for actual clicks, not drag gestures (which are used for scrolling)
     if (!isDrag) {
@@ -2534,7 +2713,7 @@ class CSSInspector {
             <span style="opacity: 0.75;">${tagNameEscaped}</span>
       </div>
     `;
-  }
+      }
 
       if (websiteInfo) {
         websiteInfo.style.display = "none";
@@ -2568,7 +2747,7 @@ class CSSInspector {
   extractElementInfo(element, styles, rect) {
     const classList = Array.from(element.classList);
     const classString = classList.length > 0 ? "." + classList.join(".") : "";
-    
+
     return {
       tag: element.tagName.toLowerCase(),
       classes: classString,
@@ -2662,7 +2841,7 @@ class CSSInspector {
         ? "rgba(0, 0, 0, 0.15)"
         : "rgba(255, 255, 255, 0.15)";
     const spacingCornerStroke = this.theme === "light" ? "#666666" : "#A5A5A5";
-    
+
     // Calculate contrast if we have background and text colors
     const contrast = this.calculateContrast(
       info.colors.color,
@@ -2790,9 +2969,9 @@ class CSSInspector {
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;")}; font-size: 24px; font-weight: ${
               info.typography.fontWeight || "400"
-            }; line-height: 1.2; letter-spacing: ${
-              info.typography.letterSpacing || "normal"
-            }; color: ${(info.colors.color || "#000")
+            }; line-height: 1.2; letter-spacing: normal; color: ${(
+              info.colors.color || "#000"
+            )
               .replace(/</g, "&lt;")
               .replace(/>/g, "&gt;")}; text-align: center;">
             ${
@@ -3233,7 +3412,7 @@ class CSSInspector {
 
   extractColors() {
     const colors = new Map();
-    
+
     const allElements = document.querySelectorAll("*");
 
     allElements.forEach((element) => {
@@ -3285,7 +3464,7 @@ class CSSInspector {
           const fontSize = parseFloat(styles.fontSize) || 16;
           const textCoverageRatio = Math.min(0.5, Math.max(0.2, fontSize / 40)); // Between 20-50% based on font size
           const estimatedTextArea = elementArea * textCoverageRatio;
-            existing.instances++;
+          existing.instances++;
           existing.area += estimatedTextArea;
           existing.categories.add("typography");
           colors.set(hex, existing);
@@ -3309,49 +3488,54 @@ class CSSInspector {
         }
         const transparentHex = this.rgbToHex("rgba(0, 0, 0, 0)");
         const transparentHex2 = this.rgbToHex("transparent");
-        
+
         // Track all descendant elements with different backgrounds (not just direct children)
         // Use a Set to avoid double-counting overlapping elements
         const processedElements = new Set();
-        
+
         const calculateDescendantAreaSum = (parentElement, parentBgHex) => {
           let sum = 0;
-          
+
           // Use a queue to process all descendants level by level
           const queue = Array.from(parentElement.children);
-          
+
           while (queue.length > 0) {
             const child = queue.shift();
-            
+
             // Skip if already processed (handles overlapping elements)
             if (processedElements.has(child)) {
               continue;
             }
-            
+
             const childStyles = window.getComputedStyle(child);
             const childRect = child.getBoundingClientRect();
-            const childVisible = childRect.width > 0 && childRect.height > 0 &&
-              childStyles.display !== "none" && childStyles.visibility !== "hidden" &&
+            const childVisible =
+              childRect.width > 0 &&
+              childRect.height > 0 &&
+              childStyles.display !== "none" &&
+              childStyles.visibility !== "hidden" &&
               childStyles.opacity !== "0";
-            
+
             if (!childVisible) {
               continue;
             }
-            
+
             const childBg = childStyles.backgroundColor;
             const childBgHex = this.rgbToHex(childBg);
-            
+
             // If child has a different, non-transparent background, subtract its area
-            if (childBgHex && 
-                childBgHex !== transparentHex && 
-                childBgHex !== transparentHex2 &&
-                childBgHex !== parentBgHex) {
+            if (
+              childBgHex &&
+              childBgHex !== transparentHex &&
+              childBgHex !== transparentHex2 &&
+              childBgHex !== parentBgHex
+            ) {
               // Child has different background - subtract its full area
               // Don't process its children (they cover the child, not the parent)
               const childArea = childRect.width * childRect.height;
               sum += childArea;
               processedElements.add(child);
-          } else {
+            } else {
               // Child has same/transparent/undefined background - add its children to queue
               // (they might have backgrounds that cover the parent)
               for (const grandchild of child.children) {
@@ -3361,14 +3545,17 @@ class CSSInspector {
               }
             }
           }
-          
+
           return sum;
         };
-        
+
         // Calculate visible area = parent area - sum of all descendant areas with different backgrounds
-        const descendantAreaSum = calculateDescendantAreaSum(element, parentBgHex);
+        const descendantAreaSum = calculateDescendantAreaSum(
+          element,
+          parentBgHex
+        );
         const visibleArea = Math.max(0, elementArea - descendantAreaSum);
-        
+
         // Only count if visible area is significant
         if (visibleArea > 0) {
           const hex = this.rgbToHex(styles.backgroundColor);
@@ -3450,9 +3637,7 @@ class CSSInspector {
       // Only process visible elements (check rendering, not viewport position)
       const rect = element.getBoundingClientRect();
       const isVisible =
-        rect.width > 0 &&
-        rect.height > 0 &&
-        styles.opacity !== "0";
+        rect.width > 0 && rect.height > 0 && styles.opacity !== "0";
 
       if (!isVisible) {
         return;
@@ -3510,7 +3695,7 @@ class CSSInspector {
         "Liberation Mono",
         "DejaVu Sans",
         "DejaVu Serif",
-        "DejaVu Sans Mono"
+        "DejaVu Sans Mono",
       ]);
 
       // Skip generic/system fonts
@@ -3539,15 +3724,20 @@ class CSSInspector {
 
       // Track sizes and weights separately
       const fontWeight = styles.fontWeight;
-      
+
       // Parse and normalize font size (remove 'px' for sorting)
       const sizeValue = parseFloat(fontSize);
       if (!isNaN(sizeValue)) {
         entry.sizes.add(sizeValue);
       }
-      
+
       // Parse and normalize font weight
-      const weightValue = fontWeight === "normal" ? 400 : fontWeight === "bold" ? 700 : parseInt(fontWeight);
+      const weightValue =
+        fontWeight === "normal"
+          ? 400
+          : fontWeight === "bold"
+          ? 700
+          : parseInt(fontWeight);
       if (!isNaN(weightValue)) {
         entry.weights.add(weightValue);
       }
@@ -3559,7 +3749,7 @@ class CSSInspector {
         // Sort sizes and weights for display
         const sortedSizes = Array.from(font.sizes).sort((a, b) => a - b);
         const sortedWeights = Array.from(font.weights).sort((a, b) => a - b);
-        
+
         return {
           fontFamily: font.fontFamily,
           instances: font.instances,
@@ -3580,7 +3770,7 @@ class CSSInspector {
 
   rgbToHex(rgb) {
     if (!rgb || rgb === "transparent") return null;
-    
+
     // Handle rgb() format
     const rgbMatch = rgb.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
     if (rgbMatch) {
@@ -3601,16 +3791,17 @@ class CSSInspector {
 
     // If it's already hex, return it
     if (rgb.startsWith("#")) {
-      return rgb;
+      return rgb.toUpperCase();
     }
-    
+
     // Try to use CSS color name
     const s = new Option().style;
     s.color = rgb;
-    if (s.color !== "") {
+    if (s.color !== "" && s.color !== rgb) {
+      // Only recurse if the value changed (prevents infinite recursion)
       return this.rgbToHex(s.color);
     }
-    
+
     return null;
   }
 
@@ -3642,7 +3833,7 @@ class CSSInspector {
     }
 
     const ratio = (lighter + 0.05) / (darker + 0.05);
-    
+
     let level = "";
     if (ratio >= 7) {
       level = "aaa";
@@ -3832,8 +4023,8 @@ class CSSInspector {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     return result
       ? {
-      r: parseInt(result[1], 16),
-      g: parseInt(result[2], 16),
+          r: parseInt(result[1], 16),
+          g: parseInt(result[2], 16),
           b: parseInt(result[3], 16),
         }
       : null;
@@ -3845,23 +4036,47 @@ let inspector;
 let inspectorReady = false;
 
 function initializeInspector() {
+  // Check if we're in a valid context
+  if (typeof document === "undefined") {
+    console.log("[CSS Inspector] Document not available, waiting...");
+    setTimeout(initializeInspector, 100);
+    return;
+  }
+
+  // Wait for document.body to be available
+  if (!document.body) {
+    console.log("[CSS Inspector] Document body not ready, waiting...");
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initializeInspector, {
+        once: true,
+      });
+    } else {
+      // Document loaded but body not ready yet, wait a bit
+      setTimeout(initializeInspector, 100);
+    }
+    return;
+  }
+
   if (!inspector) {
     console.log("[CSS Inspector] Creating new CSSInspector instance...");
-    inspector = new CSSInspector();
-    inspectorReady = true;
-    // Make inspector accessible globally
-    if (typeof window !== "undefined") {
-      window.cssInspector = inspector;
+    try {
+      inspector = new CSSInspector();
+      inspectorReady = true;
+      // Make inspector accessible globally
+      if (typeof window !== "undefined") {
+        window.cssInspector = inspector;
+        window.inspectorInstance = inspector;
+        window.inspector = inspector;
+        window.cssInspectorReady = true;
+      }
+      console.log(
+        "[CSS Inspector] Inspector instance initialized, ready:",
+        inspectorReady
+      );
+    } catch (error) {
+      console.error("[CSS Inspector] Error initializing inspector:", error);
     }
-    // Signal that inspector is ready
-    if (typeof window !== "undefined") {
-      window.cssInspectorReady = true;
-    }
-    console.log(
-      "[CSS Inspector] Inspector instance initialized, ready:",
-      inspectorReady
-    );
-} else {
+  } else {
     console.log("[CSS Inspector] Inspector instance already exists");
   }
   return inspector;
@@ -3869,8 +4084,11 @@ function initializeInspector() {
 
 // Initialize immediately if DOM is ready, otherwise wait
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", initializeInspector);
+  document.addEventListener("DOMContentLoaded", initializeInspector, {
+    once: true,
+  });
 } else {
+  // If already loaded, initialize immediately
   initializeInspector();
 }
 
@@ -3878,6 +4096,7 @@ if (document.readyState === "loading") {
 if (typeof window !== "undefined") {
   // Try to initialize immediately
   if (!window.cssInspector) {
-    initializeInspector();
+    // Use a small delay to ensure DOM is ready
+    setTimeout(initializeInspector, 0);
   }
 }
