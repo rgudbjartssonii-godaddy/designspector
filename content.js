@@ -2890,10 +2890,10 @@ class CSSInspector {
     }
 
     // Calculate background color display value and text color for readability
+    // Check if background color is valid and not transparent
+    const bgHex = this.rgbToHex(info.colors.backgroundColor);
     const bgColorDisplay =
-      info.colors.backgroundColor &&
-      info.colors.backgroundColor !== "rgba(0, 0, 0, 0)" &&
-      info.colors.backgroundColor !== "transparent"
+      bgHex && this.isValidColor(info.colors.backgroundColor)
         ? info.colors.backgroundColor
         : "#FFFFFF";
     const bgColorTextColor =
@@ -3306,15 +3306,19 @@ class CSSInspector {
       ${
         info.colors &&
         ((info.colors.color &&
-          info.colors.color !== "rgb(0, 0, 0)" &&
-          info.colors.color !== "rgba(0, 0, 0, 0)") ||
+          info.colors.color !== "rgba(0, 0, 0, 0)" &&
+          info.colors.color !== "transparent") ||
           (info.colors.backgroundColor &&
             info.colors.backgroundColor !== "rgba(0, 0, 0, 0)" &&
             info.colors.backgroundColor !== "transparent") ||
           (info.colors.borderColor &&
             this.isValidColor(info.colors.borderColor) &&
             info.colors.borderColor !== "rgba(0, 0, 0, 0)" &&
-            info.colors.borderColor !== "transparent"))
+            info.colors.borderColor !== "transparent" &&
+            (info.border.width.top !== "0" ||
+              info.border.width.right !== "0" ||
+              info.border.width.bottom !== "0" ||
+              info.border.width.left !== "0")))
           ? `
       <div class="inspector-section" style="margin-bottom: 20px; opacity: 1; transform: translateY(0); transition: opacity 0.2s ease-out, transform 0.2s ease-out;">
         <div style="margin-bottom: 10px;">
@@ -3339,7 +3343,11 @@ class CSSInspector {
               <div style="color: ${
                 this.getLuminance(info.colors.color) > 0.5 ? "#000" : "#FFF"
               }; font-weight: 600; font-size: 13px; font-family: 'Inter', sans-serif; display: flex; align-items: center; gap: 8px;">
-                ${this.rgbToHex(info.colors.color)}
+                ${
+                  this.rgbToHex(info.colors.color) ||
+                  info.colors.color ||
+                  "transparent"
+                }
           </div>
         </div>
       </div>
@@ -3349,16 +3357,20 @@ class CSSInspector {
             }; font-size: 11px; font-family: 'Inter', sans-serif; font-weight: 400;">Background</div>
             <div style="padding: 12px; background: ${bgColorDisplay}; border-radius: 6px; border: 1px solid ${
               colors.border
-            }; cursor: pointer; transition: opacity 0.2s; height: 48px; display: flex; align-items: center; justify-content: space-between;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'" data-copy-value="${this.rgbToHex(
-              info.colors.backgroundColor || "#FFFFFF"
-            )}" data-copy-message="Background color copied">
+            }; cursor: pointer; transition: opacity 0.2s; height: 48px; display: flex; align-items: center; justify-content: space-between;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'" data-copy-value="${
+              this.rgbToHex(info.colors.backgroundColor) || "#FFFFFF"
+            }" data-copy-message="Background color copied">
               <div style="color: ${bgColorTextColor}; font-weight: 600; font-size: 13px; font-family: 'Inter', sans-serif; display: flex; align-items: center; gap: 8px;">
-                ${this.rgbToHex(info.colors.backgroundColor || "#FFFFFF")}
+                ${this.rgbToHex(info.colors.backgroundColor) || "#FFFFFF"}
               </div>
             </div>
           </div>
           ${
-            this.isValidColor(info.colors.borderColor)
+            this.isValidColor(info.colors.borderColor) &&
+            (info.border.width.top !== "0" ||
+              info.border.width.right !== "0" ||
+              info.border.width.bottom !== "0" ||
+              info.border.width.left !== "0")
               ? `
           <div style="display: flex; flex-direction: column; gap: 8px;">
             <div style="color: ${
@@ -3780,9 +3792,16 @@ class CSSInspector {
       return `#${r}${g}${b}`;
     }
 
-    // Handle rgba() format - just extract RGB
-    const rgbaMatch = rgb.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+    // Handle rgba() format - check alpha channel first
+    const rgbaMatch = rgb.match(
+      /^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$/
+    );
     if (rgbaMatch) {
+      // Check if alpha is 0 or very close to 0 (transparent)
+      const alpha = rgbaMatch[4] ? parseFloat(rgbaMatch[4]) : 1;
+      if (alpha === 0 || alpha < 0.01) {
+        return null; // Transparent, return null
+      }
       const r = parseInt(rgbaMatch[1]).toString(16).padStart(2, "0");
       const g = parseInt(rgbaMatch[2]).toString(16).padStart(2, "0");
       const b = parseInt(rgbaMatch[3]).toString(16).padStart(2, "0");
