@@ -441,6 +441,10 @@ class CSSInspector {
     // Switch panel to inspector mode
     this.switchPanelToInspectorMode();
 
+    // Change cursor to custom inspector cursor
+    this.originalCursor = document.body.style.cursor;
+    document.body.style.cursor = this.getInspectorCursor();
+
     // Store bound handlers so we can properly remove them later
     this.boundHandleMouseOver = this.handleMouseOver.bind(this);
     this.boundHandleMouseOut = this.handleMouseOut.bind(this);
@@ -580,6 +584,13 @@ class CSSInspector {
     // Switch panel to overview mode
     this.switchPanelToOverviewMode();
 
+    // Restore original cursor
+    if (this.originalCursor !== undefined) {
+      document.body.style.cursor = this.originalCursor || "";
+    } else {
+      document.body.style.cursor = "";
+    }
+
     if (this.boundHandleMouseOver) {
       document.removeEventListener(
         "mouseover",
@@ -603,6 +614,17 @@ class CSSInspector {
     if (this.boundHandleScroll) {
       window.removeEventListener("scroll", this.boundHandleScroll, true);
       window.removeEventListener("resize", this.boundHandleScroll, true);
+    }
+
+    // Remove inspector active class from body
+    document.body.classList.remove("css-inspector-active");
+
+    // Remove cursor override styles
+    if (this.inspectorStyleElement && this.inspectorStyleElement.parentNode) {
+      this.inspectorStyleElement.parentNode.removeChild(
+        this.inspectorStyleElement
+      );
+      this.inspectorStyleElement = null;
     }
 
     // Remove ALL highlight classes
@@ -702,7 +724,25 @@ class CSSInspector {
   }
 
   injectInspectorStyles() {
-    // Styles are injected via content.css, but we can add dynamic styles here if needed
+    // Add class to body to indicate inspector is active
+    document.body.classList.add("css-inspector-active");
+
+    // Inject style element to override cursor for interactive elements
+    if (!this.inspectorStyleElement) {
+      this.inspectorStyleElement = document.createElement("style");
+      this.inspectorStyleElement.id = "css-inspector-cursor-override";
+      const cursorUrl = this.getInspectorCursor();
+      this.inspectorStyleElement.textContent = `
+        body.css-inspector-active * {
+          cursor: ${cursorUrl} !important;
+        }
+        body.css-inspector-active #css-inspector-panel,
+        body.css-inspector-active #css-inspector-panel * {
+          cursor: default !important;
+        }
+      `;
+      document.head.appendChild(this.inspectorStyleElement);
+    }
   }
 
   createPanel() {
@@ -1089,16 +1129,16 @@ class CSSInspector {
           <!-- Segmented control for Colors/Fonts -->
           <div id="overview-segment-container" style="display: flex; background: ${
             colors.segmentBg
-          }; border-radius: 6px; padding: 2px; gap: 2px; margin-bottom: 16px; position: relative;">
+          }; border-radius: 14px; padding: 2px; gap: 2px; margin-bottom: 16px; position: relative;">
             <div id="overview-segment-indicator" style="position: absolute; top: 2px; left: 2px; width: calc(50% - 2px); height: calc(100% - 4px); background: ${
               colors.segmentActive
-            }; border-radius: 4px; z-index: 0;"></div>
+            }; border-radius: 12px; z-index: 0;"></div>
             <button id="overview-segment-colors" style="flex: 1; padding: 8px 12px; border: none; background: transparent; color: ${
               colors.textPrimary
-            }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 4px; cursor: pointer; transition: color 0.2s; user-select: none; position: relative; z-index: 1;">Colors</button>
+            }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 12px; cursor: pointer; transition: color 0.2s; user-select: none; position: relative; z-index: 1;">Colors</button>
             <button id="overview-segment-fonts" style="flex: 1; padding: 8px 12px; border: none; background: transparent; color: ${
               colors.textSecondary
-            }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 4px; cursor: pointer; transition: color 0.2s; user-select: none; position: relative; z-index: 1;">Fonts</button>
+            }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 12px; cursor: pointer; transition: color 0.2s; user-select: none; position: relative; z-index: 1;">Fonts</button>
           </div>
           
           <!-- Content area that switches between colors and fonts -->
@@ -1217,8 +1257,29 @@ class CSSInspector {
         }, 0);
       }
 
-      // Re-enable transition after a brief delay
+      // Apply squircle clip-path to container and indicator
       setTimeout(() => {
+        const containerRect = segmentContainer.getBoundingClientRect();
+        const indicatorRect = segmentIndicator.getBoundingClientRect();
+
+        if (containerRect.width > 0 && containerRect.height > 0) {
+          const containerPath = this.createSquircleClipPath(
+            containerRect.width,
+            containerRect.height,
+            14
+          );
+          segmentContainer.style.clipPath = `path('${containerPath}')`;
+        }
+
+        if (indicatorRect.width > 0 && indicatorRect.height > 0) {
+          const indicatorPath = this.createSquircleClipPath(
+            indicatorRect.width,
+            indicatorRect.height,
+            12
+          );
+          segmentIndicator.style.clipPath = `path('${indicatorPath}')`;
+        }
+
         segmentIndicator.style.transition =
           "transform 0.45s cubic-bezier(0.88, 0, 0.12, 1)";
       }, 50);
@@ -1505,7 +1566,8 @@ class CSSInspector {
             themeColors.bgSecondary
           }; border: 1px solid ${
           themeColors.border
-        }; border-radius: 6px; overflow: hidden; cursor: pointer; transition: all 0.2s;" 
+        }; border-radius: 12px; overflow: hidden; cursor: pointer; transition: all 0.2s;" 
+               class="color-card-squircle"
                onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}'" 
                onmouseout="this.style.background='${
                  themeColors.bgSecondary
@@ -1559,6 +1621,16 @@ class CSSInspector {
     // Update panel height after content is rendered
     setTimeout(() => {
       this.updatePanelHeight();
+
+      // Apply squircle clip-path to color cards
+      const colorCards = colorsView.querySelectorAll(".color-card-squircle");
+      colorCards.forEach((card) => {
+        const rect = card.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          const path = this.createSquircleClipPath(rect.width, rect.height, 12);
+          card.style.clipPath = `path('${path}')`;
+        }
+      });
     }, 0);
 
     // Add event listeners for copy functionality
@@ -1796,7 +1868,8 @@ class CSSInspector {
             themeColors.bgSecondary
           }; border: 1px solid ${
           themeColors.border
-        }; border-radius: 6px; padding: 16px; margin-bottom: 12px;">
+        }; border-radius: 12px; padding: 16px; margin-bottom: 12px;"
+               class="font-card-squircle">
             <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
               ${
                 label
@@ -1866,6 +1939,16 @@ class CSSInspector {
     // Update panel height after content is rendered
     setTimeout(() => {
       this.updatePanelHeight();
+
+      // Apply squircle clip-path to font cards
+      const fontCards = fontsView.querySelectorAll(".font-card-squircle");
+      fontCards.forEach((card) => {
+        const rect = card.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          const path = this.createSquircleClipPath(rect.width, rect.height, 12);
+          card.style.clipPath = `path('${path}')`;
+        }
+      });
     }, 0);
 
     // Add event listeners for copy functionality
@@ -2201,6 +2284,9 @@ class CSSInspector {
         // Update panel height for instant updates
         setTimeout(() => {
           this.updatePanelHeight();
+
+          // Apply squircle clip-paths to inspector elements
+          this.applyInspectorSquircles();
         }, 0);
       } else {
         // Smooth fade out transition
@@ -2225,6 +2311,9 @@ class CSSInspector {
             infoDiv.style.transform = "translateY(0)";
             // Update panel height after content is updated
             this.updatePanelHeight();
+
+            // Apply squircle clip-paths to inspector elements
+            this.applyInspectorSquircles();
           });
         }, 150);
       }
@@ -2805,6 +2894,46 @@ class CSSInspector {
     return value;
   }
 
+  getInspectorCursor() {
+    // SVG cursor icon - optimized for cursor use (larger size)
+    const cursorSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="#000000"><g fill="none" fill-rule="evenodd"><path d="M24 0v24H0V0zM12.594 23.258l-.012.002l-.071.035l-.02.004l-.014-.004l-.071-.036c-.01-.003-.019 0-.024.006l-.004.01l-.017.428l.005.02l.01.013l.104.074l.015.004l.012-.004l.104-.074l.012-.016l.004-.017l-.017-.427c-.002-.01-.009-.017-.016-.018m.264-.113l-.014.002l-.184.093l-.01.01l-.003.011l.018.43l.005.012l.008.008l.201.092c.012.004.023 0 .029-.008l.004-.014l-.034-.614c-.003-.012-.01-.02-.02-.022m-.715.002a.023.023 0 0 0-.027.006l-.006.014l-.034.614c0 .012.007.02.017.024l.015-.002l.201-.093l.01-.008l.003-.011l.018-.43l-.003-.012l-.01-.01z"/><path fill="#000000" d="M10 3a1 1 0 0 0-2 0v2a1 1 0 0 0 2 0zM5.464 4.05A1 1 0 1 0 4.05 5.464L5.464 6.88A1 1 0 1 0 6.88 5.464zm4.327 4.16c-.978-.326-1.907.603-1.582 1.58l3.533 10.598c.357 1.072 1.84 1.158 2.319.134l2.055-4.406l4.406-2.055c1.024-.478.938-1.962-.134-2.319zm4.159-4.16a1 1 0 0 1 0 1.414L12.536 6.88a1 1 0 1 1-1.415-1.415l1.415-1.414a1 1 0 0 1 1.414 0M2 9a1 1 0 0 1 1-1h2a1 1 0 1 1 0 2H3a1 1 0 0 1-1-1m4.879 3.536a1 1 0 1 0-1.415-1.415L4.05 12.536a1 1 0 1 0 1.414 1.414z"/></g></svg>`;
+    const base64Svg = btoa(unescape(encodeURIComponent(cursorSvg)));
+    // Hotspot at (5, 5) - adjusted for larger cursor size
+    return `url('data:image/svg+xml;base64,${base64Svg}') 5 5, auto`;
+  }
+
+  createSquircleClipPath(width, height, cornerRadius) {
+    // Generate a squircle (superellipse) clip-path using cubic bezier approximation
+    // This creates smooth, continuous curvature like iOS app icons
+    const r = cornerRadius;
+    const w = width;
+    const h = height;
+
+    // Magic number for smooth cubic bezier approximation of a circle
+    const c = 0.551915024494;
+
+    // Generate path with smooth transitions
+    return `M ${r},0 L ${w - r},0 C ${w - r + r * c},0 ${w},${
+      r - r * c
+    } ${w},${r} L ${w},${h - r} C ${w},${h - r + r * c} ${w - r + r * c},${h} ${
+      w - r
+    },${h} L ${r},${h} C ${r - r * c},${h} 0,${h - r + r * c} 0,${
+      h - r
+    } L 0,${r} C 0,${r - r * c} ${r - r * c},0 ${r},0 Z`;
+  }
+
+  applyInspectorSquircles() {
+    // Apply squircle clip-paths to all inspector elements with the inspector-squircle class
+    const squircleElements = document.querySelectorAll(".inspector-squircle");
+    squircleElements.forEach((el) => {
+      const rect = el.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        const path = this.createSquircleClipPath(rect.width, rect.height, 12);
+        el.style.clipPath = `path('${path}')`;
+      }
+    });
+  }
+
   formatElementInfo(info, isSelected, hasText = true) {
     const selector = `${info.tag}${info.id ? "#" + info.id : ""}${
       info.classes
@@ -2911,7 +3040,7 @@ class CSSInspector {
             colors.bgSecondary
           }; border: 1px solid ${
       colors.border
-    }; border-radius: 6px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='${hoverBg}'" onmouseout="this.style.background='${
+    }; border-radius: 12px; cursor: pointer; transition: all 0.2s;" class="inspector-squircle" onmouseover="this.style.background='${hoverBg}'" onmouseout="this.style.background='${
       colors.bgSecondary
     }'" data-copy-value="${
       info.dimensions.width
@@ -2929,7 +3058,7 @@ class CSSInspector {
             colors.bgSecondary
           }; border: 1px solid ${
       colors.border
-    }; border-radius: 6px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='${hoverBg}'" onmouseout="this.style.background='${
+    }; border-radius: 12px; cursor: pointer; transition: all 0.2s;" class="inspector-squircle" onmouseover="this.style.background='${hoverBg}'" onmouseout="this.style.background='${
       colors.bgSecondary
     }'" data-copy-value="${
       info.dimensions.height
@@ -2959,11 +3088,14 @@ class CSSInspector {
           .replace(/</g, "&lt;")
           .replace(/>/g, "&gt;")}; border: 1px solid ${
               colors.border
-            }; border-radius: 6px; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; min-height: 60px; cursor: pointer; transition: opacity 0.2s, background 0.2s; position: relative;" data-font-family="${(
+            }; border-radius: 12px; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; min-height: 60px; cursor: pointer; transition: opacity 0.2s, background 0.2s; position: relative;" data-font-family="${(
               info.typography.fontFamily || ""
             )
               .replace(/"/g, "&quot;")
-              .replace(/'/g, "&#39;")}" class="font-preview-copyable">
+              .replace(
+                /'/g,
+                "&#39;"
+              )}" class="font-preview-copyable inspector-squircle">
           <div style="font-family: ${(info.typography.fontFamily || "")
             .replace(/['"]/g, "")
             .replace(/</g, "&lt;")
@@ -2988,7 +3120,7 @@ class CSSInspector {
             colors.bgSecondary
           }; border: 1px solid ${
               colors.border
-            }; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-align: center;" onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}'" onmouseout="this.style.background='${
+            }; border-radius: 12px; cursor: pointer; transition: all 0.2s; text-align: center;" class="inspector-squircle" onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}'" onmouseout="this.style.background='${
               colors.bgSecondary
             }'; this.style.borderColor='${colors.border}'" data-copy-value="${
               info.typography.fontSize
@@ -3006,7 +3138,7 @@ class CSSInspector {
             colors.bgSecondary
           }; border: 1px solid ${
               colors.border
-            }; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-align: center;" onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}'" onmouseout="this.style.background='${
+            }; border-radius: 12px; cursor: pointer; transition: all 0.2s; text-align: center;" class="inspector-squircle" onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}'" onmouseout="this.style.background='${
               colors.bgSecondary
             }'; this.style.borderColor='${colors.border}'" data-copy-value="${
               info.typography.fontWeight
@@ -3024,7 +3156,7 @@ class CSSInspector {
             colors.bgSecondary
           }; border: 1px solid ${
               colors.border
-            }; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-align: center;" onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}'" onmouseout="this.style.background='${
+            }; border-radius: 12px; cursor: pointer; transition: all 0.2s; text-align: center;" class="inspector-squircle" onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}'" onmouseout="this.style.background='${
               colors.bgSecondary
             }'; this.style.borderColor='${colors.border}'" data-copy-value="${
               info.typography.lineHeight
@@ -3041,7 +3173,7 @@ class CSSInspector {
           ${
             info.typography.letterSpacing !== "normal"
               ? `
-          <div style="padding: 8px 10px; background: ${colors.bgSecondary}; border: 1px solid ${colors.border}; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-align: center;" onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}'" onmouseout="this.style.background='${colors.bgSecondary}'; this.style.borderColor='${colors.border}'" data-copy-value="${info.typography.letterSpacing}" data-copy-message="Letter spacing copied">
+          <div style="padding: 8px 10px; background: ${colors.bgSecondary}; border: 1px solid ${colors.border}; border-radius: 12px; cursor: pointer; transition: all 0.2s; text-align: center;" class="inspector-squircle" onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}'" onmouseout="this.style.background='${colors.bgSecondary}'; this.style.borderColor='${colors.border}'" data-copy-value="${info.typography.letterSpacing}" data-copy-message="Letter spacing copied">
             <div style="color: ${colors.textSecondary}; font-size: 10px; font-family: 'Inter', sans-serif; margin-bottom: 4px; font-weight: 400;">Letter</div>
             <div style="color: ${colors.textPrimary}; font-weight: 500; font-family: 'Inter', sans-serif; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 4px;">
               <span>${info.typography.letterSpacing}</span>
@@ -3049,7 +3181,7 @@ class CSSInspector {
           </div>
           `
               : `
-          <div style="padding: 8px 10px; background: ${colors.bgSecondary}; border: 1px solid ${colors.border}; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-align: center;" onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}'" onmouseout="this.style.background='${colors.bgSecondary}'; this.style.borderColor='${colors.border}'" data-copy-value="0px" data-copy-message="Letter spacing copied">
+          <div style="padding: 8px 10px; background: ${colors.bgSecondary}; border: 1px solid ${colors.border}; border-radius: 12px; cursor: pointer; transition: all 0.2s; text-align: center;" class="inspector-squircle" onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}'" onmouseout="this.style.background='${colors.bgSecondary}'; this.style.borderColor='${colors.border}'" data-copy-value="0px" data-copy-message="Letter spacing copied">
             <div style="color: ${colors.textSecondary}; font-size: 10px; font-family: 'Inter', sans-serif; margin-bottom: 4px; font-weight: 400;">Letter</div>
             <div style="color: ${colors.textPrimary}; font-weight: 500; font-family: 'Inter', sans-serif; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 4px;">
               <span>0px</span>
@@ -3335,9 +3467,9 @@ class CSSInspector {
             }; font-size: 11px; font-family: 'Inter', sans-serif; font-weight: 400;">Text</div>
             <div style="padding: 12px; background: ${
               info.colors.color
-            }; border-radius: 6px; border: 1px solid ${
+            }; border-radius: 12px; border: 1px solid ${
               colors.border
-            }; cursor: pointer; transition: opacity 0.2s; height: 48px; display: flex; align-items: center; justify-content: space-between;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'" data-copy-value="${this.rgbToHex(
+            }; cursor: pointer; transition: opacity 0.2s; height: 48px; display: flex; align-items: center; justify-content: space-between;" class="inspector-squircle" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'" data-copy-value="${this.rgbToHex(
               info.colors.color
             )}" data-copy-message="Text color copied">
               <div style="color: ${
@@ -3355,9 +3487,9 @@ class CSSInspector {
             <div style="color: ${
               colors.textSecondary
             }; font-size: 11px; font-family: 'Inter', sans-serif; font-weight: 400;">Background</div>
-            <div style="padding: 12px; background: ${bgColorDisplay}; border-radius: 6px; border: 1px solid ${
+            <div style="padding: 12px; background: ${bgColorDisplay}; border-radius: 12px; border: 1px solid ${
               colors.border
-            }; cursor: pointer; transition: opacity 0.2s; height: 48px; display: flex; align-items: center; justify-content: space-between;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'" data-copy-value="${
+            }; cursor: pointer; transition: opacity 0.2s; height: 48px; display: flex; align-items: center; justify-content: space-between;" class="inspector-squircle" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'" data-copy-value="${
               this.rgbToHex(info.colors.backgroundColor) || "#FFFFFF"
             }" data-copy-message="Background color copied">
               <div style="color: ${bgColorTextColor}; font-weight: 600; font-size: 13px; font-family: 'Inter', sans-serif; display: flex; align-items: center; gap: 8px;">
@@ -3378,9 +3510,9 @@ class CSSInspector {
             }; font-size: 11px; font-family: 'Inter', sans-serif; font-weight: 400;">Border</div>
             <div style="padding: 12px; background: ${
               info.colors.borderColor
-            }; border-radius: 6px; border: 1px solid ${
+            }; border-radius: 12px; border: 1px solid ${
                   colors.border
-                }; cursor: pointer; transition: opacity 0.2s; height: 48px; display: flex; align-items: center; justify-content: space-between;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'" data-copy-value="${this.rgbToHex(
+                }; cursor: pointer; transition: opacity 0.2s; height: 48px; display: flex; align-items: center; justify-content: space-between;" class="inspector-squircle" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'" data-copy-value="${this.rgbToHex(
                   info.colors.borderColor
                 )}" data-copy-message="Border color copied">
               <div style="color: ${
