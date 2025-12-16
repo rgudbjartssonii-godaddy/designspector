@@ -320,10 +320,104 @@ function rgbToHex(rgb) {
     );
   }
 
+  // Explicitly detect LAB, LCH, and other modern color formats
+  const isModernColorFormat = /^(lab|lch|oklab|oklch|color)\(/i.test(rgb);
+
+  // Handle modern color formats (LAB, LCH, etc.) by using browser's conversion
+  // Method 1: Use a temporary element with forced reflow
+  if (document.body) {
+    const tempEl = document.createElement("div");
+    tempEl.style.color = rgb;
+    tempEl.style.position = "absolute";
+    tempEl.style.visibility = "hidden";
+    tempEl.style.top = "-9999px";
+    tempEl.style.left = "-9999px";
+    tempEl.style.width = "1px";
+    tempEl.style.height = "1px";
+    tempEl.style.opacity = "1";
+    tempEl.style.display = "block";
+
+    try {
+      document.body.appendChild(tempEl);
+      // Force a reflow to ensure browser processes the color
+      void tempEl.offsetWidth;
+
+      const computedColor = window.getComputedStyle(tempEl).color;
+
+      // Remove element immediately
+      if (tempEl.parentNode) {
+        document.body.removeChild(tempEl);
+      }
+
+      // If the browser converted it to RGB or hex, recurse to parse the result
+      if (
+        computedColor &&
+        computedColor !== rgb &&
+        computedColor !== "" &&
+        (computedColor.startsWith("rgb") || computedColor.startsWith("#"))
+      ) {
+        const result = rgbToHex(computedColor);
+        if (result) return result;
+      }
+    } catch (e) {
+      // Clean up on error
+      if (tempEl.parentNode) {
+        try {
+          document.body.removeChild(tempEl);
+        } catch (cleanupError) {
+          // Ignore cleanup errors
+        }
+      }
+    }
+  }
+
+  // Method 2: Try using canvas as fallback for LAB colors
+  // Canvas can render modern color formats and extract RGB values
+  if (isModernColorFormat) {
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1;
+      canvas.height = 1;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.fillStyle = rgb;
+        ctx.fillRect(0, 0, 1, 1);
+        const imageData = ctx.getImageData(0, 0, 1, 1);
+        const r = imageData.data[0];
+        const g = imageData.data[1];
+        const b = imageData.data[2];
+        const a = imageData.data[3];
+
+        // Check if alpha is very low (transparent)
+        if (a < 10) {
+          return "#000000";
+        }
+
+        // Return hex value
+        return (
+          "#" +
+          [r, g, b]
+            .map((x) => x.toString(16).padStart(2, "0"))
+            .join("")
+            .toUpperCase()
+        );
+      }
+    } catch (canvasError) {
+      // Canvas method failed, continue to next method
+    }
+  }
+
+  // Method 3: Fallback: try CSS color name
   const s = new Option().style;
   s.color = rgb;
-  if (s.color !== "") {
+  if (s.color !== "" && s.color !== rgb && s.color.startsWith("rgb")) {
     return rgbToHex(s.color);
+  }
+
+  // If all methods fail and it's a modern color format, return default black
+  // This prevents showing raw LAB strings in the UI
+  if (isModernColorFormat) {
+    return "#000000";
   }
 
   return "#000000";

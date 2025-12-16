@@ -441,7 +441,7 @@ class CSSInspector {
     // Switch panel to inspector mode
     this.switchPanelToInspectorMode();
 
-    // Change cursor to custom inspector cursor
+    // Change cursor to custom inspector cursor (always black with white stroke)
     this.originalCursor = document.body.style.cursor;
     document.body.style.cursor = this.getInspectorCursor();
 
@@ -742,6 +742,18 @@ class CSSInspector {
         }
       `;
       document.head.appendChild(this.inspectorStyleElement);
+    } else {
+      // Update existing style element
+      const cursorUrl = this.getInspectorCursor();
+      this.inspectorStyleElement.textContent = `
+        body.css-inspector-active * {
+          cursor: ${cursorUrl} !important;
+        }
+        body.css-inspector-active #css-inspector-panel,
+        body.css-inspector-active #css-inspector-panel * {
+          cursor: default !important;
+        }
+      `;
     }
   }
 
@@ -2895,11 +2907,69 @@ class CSSInspector {
   }
 
   getInspectorCursor() {
-    // SVG cursor icon - optimized for cursor use (larger size)
-    const cursorSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="#000000"><g fill="none" fill-rule="evenodd"><path d="M24 0v24H0V0zM12.594 23.258l-.012.002l-.071.035l-.02.004l-.014-.004l-.071-.036c-.01-.003-.019 0-.024.006l-.004.01l-.017.428l.005.02l.01.013l.104.074l.015.004l.012-.004l.104-.074l.012-.016l.004-.017l-.017-.427c-.002-.01-.009-.017-.016-.018m.264-.113l-.014.002l-.184.093l-.01.01l-.003.011l.018.43l.005.012l.008.008l.201.092c.012.004.023 0 .029-.008l.004-.014l-.034-.614c-.003-.012-.01-.02-.02-.022m-.715.002a.023.023 0 0 0-.027.006l-.006.014l-.034.614c0 .012.007.02.017.024l.015-.002l.201-.093l.01-.008l.003-.011l.018-.43l-.003-.012l-.01-.01z"/><path fill="#000000" d="M10 3a1 1 0 0 0-2 0v2a1 1 0 0 0 2 0zM5.464 4.05A1 1 0 1 0 4.05 5.464L5.464 6.88A1 1 0 1 0 6.88 5.464zm4.327 4.16c-.978-.326-1.907.603-1.582 1.58l3.533 10.598c.357 1.072 1.84 1.158 2.319.134l2.055-4.406l4.406-2.055c1.024-.478.938-1.962-.134-2.319zm4.159-4.16a1 1 0 0 1 0 1.414L12.536 6.88a1 1 0 1 1-1.415-1.415l1.415-1.414a1 1 0 0 1 1.414 0M2 9a1 1 0 0 1 1-1h2a1 1 0 1 1 0 2H3a1 1 0 0 1-1-1m4.879 3.536a1 1 0 1 0-1.415-1.415L4.05 12.536a1 1 0 1 0 1.414 1.414z"/></g></svg>`;
+    // SVG cursor icon - always black with white stroke for visibility on all backgrounds
+    // Increased size to 40x40 for better visibility
+    const cursorSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24"><g fill="none" fill-rule="evenodd"><path d="M24 0v24H0V0zM12.594 23.258l-.012.002l-.071.035l-.02.004l-.014-.004l-.071-.036c-.01-.003-.019 0-.024.006l-.004.01l-.017.428l.005.02l.01.013l.104.074l.015.004l.012-.004l.104-.074l.012-.016l.004-.017l-.017-.427c-.002-.01-.009-.017-.016-.018m.264-.113l-.014.002l-.184.093l-.01.01l-.003.011l.018.43l.005.012l.008.008l.201.092c.012.004.023 0 .029-.008l.004-.014l-.034-.614c-.003-.012-.01-.02-.02-.022m-.715.002a.023.023 0 0 0-.027.006l-.006.014l-.034.614c0 .012.007.02.017.024l.015-.002l.201-.093l.01-.008l.003-.011l.018-.43l-.003-.012l-.01-.01z"/><path fill="#000000" stroke="#FFFFFF" stroke-width="0.75" stroke-linejoin="round" d="M10 3a1 1 0 0 0-2 0v2a1 1 0 0 0 2 0zM5.464 4.05A1 1 0 1 0 4.05 5.464L5.464 6.88A1 1 0 1 0 6.88 5.464zm4.327 4.16c-.978-.326-1.907.603-1.582 1.58l3.533 10.598c.357 1.072 1.84 1.158 2.319.134l2.055-4.406l4.406-2.055c1.024-.478.938-1.962-.134-2.319zm4.159-4.16a1 1 0 0 1 0 1.414L12.536 6.88a1 1 0 1 1-1.415-1.415l1.415-1.414a1 1 0 0 1 1.414 0M2 9a1 1 0 0 1 1-1h2a1 1 0 1 1 0 2H3a1 1 0 0 1-1-1m4.879 3.536a1 1 0 1 0-1.415-1.415L4.05 12.536a1 1 0 1 0 1.414 1.414z"/></g></svg>`;
     const base64Svg = btoa(unescape(encodeURIComponent(cursorSvg)));
-    // Hotspot at (5, 5) - adjusted for larger cursor size
-    return `url('data:image/svg+xml;base64,${base64Svg}') 5 5, auto`;
+    // Hotspot at (6, 6) - adjusted for larger cursor size
+    return `url('data:image/svg+xml;base64,${base64Svg}') 6 6, auto`;
+  }
+
+  // Get cursor color based on element background (for site theme adaptation)
+  getCursorColorForElement(element) {
+    if (!element) {
+      // Fallback to site theme
+      const siteTheme = this.detectWebsiteTheme();
+      return siteTheme === "dark" ? "#FFFFFF" : "#000000";
+    }
+
+    try {
+      // Get the background color of the element
+      const styles = window.getComputedStyle(element);
+      let bgColor = styles.backgroundColor;
+
+      // If transparent, check parent elements
+      if (
+        !bgColor ||
+        bgColor === "transparent" ||
+        bgColor === "rgba(0, 0, 0, 0)"
+      ) {
+        let parent = element.parentElement;
+        let depth = 0;
+        while (parent && depth < 5) {
+          const parentStyles = window.getComputedStyle(parent);
+          const parentBg = parentStyles.backgroundColor;
+          if (
+            parentBg &&
+            parentBg !== "transparent" &&
+            parentBg !== "rgba(0, 0, 0, 0)"
+          ) {
+            bgColor = parentBg;
+            break;
+          }
+          parent = parent.parentElement;
+          depth++;
+        }
+      }
+
+      // If still no background, use site theme
+      if (
+        !bgColor ||
+        bgColor === "transparent" ||
+        bgColor === "rgba(0, 0, 0, 0)"
+      ) {
+        const siteTheme = this.detectWebsiteTheme();
+        return siteTheme === "dark" ? "#FFFFFF" : "#000000";
+      }
+
+      // Determine if background is light or dark
+      const isLight = this.isColorLight(bgColor);
+      return isLight ? "#000000" : "#FFFFFF";
+    } catch (e) {
+      // Fallback to site theme on error
+      const siteTheme = this.detectWebsiteTheme();
+      return siteTheme === "dark" ? "#FFFFFF" : "#000000";
+    }
   }
 
   createSquircleClipPath(width, height, cornerRadius) {
@@ -3029,7 +3099,7 @@ class CSSInspector {
       this.getLuminance(bgColorDisplay) > 0.5 ? "#000" : "#FFF";
 
     return `
-      <div style="margin-bottom: 20px;">
+      <div class="inspector-section" style="margin-bottom: 16px; opacity: 1; transform: translateY(0); transition: opacity 0.2s ease-out, transform 0.2s ease-out;">
         <div style="margin-bottom: 10px;">
           <h4 style="margin: 0; font-size: 13px; font-weight: 600; color: ${
             colors.textPrimary
@@ -3078,7 +3148,7 @@ class CSSInspector {
       ${
         hasText && info.typography && info.typography.fontFamily
           ? `
-      <div class="inspector-section" style="margin-bottom: 20px; opacity: 1; transform: translateY(0); transition: opacity 0.2s ease-out, transform 0.2s ease-out;">
+      <div class="inspector-section" style="margin-bottom: 16px; opacity: 1; transform: translateY(0); transition: opacity 0.2s ease-out, transform 0.2s ease-out;">
         <div style="margin-bottom: 10px;">
           <h4 style="margin: 0; font-size: 13px; font-weight: 600; color: ${
             colors.textPrimary
@@ -3195,7 +3265,7 @@ class CSSInspector {
           : ""
       }
 
-      <div class="inspector-section" style="margin-bottom: 20px; opacity: 1; transform: translateY(0); transition: opacity 0.2s ease-out, transform 0.2s ease-out;">
+      <div class="inspector-section" style="margin-bottom: 16px; opacity: 1; transform: translateY(0); transition: opacity 0.2s ease-out, transform 0.2s ease-out;">
         <div style="margin-bottom: 10px;">
           <h4 style="margin: 0; font-size: 13px; font-weight: 600; color: ${
             colors.textPrimary
@@ -3452,34 +3522,34 @@ class CSSInspector {
               info.border.width.bottom !== "0" ||
               info.border.width.left !== "0")))
           ? `
-      <div class="inspector-section" style="margin-bottom: 20px; opacity: 1; transform: translateY(0); transition: opacity 0.2s ease-out, transform 0.2s ease-out;">
+      <div class="inspector-section" style="margin-bottom: 16px; opacity: 1; transform: translateY(0); transition: opacity 0.2s ease-out, transform 0.2s ease-out;">
         <div style="margin-bottom: 10px;">
           <h4 style="margin: 0; font-size: 13px; font-weight: 600; color: ${
             colors.textPrimary
           }; font-family: 'Inter', sans-serif;">Colors</h4>
           </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: ${
-          contrast.ratio ? "12px" : "0"
-        };">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
           <div style="display: flex; flex-direction: column; gap: 8px;">
             <div style="color: ${
               colors.textSecondary
             }; font-size: 11px; font-family: 'Inter', sans-serif; font-weight: 400;">Text</div>
-            <div style="padding: 12px; background: ${
-              info.colors.color
-            }; border-radius: 12px; border: 1px solid ${
+            <div style="padding: 12px; background: ${(() => {
+              const hex = this.rgbToHex(info.colors.color);
+              return hex || "#FFFFFF";
+            })()}; border-radius: 12px; border: 1px solid ${
               colors.border
-            }; cursor: pointer; transition: opacity 0.2s; height: 48px; display: flex; align-items: center; justify-content: space-between;" class="inspector-squircle" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'" data-copy-value="${this.rgbToHex(
-              info.colors.color
-            )}" data-copy-message="Text color copied">
-              <div style="color: ${
-                this.getLuminance(info.colors.color) > 0.5 ? "#000" : "#FFF"
-              }; font-weight: 600; font-size: 13px; font-family: 'Inter', sans-serif; display: flex; align-items: center; gap: 8px;">
-                ${
-                  this.rgbToHex(info.colors.color) ||
-                  info.colors.color ||
-                  "transparent"
-                }
+            }; cursor: pointer; transition: opacity 0.2s; height: 48px; min-height: 48px; max-height: 48px; display: flex; align-items: center; justify-content: space-between; overflow: hidden; box-sizing: border-box;" class="inspector-squircle" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'" data-copy-value="${(() => {
+              const hex = this.rgbToHex(info.colors.color);
+              return hex || "#000000";
+            })()}" data-copy-message="Text color copied">
+              <div style="color: ${(() => {
+                const hex = this.rgbToHex(info.colors.color) || "#000000";
+                return this.getLuminance(hex) > 0.5 ? "#000" : "#FFF";
+              })()}; font-weight: 600; font-size: 13px; font-family: 'Inter', sans-serif; display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0;">
+                ${(() => {
+                  const hex = this.rgbToHex(info.colors.color);
+                  return hex || "#000000";
+                })()}
           </div>
         </div>
       </div>
@@ -3487,12 +3557,14 @@ class CSSInspector {
             <div style="color: ${
               colors.textSecondary
             }; font-size: 11px; font-family: 'Inter', sans-serif; font-weight: 400;">Background</div>
-            <div style="padding: 12px; background: ${bgColorDisplay}; border-radius: 12px; border: 1px solid ${
+            <div style="padding: 12px; background: ${
+              this.rgbToHex(bgColorDisplay) || bgColorDisplay || "#FFFFFF"
+            }; border-radius: 12px; border: 1px solid ${
               colors.border
-            }; cursor: pointer; transition: opacity 0.2s; height: 48px; display: flex; align-items: center; justify-content: space-between;" class="inspector-squircle" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'" data-copy-value="${
+            }; cursor: pointer; transition: opacity 0.2s; height: 48px; min-height: 48px; max-height: 48px; display: flex; align-items: center; justify-content: space-between; overflow: hidden; box-sizing: border-box;" class="inspector-squircle" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'" data-copy-value="${
               this.rgbToHex(info.colors.backgroundColor) || "#FFFFFF"
             }" data-copy-message="Background color copied">
-              <div style="color: ${bgColorTextColor}; font-weight: 600; font-size: 13px; font-family: 'Inter', sans-serif; display: flex; align-items: center; gap: 8px;">
+              <div style="color: ${bgColorTextColor}; font-weight: 600; font-size: 13px; font-family: 'Inter', sans-serif; display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0;">
                 ${this.rgbToHex(info.colors.backgroundColor) || "#FFFFFF"}
               </div>
             </div>
@@ -3508,19 +3580,23 @@ class CSSInspector {
             <div style="color: ${
               colors.textSecondary
             }; font-size: 11px; font-family: 'Inter', sans-serif; font-weight: 400;">Border</div>
-            <div style="padding: 12px; background: ${
-              info.colors.borderColor
-            }; border-radius: 12px; border: 1px solid ${
+            <div style="padding: 12px; background: ${(() => {
+              const hex = this.rgbToHex(info.colors.borderColor);
+              return hex || "#FFFFFF";
+            })()}; border-radius: 12px; border: 1px solid ${
                   colors.border
-                }; cursor: pointer; transition: opacity 0.2s; height: 48px; display: flex; align-items: center; justify-content: space-between;" class="inspector-squircle" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'" data-copy-value="${this.rgbToHex(
-                  info.colors.borderColor
-                )}" data-copy-message="Border color copied">
-              <div style="color: ${
-                this.getLuminance(info.colors.borderColor) > 0.5
-                  ? "#000"
-                  : "#FFF"
-              }; font-weight: 600; font-size: 13px; font-family: 'Inter', sans-serif; display: flex; align-items: center; gap: 8px;">
-                ${this.rgbToHex(info.colors.borderColor)}
+                }; cursor: pointer; transition: opacity 0.2s; height: 48px; min-height: 48px; max-height: 48px; display: flex; align-items: center; justify-content: space-between; overflow: hidden; box-sizing: border-box;" class="inspector-squircle" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'" data-copy-value="${(() => {
+                  const hex = this.rgbToHex(info.colors.borderColor);
+                  return hex || "#000000";
+                })()}" data-copy-message="Border color copied">
+              <div style="color: ${(() => {
+                const hex = this.rgbToHex(info.colors.borderColor) || "#000000";
+                return this.getLuminance(hex) > 0.5 ? "#000" : "#FFF";
+              })()}; font-weight: 600; font-size: 13px; font-family: 'Inter', sans-serif; display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0;">
+                ${(() => {
+                  const hex = this.rgbToHex(info.colors.borderColor);
+                  return hex || "#000000";
+                })()}
               </div>
             </div>
           </div>
@@ -3528,24 +3604,6 @@ class CSSInspector {
               : ""
           }
         </div>
-        ${
-          contrast.ratio
-            ? `
-        <div style="padding: 10px 12px; background: ${
-          colors.bgSecondary
-        }; border: 1px solid ${
-                colors.border
-              }; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; width: 100%;">
-          <span style="color: ${
-            colors.textSecondary
-          }; font-size: 12px; font-family: 'Inter', sans-serif;">Contrast Ratio</span>
-          <span style="padding: 6px 10px; border-radius: 4px; font-weight: 600; font-size: 12px; background: ${contrastBg}; color: white; font-family: 'Inter', sans-serif;">
-            ${contrast.ratio}:1 ${contrast.level.toUpperCase()}
-          </span>
-        </div>
-        `
-            : ""
-        }
       </div>
       `
           : ""
@@ -3945,12 +4003,105 @@ class CSSInspector {
       return rgb.toUpperCase();
     }
 
-    // Try to use CSS color name
+    // Explicitly detect LAB, LCH, and other modern color formats
+    const isModernColorFormat = /^(lab|lch|oklab|oklch|color)\(/i.test(rgb);
+
+    // Handle modern color formats (LAB, LCH, etc.) by using browser's conversion
+    // Method 1: Use a temporary element with forced reflow
+    if (document.body) {
+      const tempEl = document.createElement("div");
+      tempEl.style.color = rgb;
+      tempEl.style.position = "absolute";
+      tempEl.style.visibility = "hidden";
+      tempEl.style.top = "-9999px";
+      tempEl.style.left = "-9999px";
+      tempEl.style.width = "1px";
+      tempEl.style.height = "1px";
+      tempEl.style.opacity = "1";
+      tempEl.style.display = "block";
+
+      try {
+        document.body.appendChild(tempEl);
+        // Force a reflow to ensure browser processes the color
+        void tempEl.offsetWidth;
+
+        const computedColor = window.getComputedStyle(tempEl).color;
+
+        // Remove element immediately
+        if (tempEl.parentNode) {
+          document.body.removeChild(tempEl);
+        }
+
+        // If the browser converted it to RGB or hex, recurse to parse the result
+        if (
+          computedColor &&
+          computedColor !== rgb &&
+          computedColor !== "" &&
+          (computedColor.startsWith("rgb") || computedColor.startsWith("#"))
+        ) {
+          const result = this.rgbToHex(computedColor);
+          if (result) return result;
+        }
+      } catch (e) {
+        // Clean up on error
+        if (tempEl.parentNode) {
+          try {
+            document.body.removeChild(tempEl);
+          } catch (cleanupError) {
+            // Ignore cleanup errors
+          }
+        }
+      }
+    }
+
+    // Method 2: Try using canvas as fallback for LAB colors
+    // Canvas can render modern color formats and extract RGB values
+    if (isModernColorFormat) {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = 1;
+        canvas.height = 1;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.fillStyle = rgb;
+          ctx.fillRect(0, 0, 1, 1);
+          const imageData = ctx.getImageData(0, 0, 1, 1);
+          const r = imageData.data[0];
+          const g = imageData.data[1];
+          const b = imageData.data[2];
+          const a = imageData.data[3];
+
+          // Check if alpha is very low (transparent)
+          if (a < 10) {
+            return null;
+          }
+
+          // Return hex value
+          return (
+            "#" +
+            [r, g, b]
+              .map((x) => x.toString(16).padStart(2, "0"))
+              .join("")
+              .toUpperCase()
+          );
+        }
+      } catch (canvasError) {
+        // Canvas method failed, continue to next method
+      }
+    }
+
+    // Method 3: Try to use CSS color name as fallback
     const s = new Option().style;
     s.color = rgb;
-    if (s.color !== "" && s.color !== rgb) {
-      // Only recurse if the value changed (prevents infinite recursion)
+    if (s.color !== "" && s.color !== rgb && s.color.startsWith("rgb")) {
+      // Only recurse if the value changed and is RGB format (prevents infinite recursion)
       return this.rgbToHex(s.color);
+    }
+
+    // If all methods fail and it's a modern color format, return a default black
+    // This prevents showing raw LAB strings in the UI
+    if (isModernColorFormat) {
+      return "#000000";
     }
 
     return null;
