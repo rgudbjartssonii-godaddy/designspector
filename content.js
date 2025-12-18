@@ -1,3 +1,63 @@
+// Prevent multiple script injections - wrap everything in IIFE
+(function() {
+  'use strict';
+  
+  // Check if already loaded AND initialized
+  if (typeof window !== 'undefined' && window.__CSSInspectorLoaded && window.cssInspector) {
+    // Already loaded and initialized, ensure message listener is set up
+    if (!window.__CSSInspectorMessageListenerSet) {
+      chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        const instance = window.cssInspector;
+        if (!instance) {
+          sendResponse({ success: false, error: "Inspector not initialized" });
+          return false;
+        }
+        
+        if (message.action === "togglePanel") {
+          const existingPanel = document.getElementById("css-inspector-panel");
+          if (existingPanel) {
+            existingPanel.remove();
+            instance.inspectorPanel = null;
+            instance.isActive = false;
+            // Clean up event listeners
+            if (instance.boundHandleMouseOver) {
+              document.removeEventListener("mouseover", instance.boundHandleMouseOver, true);
+            }
+            if (instance.boundHandleMouseOut) {
+              document.removeEventListener("mouseout", instance.boundHandleMouseOut, true);
+            }
+            if (instance.boundHandleClick) {
+              document.removeEventListener("click", instance.boundHandleClick, true);
+            }
+            if (instance.boundHandleMouseDown) {
+              document.removeEventListener("mousedown", instance.boundHandleMouseDown, true);
+            }
+            document.querySelectorAll(".css-inspector-highlight").forEach((el) => {
+              el.classList.remove("css-inspector-highlight");
+            });
+            document.querySelectorAll(".css-inspector-selected").forEach((el) => {
+              el.classList.remove("css-inspector-selected");
+            });
+            instance.removeOverlay("hover");
+            instance.removeOverlay("selected");
+            instance.selectedElement = null;
+            instance.hoveredElement = null;
+          } else {
+            instance.inspectorPanel = null;
+            instance.createPanel();
+          }
+          sendResponse({ success: true });
+          return true;
+        }
+        return true;
+      });
+      window.__CSSInspectorMessageListenerSet = true;
+    }
+    return; // Already loaded and initialized, exit
+  }
+  
+  // Don't set the flag yet - we'll set it after successful initialization
+
 // Content script that runs on every page
 class CSSInspector {
   constructor() {
@@ -15,6 +75,53 @@ class CSSInspector {
     this.scrollEndTimeout = null;
     this.scrollAnimationFrame = null;
     this.lastMouseDownPos = null;
+
+    // Performance optimizations: caching
+    // Use window.LRUCache (exposed from utils/cache.js)
+    const CacheClass = (typeof window !== 'undefined' && window.LRUCache) ? window.LRUCache : null;
+    if (!CacheClass) {
+      console.error('[CSS Inspector] LRUCache not found. Make sure utils/cache.js is loaded before content.js');
+      // Fallback: simple cache implementation
+      this.styleCache = {
+        get: () => null,
+        set: () => {},
+        clear: () => {},
+        has: () => false
+      };
+    } else {
+      this.styleCache = new CacheClass(200); // Cache computed styles
+    }
+    this.colorExtractionCache = null; // Cache color extraction results
+    this.typographyExtractionCache = null; // Cache typography extraction results
+    this.domMutationObserver = null; // Observer for DOM changes
+
+    // Debounced functions
+    // Use window.debounce (exposed from utils/cache.js)
+    const debounceFunc = (typeof window !== 'undefined' && window.debounce) ? window.debounce : debounce;
+    if (!debounceFunc) {
+      console.error('[CSS Inspector] debounce not found. Make sure utils/cache.js is loaded before content.js');
+      // Fallback: no debouncing
+      this.debouncedMouseOver = (element) => {
+        if (!this.isScrolling && element !== this.selectedElement) {
+          this.updateOverlay("hover", element);
+          if (!this.selectedElement) {
+            this.updateLockedElementHeader(element, false);
+            this.sendElementUpdateToPopup(element, false);
+          }
+        }
+      };
+    } else {
+      this.debouncedMouseOver = debounceFunc((element) => {
+        if (!this.isScrolling && element !== this.selectedElement) {
+          this.updateOverlay("hover", element);
+          if (!this.selectedElement) {
+            this.updateLockedElementHeader(element, false);
+            this.sendElementUpdateToPopup(element, false);
+          }
+        }
+      }, 50);
+    }
+
     this.init();
   }
 
@@ -302,7 +409,7 @@ class CSSInspector {
     // Re-render panel if it exists
     if (this.inspectorPanel) {
       // Save scroll position before re-rendering
-      const panelContent = this.inspectorPanel.querySelector("#panel-content");
+      const panelContent = this.shadowRoot ? this.shadowRoot.querySelector("#panel-content") : null;
       const savedScrollTop = panelContent ? panelContent.scrollTop : 0;
 
       if (this.isActive) {
@@ -310,8 +417,7 @@ class CSSInspector {
         // Restore scroll position after re-rendering
         if (panelContent && savedScrollTop > 0) {
           setTimeout(() => {
-            const newPanelContent =
-              this.inspectorPanel.querySelector("#panel-content");
+            const newPanelContent = this.shadowRoot ? this.shadowRoot.querySelector("#panel-content") : null;
             if (newPanelContent) {
               newPanelContent.scrollTop = savedScrollTop;
             }
@@ -324,8 +430,7 @@ class CSSInspector {
           setTimeout(() => {
             this.updateInspectorPanel(this.selectedElement, true, true);
             // Restore scroll position again after element info is updated
-            const newPanelContent =
-              this.inspectorPanel.querySelector("#panel-content");
+            const newPanelContent = this.shadowRoot ? this.shadowRoot.querySelector("#panel-content") : null;
             if (newPanelContent && savedScrollTop > 0) {
               newPanelContent.scrollTop = savedScrollTop;
             }
@@ -333,12 +438,12 @@ class CSSInspector {
         }
       } else {
         // Save which overview tab is active before re-rendering
-        const colorsView = this.inspectorPanel.querySelector(
+        const colorsView = this.shadowRoot ? this.shadowRoot.querySelector(
           "#overview-colors-view"
-        );
-        const fontsView = this.inspectorPanel.querySelector(
+        ) : null;
+        const fontsView = this.shadowRoot ? this.shadowRoot.querySelector(
           "#overview-fonts-view"
-        );
+        ) : null;
         const activeTab =
           fontsView && fontsView.style.display !== "none" ? "fonts" : "colors";
 
@@ -347,8 +452,7 @@ class CSSInspector {
         // Restore scroll position after re-rendering
         if (panelContent && savedScrollTop > 0) {
           setTimeout(() => {
-            const newPanelContent =
-              this.inspectorPanel.querySelector("#panel-content");
+            const newPanelContent = this.shadowRoot ? this.shadowRoot.querySelector("#panel-content") : null;
             if (newPanelContent) {
               newPanelContent.scrollTop = savedScrollTop;
             }
@@ -466,6 +570,25 @@ class CSSInspector {
     window.addEventListener("scroll", this.boundHandleScroll, true);
     window.addEventListener("resize", this.boundHandleScroll, true);
 
+    // Setup MutationObserver to invalidate caches on DOM changes
+    if (!this.domMutationObserver) {
+      this.domMutationObserver = new MutationObserver(() => {
+        // Invalidate caches when DOM changes significantly
+        this.colorExtractionCache = null;
+        this.typographyExtractionCache = null;
+        // Clear style cache periodically (keep it for performance but limit size)
+        if (this.styleCache && this.styleCache.cache.size > 500) {
+          this.styleCache.clear();
+        }
+      });
+      this.domMutationObserver.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["style", "class"],
+      });
+    }
+
     // Add styles to document
     this.injectInspectorStyles();
   }
@@ -479,10 +602,10 @@ class CSSInspector {
       clearTimeout(this.scrollEndTimeout);
     }
 
-    // Set flag to false after scrolling stops (debounce)
+    // Set flag to false after scrolling stops (debounce) - reduced from 150ms to 100ms
     this.scrollEndTimeout = setTimeout(() => {
       this.isScrolling = false;
-    }, 150);
+    }, 100);
 
     // Throttle overlay updates using requestAnimationFrame
     if (this.scrollAnimationFrame) {
@@ -502,87 +625,120 @@ class CSSInspector {
   }
 
   updatePanelHeight() {
-    if (!this.inspectorPanel) return;
+    if (!this.inspectorPanel || !this.shadowRoot) return;
 
-    // Get the panel content element
-    const panelContent = this.inspectorPanel.querySelector("#panel-content");
+    // Get the panel content element from shadow root
+    const panelContent = this.shadowRoot.querySelector("#panel-content");
     if (!panelContent) return;
 
-    // Get current height first (before changing anything)
-    const currentHeight =
-      this.inspectorPanel.offsetHeight || this.inspectorPanel.scrollHeight;
-
-    // Temporarily disable transition and set to auto to measure
-    this.inspectorPanel.style.setProperty("transition", "none", "important");
-    this.inspectorPanel.style.setProperty("height", "auto", "important");
-
-    // Measure the actual content height
-    const contentHeight = panelContent.scrollHeight;
-    const headerElement = this.inspectorPanel.querySelector("div:first-child");
-    const headerHeight = headerElement ? headerElement.offsetHeight : 0;
-    const totalHeight = contentHeight + headerHeight;
-
-    // Get max height (80vh)
-    const maxHeight = window.innerHeight * 0.8;
-
-    // Set height to content height, but not exceeding max-height
-    const finalHeight = Math.min(totalHeight, maxHeight);
-
-    // If the height hasn't changed, don't animate
-    if (Math.abs(currentHeight - finalHeight) < 1) {
-      this.inspectorPanel.style.setProperty(
-        "height",
-        `${finalHeight}px`,
-        "important"
-      );
-      // Re-enable transition (CSS will handle it)
-      this.inspectorPanel.style.setProperty("transition", "", "important");
-      // If content exceeds max height, ensure scrolling works
-      if (totalHeight > maxHeight) {
-        this.inspectorPanel.style.overflowY = "auto";
-      } else {
-        this.inspectorPanel.style.overflowY = "hidden";
-      }
-      return;
-    }
-
-    // Set current height explicitly first (to establish a starting point for transition)
-    this.inspectorPanel.style.setProperty(
-      "height",
-      `${currentHeight}px`,
-      "important"
-    );
-
-    // Re-enable transition
-    this.inspectorPanel.style.setProperty(
-      "transition",
-      "height 0.45s cubic-bezier(0.88, 0, 0.12, 1)",
-      "important"
-    );
-
-    // Force a reflow
-    this.inspectorPanel.offsetHeight;
-
-    // Use requestAnimationFrame to trigger the transition
+    // Use requestAnimationFrame to ensure DOM is fully rendered
     requestAnimationFrame(() => {
-      this.inspectorPanel.style.setProperty(
-        "height",
-        `${finalHeight}px`,
-        "important"
-      );
+      // Get current height first (before changing anything)
+      const currentHeight =
+        this.inspectorPanel.offsetHeight || this.inspectorPanel.scrollHeight;
 
-      // If content exceeds max height, ensure scrolling works
-      if (totalHeight > maxHeight) {
-        this.inspectorPanel.style.overflowY = "auto";
-      } else {
-        this.inspectorPanel.style.overflowY = "hidden";
-      }
+      // Temporarily disable transition and set to auto to measure natural height
+      this.inspectorPanel.style.setProperty("transition", "none", "important");
+      this.inspectorPanel.style.setProperty("height", "auto", "important");
+      this.inspectorPanel.style.setProperty("max-height", "none", "important");
+
+      // Force multiple reflows to ensure layout is complete (especially for grid layouts)
+      this.inspectorPanel.offsetHeight;
+      panelContent.offsetHeight;
+      
+      // Wait one more frame to ensure grid layout is fully calculated
+      requestAnimationFrame(() => {
+        // Measure the actual natural height of the panel when set to auto
+        const naturalHeight = this.inspectorPanel.offsetHeight;
+        
+        // Also measure content height as fallback
+        const contentHeight = panelContent.scrollHeight;
+        const headerElement = this.shadowRoot.querySelector("div:first-child");
+        const headerHeight = headerElement ? headerElement.offsetHeight : 0;
+        const calculatedHeight = contentHeight + headerHeight;
+        
+        // Use the larger of the two measurements to ensure nothing is cut off
+        const totalHeight = Math.max(naturalHeight, calculatedHeight);
+
+        // Get max height (80vh)
+        const maxHeight = window.innerHeight * 0.8;
+
+        // Set height to content height, but not exceeding max-height
+        const finalHeight = Math.min(totalHeight, maxHeight);
+        
+        // Restore max-height
+        this.inspectorPanel.style.setProperty("max-height", "80vh", "important");
+
+        // If the height hasn't changed, don't animate
+        if (Math.abs(currentHeight - finalHeight) < 1) {
+          this.inspectorPanel.style.setProperty(
+            "height",
+            `${finalHeight}px`,
+            "important"
+          );
+          // Re-enable transition (CSS will handle it)
+          this.inspectorPanel.style.setProperty("transition", "", "important");
+          return;
+        }
+
+        // Set current height explicitly first (to establish a starting point for transition)
+        this.inspectorPanel.style.setProperty(
+          "height",
+          `${currentHeight}px`,
+          "important"
+        );
+
+        // Re-enable transition
+        this.inspectorPanel.style.setProperty(
+          "transition",
+          "height 0.45s cubic-bezier(0.88, 0, 0.12, 1)",
+          "important"
+        );
+
+        // Force a reflow
+        this.inspectorPanel.offsetHeight;
+
+        // Use requestAnimationFrame to trigger the transition
+        requestAnimationFrame(() => {
+          this.inspectorPanel.style.setProperty(
+            "height",
+            `${finalHeight}px`,
+            "important"
+          );
+        });
+      });
     });
   }
 
   deactivateInspector() {
     // Switch panel to overview mode
     this.switchPanelToOverviewMode();
+
+    // Clear all timeouts
+    if (this.updateTimeout) {
+      clearTimeout(this.updateTimeout);
+      this.updateTimeout = null;
+    }
+    if (this.scrollEndTimeout) {
+      clearTimeout(this.scrollEndTimeout);
+      this.scrollEndTimeout = null;
+    }
+    if (this.toastTimeout) {
+      clearTimeout(this.toastTimeout);
+      this.toastTimeout = null;
+    }
+
+    // Cancel animation frames
+    if (this.scrollAnimationFrame) {
+      cancelAnimationFrame(this.scrollAnimationFrame);
+      this.scrollAnimationFrame = null;
+    }
+
+    // Disconnect mutation observer if it exists
+    if (this.domMutationObserver) {
+      this.domMutationObserver.disconnect();
+      this.domMutationObserver = null;
+    }
 
     // Restore original cursor
     if (this.originalCursor !== undefined) {
@@ -597,12 +753,15 @@ class CSSInspector {
         this.boundHandleMouseOver,
         true
       );
+      this.boundHandleMouseOver = null;
     }
     if (this.boundHandleMouseOut) {
       document.removeEventListener("mouseout", this.boundHandleMouseOut, true);
+      this.boundHandleMouseOut = null;
     }
     if (this.boundHandleClick) {
       document.removeEventListener("click", this.boundHandleClick, true);
+      this.boundHandleClick = null;
     }
     if (this.boundHandleMouseDown) {
       document.removeEventListener(
@@ -610,10 +769,12 @@ class CSSInspector {
         this.boundHandleMouseDown,
         true
       );
+      this.boundHandleMouseDown = null;
     }
     if (this.boundHandleScroll) {
       window.removeEventListener("scroll", this.boundHandleScroll, true);
       window.removeEventListener("resize", this.boundHandleScroll, true);
+      this.boundHandleScroll = null;
     }
 
     // Remove inspector active class from body
@@ -634,6 +795,13 @@ class CSSInspector {
     document.querySelectorAll(".css-inspector-selected").forEach((el) => {
       el.classList.remove("css-inspector-selected");
     });
+
+    // Clear caches
+    if (this.styleCache) {
+      this.styleCache.clear();
+    }
+    this.colorExtractionCache = null;
+    this.typographyExtractionCache = null;
 
     this.selectedElement = null;
     this.hoveredElement = null;
@@ -757,6 +925,166 @@ class CSSInspector {
     }
   }
 
+  getShadowDOMCSS() {
+    // Return CSS for shadow DOM - this isolates panel styles from page CSS
+    // Note: #css-inspector-panel selector won't work in shadow DOM, use :host instead
+    return `
+      :host {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        width: 380px;
+        max-height: 80vh;
+        background: #0D0D0D;
+        border: 1px solid #1F1F1F;
+        border-radius: 8px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 40px rgba(114, 65, 255, 0.15);
+        z-index: 2147483647;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        user-select: none;
+        color: #E5E5E5;
+        transition: height 0.45s cubic-bezier(0.88, 0, 0.12, 1);
+        animation: subtleGlow 8s ease-in-out infinite;
+        /* Explicitly hide scrollbar on host */
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+
+      :host::-webkit-scrollbar {
+        display: none;
+        width: 0;
+        height: 0;
+      }
+
+      :host::before {
+        content: '';
+        position: absolute;
+        top: -2px;
+        left: -2px;
+        right: -2px;
+        bottom: -2px;
+        border-radius: 10px;
+        background: linear-gradient(45deg, rgba(114, 65, 255, 0.1), rgba(251, 58, 162, 0.1), rgba(114, 65, 255, 0.1));
+        background-size: 200% 200%;
+        z-index: -1;
+        animation: glowRotate 8s ease-in-out infinite;
+        opacity: 0.6;
+      }
+
+      @keyframes glowRotate {
+        0%, 100% {
+          background-position: 0% 50%;
+          opacity: 0.4;
+        }
+        50% {
+          background-position: 100% 50%;
+          opacity: 0.6;
+        }
+      }
+
+      @keyframes subtleGlow {
+        0%, 100% {
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 30px rgba(114, 65, 255, 0.1);
+        }
+        50% {
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 50px rgba(114, 65, 255, 0.2);
+        }
+      }
+
+      #element-info {
+        transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+        margin: 0;
+        padding: 0;
+      }
+
+      #element-info > * {
+        margin-top: 0;
+      }
+
+      #element-info > *:first-child {
+        margin-top: 0;
+      }
+
+      .inspector-section {
+        transition: opacity 0.2s ease-out, transform 0.2s ease-out, margin-bottom 0.2s ease-out, max-height 0.2s ease-out;
+        overflow: hidden;
+        margin-top: 0;
+        margin-bottom: 16px;
+      }
+
+      .inspector-section:first-child {
+        margin-top: 0;
+      }
+
+      .inspector-section > div:first-child {
+        margin-top: 0;
+        margin-bottom: 10px;
+      }
+
+      .inspector-section h4 {
+        margin: 0;
+        padding: 0;
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .inspector-section > div[style*="grid"] {
+        margin-top: 0;
+        margin-bottom: 0;
+      }
+
+      #panel-drag-handle {
+        flex-shrink: 0;
+        z-index: 1;
+      }
+
+      #panel-content {
+        padding: 16px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        flex: 1;
+        /* Hide scrollbar by default, show on hover */
+        scrollbar-width: thin;
+        scrollbar-color: transparent transparent;
+      }
+
+      #panel-content:hover {
+        scrollbar-color: #ccc transparent;
+      }
+
+      #panel-content::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      #panel-content::-webkit-scrollbar-track {
+        background: transparent;
+        border-radius: 4px;
+      }
+
+      #panel-content::-webkit-scrollbar-thumb {
+        background: transparent;
+        border-radius: 4px;
+        transition: background 0.2s;
+      }
+
+      #panel-content:hover::-webkit-scrollbar-thumb {
+        background: #ccc;
+      }
+
+      #panel-content::-webkit-scrollbar-thumb:hover {
+        background: #999;
+      }
+
+      /* Reset all inherited styles to ensure consistency */
+      * {
+        box-sizing: border-box;
+      }
+    `;
+  }
+
   createPanel() {
     console.log("[CSS Inspector] createPanel called");
     // Ensure document.body exists
@@ -782,6 +1110,14 @@ class CSSInspector {
     if (existingPanel) {
       console.log("[CSS Inspector] Panel already exists, reusing it");
       this.inspectorPanel = existingPanel;
+      // Get shadow root if it exists
+      this.shadowRoot = existingPanel.shadowRoot;
+      if (!this.shadowRoot) {
+        // Panel exists but no shadow root - recreate it
+        console.warn("[CSS Inspector] Panel exists but no shadow root, recreating...");
+        existingPanel.remove();
+        // Continue to create new panel below
+      } else {
       // Ensure theme is up to date when reusing existing panel
       const colors = this.getThemeColors();
       this.inspectorPanel.style.setProperty(
@@ -812,6 +1148,7 @@ class CSSInspector {
         this.switchPanelToOverviewMode();
       }
       return;
+      }
     }
 
     console.log("[CSS Inspector] Creating panel element...");
@@ -820,17 +1157,29 @@ class CSSInspector {
     const panel = document.createElement("div");
     panel.id = "css-inspector-panel";
 
-    // Set initial theme colors (using setProperty with !important to override CSS)
-    const colors = this.getThemeColors();
-    panel.style.setProperty("background", colors.panelBg, "important");
-    panel.style.setProperty("border-color", colors.border, "important");
-    panel.style.setProperty("color", colors.textPrimary, "important");
+    // Create Shadow DOM for complete CSS isolation from page styles
+    const shadowRoot = panel.attachShadow({ mode: 'open' });
+    this.shadowRoot = shadowRoot; // Store reference for later use
+
+    // Inject CSS into shadow root
+    const style = document.createElement("style");
+    style.textContent = this.getShadowDOMCSS();
+    shadowRoot.appendChild(style);
+
+    // Set panel host styles (positioning, z-index - these must be on the host element)
+    panel.style.setProperty("position", "fixed", "important");
+    panel.style.setProperty("top", "20px", "important");
+    panel.style.setProperty("right", "20px", "important");
+    panel.style.setProperty("width", "380px", "important");
+    panel.style.setProperty("max-height", "80vh", "important");
+    panel.style.setProperty("z-index", "2147483647", "important");
+    panel.style.setProperty("pointer-events", "auto", "important");
 
     // Position will be set via transform in initDragHandle
 
     document.body.appendChild(panel);
     this.inspectorPanel = panel;
-    console.log("[CSS Inspector] Panel element created and appended to body");
+    console.log("[CSS Inspector] Panel element created with Shadow DOM and appended to body");
 
     // Inject Inter font
     if (!document.getElementById("inter-font-inspector")) {
@@ -851,7 +1200,8 @@ class CSSInspector {
     });
 
     // Close button handler (using event delegation - works for dynamically added content)
-    panel.addEventListener(
+    // Note: Events from shadow DOM bubble up to the host element
+    shadowRoot.addEventListener(
       "click",
       (e) => {
         // Check if clicked element or its parent is the close button
@@ -989,8 +1339,8 @@ class CSSInspector {
       }
     };
 
-    // Use event delegation for drag handle
-    const dragHandle = this.inspectorPanel.querySelector("#panel-drag-handle");
+    // Use event delegation for drag handle - need to query shadow root
+    const dragHandle = this.shadowRoot ? this.shadowRoot.querySelector("#panel-drag-handle") : null;
     if (dragHandle) {
       dragHandle.addEventListener("mousedown", dragStart);
     }
@@ -1056,8 +1406,13 @@ class CSSInspector {
     const hoverBorder = this.theme === "light" ? "#D5D5D5" : "#3A3A3A";
     const numberColor = this.theme === "light" ? "#333333" : "#B8B8B8";
 
-    // Use inline styles with theme colors
-    this.inspectorPanel.innerHTML = `
+    // Use inline styles with theme colors - target shadow root
+    if (!this.shadowRoot) {
+      console.error("[CSS Inspector] Shadow root not found");
+      return;
+    }
+    this.shadowRoot.innerHTML = `
+      <style>${this.getShadowDOMCSS()}</style>
       <div style="display: flex; flex-direction: column; border-bottom: 1px solid ${
         colors.border
       }; background: ${
@@ -1078,10 +1433,10 @@ class CSSInspector {
                 colors.segmentActive
               }; color: ${
       colors.textPrimary
-    }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 9999px; cursor: pointer; transition: all 0.2s; user-select: none; white-space: nowrap;" onclick="(function(inst){const colors=inst.getThemeColors();const overviewBtn=document.getElementById('panel-segment-overview');const inspectorBtn=document.getElementById('panel-segment-inspector');inspectorBtn.style.background='transparent';inspectorBtn.style.color=colors.textSecondary;overviewBtn.style.background=colors.segmentActive;overviewBtn.style.color=colors.textPrimary;inst.setInspectorState(false);})(window.inspectorInstance || window.inspector);">Overview</button>
+    }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 9999px; cursor: pointer; transition: all 0.2s; user-select: none; white-space: nowrap; outline: none;">Overview</button>
               <button id="panel-segment-inspector" style="padding: 6px 16px; border: none; background: transparent; color: ${
                 colors.textSecondary
-              }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 9999px; cursor: pointer; transition: all 0.2s; user-select: none; white-space: nowrap;" onclick="(function(inst){const colors=inst.getThemeColors();const overviewBtn=document.getElementById('panel-segment-overview');const inspectorBtn=document.getElementById('panel-segment-inspector');overviewBtn.style.background='transparent';overviewBtn.style.color=colors.textSecondary;inspectorBtn.style.background=colors.segmentActive;inspectorBtn.style.color=colors.textPrimary;inst.setInspectorState(true);})(window.inspectorInstance || window.inspector);">Inspector</button>
+              }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 9999px; cursor: pointer; transition: all 0.2s; user-select: none; white-space: nowrap; outline: none;">Inspector</button>
       </div>
           <div style="display: flex; align-items: center; gap: 8px;">
             <button id="theme-switcher" style="background: transparent; border: none; cursor: pointer; color: ${
@@ -1134,7 +1489,7 @@ class CSSInspector {
       .replace(/>/g, "&gt;")}</div>
         </div>
       </div>
-      <div style="padding: 16px; overflow-y: auto; flex: 1; background: ${
+      <div style="padding: 16px; flex: 1; background: ${
         colors.panelBg
       };" id="panel-content">
         <div id="overview-content">
@@ -1147,10 +1502,10 @@ class CSSInspector {
             }; border-radius: 12px; z-index: 0;"></div>
             <button id="overview-segment-colors" style="flex: 1; padding: 8px 12px; border: none; background: transparent; color: ${
               colors.textPrimary
-            }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 12px; cursor: pointer; transition: color 0.2s; user-select: none; position: relative; z-index: 1;">Colors</button>
+            }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 12px; cursor: pointer; transition: color 0.2s; user-select: none; position: relative; z-index: 1; outline: none;">Colors</button>
             <button id="overview-segment-fonts" style="flex: 1; padding: 8px 12px; border: none; background: transparent; color: ${
               colors.textSecondary
-            }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 12px; cursor: pointer; transition: color 0.2s; user-select: none; position: relative; z-index: 1;">Fonts</button>
+            }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 12px; cursor: pointer; transition: color 0.2s; user-select: none; position: relative; z-index: 1; outline: none;">Fonts</button>
           </div>
           
           <!-- Content area that switches between colors and fonts -->
@@ -1170,22 +1525,24 @@ class CSSInspector {
     // Ensure element ID is cleared and hidden in overview mode
     // Use setTimeout to ensure DOM is ready after innerHTML is set
     setTimeout(() => {
-      const lockedInfo = this.inspectorPanel.querySelector(
+      if (!this.shadowRoot) return;
+      const lockedInfo = this.shadowRoot.querySelector(
         "#locked-element-info"
       );
       if (lockedInfo) {
         lockedInfo.style.setProperty("display", "none", "important");
         lockedInfo.innerHTML = "";
       }
-      const websiteInfo = this.inspectorPanel.querySelector("#website-info");
+      const websiteInfo = this.shadowRoot.querySelector("#website-info");
       if (websiteInfo) {
         websiteInfo.style.setProperty("display", "flex", "important");
       }
     }, 0);
 
     // Set up segmented control state
-    const overviewBtn = document.getElementById("panel-segment-overview");
-    const inspectorBtn = document.getElementById("panel-segment-inspector");
+    if (!this.shadowRoot) return;
+    const overviewBtn = this.shadowRoot.querySelector("#panel-segment-overview");
+    const inspectorBtn = this.shadowRoot.querySelector("#panel-segment-inspector");
 
     if (overviewBtn && inspectorBtn) {
       const colors = this.getThemeColors();
@@ -1218,15 +1575,16 @@ class CSSInspector {
     }
 
     // Set up segmented control for Colors/Fonts
-    const colorsSegment = document.getElementById("overview-segment-colors");
-    const fontsSegment = document.getElementById("overview-segment-fonts");
-    const colorsView = document.getElementById("overview-colors-view");
-    const fontsView = document.getElementById("overview-fonts-view");
-    const segmentIndicator = document.getElementById(
-      "overview-segment-indicator"
+    if (!this.shadowRoot) return;
+    const colorsSegment = this.shadowRoot.querySelector("#overview-segment-colors");
+    const fontsSegment = this.shadowRoot.querySelector("#overview-segment-fonts");
+    const colorsView = this.shadowRoot.querySelector("#overview-colors-view");
+    const fontsView = this.shadowRoot.querySelector("#overview-fonts-view");
+    const segmentIndicator = this.shadowRoot.querySelector(
+      "#overview-segment-indicator"
     );
-    const segmentContainer = document.getElementById(
-      "overview-segment-container"
+    const segmentContainer = this.shadowRoot.querySelector(
+      "#overview-segment-container"
     );
 
     if (
@@ -1338,8 +1696,9 @@ class CSSInspector {
       }, 100);
     }
 
-    // Set up theme switcher button
-    const themeSwitcher = document.getElementById("theme-switcher");
+    // Set up theme switcher button - query from shadow root
+    if (!this.shadowRoot) return;
+    const themeSwitcher = this.shadowRoot.querySelector("#theme-switcher");
     if (themeSwitcher) {
       // Remove any existing listeners by cloning and replacing
       const newThemeSwitcher = themeSwitcher.cloneNode(true);
@@ -1374,7 +1733,12 @@ class CSSInspector {
     // Get theme colors
     const colors = this.getThemeColors();
 
-    this.inspectorPanel.innerHTML = `
+    if (!this.shadowRoot) {
+      console.error("[CSS Inspector] Shadow root not found");
+      return;
+    }
+    this.shadowRoot.innerHTML = `
+      <style>${this.getShadowDOMCSS()}</style>
       <div style="display: flex; flex-direction: column; border-bottom: 1px solid ${
         colors.border
       }; background: ${
@@ -1451,7 +1815,7 @@ class CSSInspector {
       .replace(/>/g, "&gt;")}</div>
         </div>
       </div>
-      <div style="padding: 16px; overflow-y: auto; flex: 1; background: ${
+      <div style="padding: 16px; flex: 1; background: ${
         colors.panelBg
       };" id="panel-content">
         <div id="element-info">
@@ -1470,8 +1834,9 @@ class CSSInspector {
     `;
 
     // Set up segmented control state
-    const overviewBtn = document.getElementById("panel-segment-overview");
-    const inspectorBtn = document.getElementById("panel-segment-inspector");
+    if (!this.shadowRoot) return;
+    const overviewBtn = this.shadowRoot.querySelector("#panel-segment-overview");
+    const inspectorBtn = this.shadowRoot.querySelector("#panel-segment-inspector");
 
     if (overviewBtn && inspectorBtn) {
       const colors = this.getThemeColors();
@@ -1503,8 +1868,9 @@ class CSSInspector {
       });
     }
 
-    // Set up theme switcher button
-    const themeSwitcher = document.getElementById("theme-switcher");
+    // Set up theme switcher button - query from shadow root
+    if (!this.shadowRoot) return;
+    const themeSwitcher = this.shadowRoot.querySelector("#theme-switcher");
     if (themeSwitcher) {
       // Remove any existing listeners by cloning and replacing
       const newThemeSwitcher = themeSwitcher.cloneNode(true);
@@ -1538,8 +1904,9 @@ class CSSInspector {
     const colors = this.extractColors();
     const typography = this.extractTypography();
 
-    const colorCountEl = document.getElementById("panel-color-count");
-    const fontCountEl = document.getElementById("panel-font-count");
+    if (!this.shadowRoot) return;
+    const colorCountEl = this.shadowRoot.querySelector("#panel-color-count");
+    const fontCountEl = this.shadowRoot.querySelector("#panel-font-count");
 
     if (colorCountEl) colorCountEl.textContent = colors.length || "0";
     if (fontCountEl) fontCountEl.textContent = typography.length || "0";
@@ -1554,7 +1921,8 @@ class CSSInspector {
 
   renderColorsView() {
     const colors = this.extractColors();
-    const colorsView = document.getElementById("overview-colors-view");
+    if (!this.shadowRoot) return;
+    const colorsView = this.shadowRoot.querySelector("#overview-colors-view");
     if (!colorsView) return;
 
     const themeColors = this.getThemeColors();
@@ -1630,20 +1998,22 @@ class CSSInspector {
       </div>
     `;
 
-    // Update panel height after content is rendered
-    setTimeout(() => {
-      this.updatePanelHeight();
+    // Update panel height after content is rendered - use double RAF to ensure layout is complete
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        this.updatePanelHeight();
 
-      // Apply squircle clip-path to color cards
-      const colorCards = colorsView.querySelectorAll(".color-card-squircle");
-      colorCards.forEach((card) => {
-        const rect = card.getBoundingClientRect();
-        if (rect.width > 0 && rect.height > 0) {
-          const path = this.createSquircleClipPath(rect.width, rect.height, 12);
-          card.style.clipPath = `path('${path}')`;
-        }
+        // Apply squircle clip-path to color cards
+        const colorCards = colorsView.querySelectorAll(".color-card-squircle");
+        colorCards.forEach((card) => {
+          const rect = card.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0) {
+            const path = this.createSquircleClipPath(rect.width, rect.height, 12);
+            card.style.clipPath = `path('${path}')`;
+          }
+        });
       });
-    }, 0);
+    });
 
     // Add event listeners for copy functionality
     setTimeout(() => {
@@ -1706,6 +2076,174 @@ class CSSInspector {
       .trim()
       .toLowerCase()
       .replace(/[-_]/g, " ");
+  }
+
+  isFontDefined(fontFamily) {
+    const cleanFontName = fontFamily.replace(/['"]/g, "").trim();
+    
+    try {
+      const styleSheets = Array.from(document.styleSheets);
+      for (const sheet of styleSheets) {
+        try {
+          const rules = Array.from(sheet.cssRules || []);
+          for (const rule of rules) {
+            if (rule.type === CSSRule.FONT_FACE_RULE || rule instanceof CSSFontFaceRule) {
+              const ruleFontFamily = rule.style.fontFamily
+                .replace(/['"]/g, "")
+                .trim();
+              if (this.normalizeFontNameForComparison(ruleFontFamily) === 
+                  this.normalizeFontNameForComparison(cleanFontName)) {
+                return true;
+              }
+            }
+          }
+        } catch (e) {
+          // Cross-origin stylesheet, skip
+          continue;
+        }
+      }
+    } catch (e) {
+      // Error accessing stylesheets
+    }
+    return false;
+  }
+
+  // Detect which font is actually being rendered by measuring text width
+  getActualRenderedFont(element, fontFamilyStack) {
+    if (!element || !element.textContent || !element.textContent.trim()) {
+      return null;
+    }
+
+    try {
+      // Use a good test string that has varying character widths
+      const testText = element.textContent.trim().substring(0, 30) || "mmmmmmmmmmlli";
+      if (testText.length < 5) return null; // Need enough text for accurate measurement
+      
+      const styles = this.getCachedComputedStyle(element);
+      const fontSize = styles.fontSize || "16px";
+      const fontWeight = styles.fontWeight || "400";
+      const fontStyle = styles.fontStyle || "normal";
+
+      // Create a canvas to measure text width
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return null;
+
+      // Get the actual rendered width from the element by cloning its styles
+      const tempSpan = document.createElement("span");
+      tempSpan.style.position = "absolute";
+      tempSpan.style.visibility = "hidden";
+      tempSpan.style.whiteSpace = "nowrap";
+      tempSpan.style.fontSize = fontSize;
+      tempSpan.style.fontWeight = fontWeight;
+      tempSpan.style.fontStyle = fontStyle;
+      tempSpan.style.fontFamily = styles.fontFamily; // Use the full font stack
+      tempSpan.textContent = testText;
+      document.body.appendChild(tempSpan);
+      const actualWidth = tempSpan.offsetWidth;
+      document.body.removeChild(tempSpan);
+
+      if (actualWidth === 0) return null;
+
+      // Test each font in the stack to see which one matches the actual width
+      // We'll test in reverse order (fallback fonts first) to find the actual rendered one
+      for (let i = 0; i < fontFamilyStack.length; i++) {
+        const candidate = fontFamilyStack[i]
+          .replace(/['"]/g, "")
+          .trim();
+        
+        if (!candidate) continue;
+
+        // Skip generic fonts for testing
+        const genericFonts = ["serif", "sans-serif", "monospace", "cursive", "fantasy", "initial", "inherit"];
+        if (genericFonts.includes(candidate.toLowerCase())) {
+          continue;
+        }
+
+        // Set the font and measure
+        ctx.font = `${fontStyle} ${fontWeight} ${fontSize} "${candidate}"`;
+        const testWidth = ctx.measureText(testText).width;
+
+        // If widths match (within 2px tolerance for rounding), this is likely the rendered font
+        if (Math.abs(testWidth - actualWidth) <= 2) {
+          return candidate;
+        }
+      }
+    } catch (e) {
+      // Fallback if canvas method fails
+      console.debug("[CSS Inspector] Font detection failed:", e);
+    }
+
+    return null;
+  }
+
+  isElementVisible(element, styles, rect) {
+    // Basic visibility checks
+    if (
+      styles.display === "none" ||
+      styles.visibility === "hidden" ||
+      styles.opacity === "0" ||
+      rect.width === 0 ||
+      rect.height === 0
+    ) {
+      return false;
+    }
+
+    // Check if element is positioned off-screen (common way to hide elements)
+    const isOffScreen =
+      rect.top + rect.height < 0 ||
+      rect.left + rect.width < 0 ||
+      rect.top > window.innerHeight ||
+      rect.left > window.innerWidth;
+
+    if (isOffScreen) {
+      return false;
+    }
+
+    // Check if element has transform that makes it invisible
+    const transform = styles.transform;
+    if (transform && transform !== "none") {
+      // Check for scale(0) or translate that moves it far off-screen
+      if (transform.includes("scale(0)") || transform.includes("scaleX(0)") || transform.includes("scaleY(0)")) {
+        return false;
+      }
+    }
+
+    // Check if element is inside a hidden container
+    let parent = element.parentElement;
+    let depth = 0;
+    while (parent && depth < 10) {
+      const parentStyles = window.getComputedStyle(parent);
+      const parentRect = parent.getBoundingClientRect();
+      
+      if (
+        parentStyles.display === "none" ||
+        parentStyles.visibility === "hidden" ||
+        parentStyles.opacity === "0" ||
+        parentRect.width === 0 ||
+        parentRect.height === 0
+      ) {
+        return false;
+      }
+      
+      // Check if parent has overflow hidden and element is completely outside parent bounds
+      if (
+        (parentStyles.overflow === "hidden" || 
+         parentStyles.overflowX === "hidden" || 
+         parentStyles.overflowY === "hidden") &&
+        (rect.bottom < parentRect.top ||
+         rect.top > parentRect.bottom ||
+         rect.right < parentRect.left ||
+         rect.left > parentRect.right)
+      ) {
+        return false;
+      }
+      
+      parent = parent.parentElement;
+      depth++;
+    }
+
+    return true;
   }
 
   getFontSourceUrl(fontFamily) {
@@ -1839,7 +2377,8 @@ class CSSInspector {
 
   renderFontsView() {
     const fonts = this.extractTypography();
-    const fontsView = document.getElementById("overview-fonts-view");
+    if (!this.shadowRoot) return;
+    const fontsView = this.shadowRoot.querySelector("#overview-fonts-view");
     if (!fontsView) return;
 
     const themeColors = this.getThemeColors();
@@ -1948,20 +2487,22 @@ class CSSInspector {
       </div>
     `;
 
-    // Update panel height after content is rendered
-    setTimeout(() => {
-      this.updatePanelHeight();
+    // Update panel height after content is rendered - use double RAF to ensure layout is complete
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        this.updatePanelHeight();
 
-      // Apply squircle clip-path to font cards
-      const fontCards = fontsView.querySelectorAll(".font-card-squircle");
-      fontCards.forEach((card) => {
-        const rect = card.getBoundingClientRect();
-        if (rect.width > 0 && rect.height > 0) {
-          const path = this.createSquircleClipPath(rect.width, rect.height, 12);
-          card.style.clipPath = `path('${path}')`;
-        }
+        // Apply squircle clip-path to font cards
+        const fontCards = fontsView.querySelectorAll(".font-card-squircle");
+        fontCards.forEach((card) => {
+          const rect = card.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0) {
+            const path = this.createSquircleClipPath(rect.width, rect.height, 12);
+            card.style.clipPath = `path('${path}')`;
+          }
+        });
       });
-    }, 0);
+    });
 
     // Add event listeners for copy functionality
     setTimeout(() => {
@@ -2237,6 +2778,18 @@ class CSSInspector {
     window.open(url, "_blank", "width=900,height=700");
   }
 
+  // Cached getComputedStyle for performance
+  getCachedComputedStyle(element) {
+    // Use element as cache key (DOM elements are unique)
+    const cacheKey = element;
+    let cached = this.styleCache.get(cacheKey);
+    if (!cached) {
+      cached = window.getComputedStyle(element);
+      this.styleCache.set(cacheKey, cached);
+    }
+    return cached;
+  }
+
   updateInspectorPanel(element, isSelected = false, skipAnimation = false) {
     if (!this.inspectorPanel) return;
 
@@ -2250,7 +2803,7 @@ class CSSInspector {
       return;
     }
 
-    const styles = window.getComputedStyle(element);
+    const styles = this.getCachedComputedStyle(element);
     const rect = element.getBoundingClientRect();
     const elementInfo = this.extractElementInfo(element, styles, rect);
 
@@ -2285,12 +2838,14 @@ class CSSInspector {
     ].includes(element.tagName.toUpperCase());
     const hasText = hasTextContent || isTextElement;
 
-    const infoDiv = document.getElementById("element-info");
+    if (!this.shadowRoot) return;
+    const infoDiv = this.shadowRoot.querySelector("#element-info");
     if (infoDiv) {
       if (skipAnimation) {
         // Instant update without animation
         infoDiv.style.transition = "none";
         infoDiv.innerHTML = this.formatElementInfo(elementInfo, true, hasText);
+        this.normalizeInspectorSpacing(); // Normalize spacing to override page CSS
         infoDiv.style.opacity = "1";
         infoDiv.style.transform = "translateY(0)";
         // Update panel height for instant updates
@@ -2314,6 +2869,7 @@ class CSSInspector {
             true,
             hasText
           );
+          this.normalizeInspectorSpacing(); // Normalize spacing to override page CSS
 
           // Smooth fade in transition
           requestAnimationFrame(() => {
@@ -2389,7 +2945,8 @@ class CSSInspector {
 
   showEmptyState() {
     if (!this.inspectorPanel) return;
-    const infoDiv = document.getElementById("element-info");
+    if (!this.shadowRoot) return;
+    const infoDiv = this.shadowRoot.querySelector("#element-info");
     if (infoDiv) {
       // Smooth transition out
       infoDiv.style.transition =
@@ -2425,7 +2982,7 @@ class CSSInspector {
 
     // Also try to send to popup if it's open (for when popup is viewing inspector)
     try {
-      const styles = window.getComputedStyle(element);
+      const styles = this.getCachedComputedStyle(element);
       const rect = element.getBoundingClientRect();
       const elementInfo = this.extractElementInfo(element, styles, rect);
 
@@ -2468,9 +3025,6 @@ class CSSInspector {
       return; // Don't highlight already selected elements
     }
 
-    // Don't stop propagation - it can interfere with page behavior
-    // e.stopPropagation(); // Removed to prevent issues
-
     // Remove previous hover highlight (but keep selected element locked)
     if (
       this.hoveredElement &&
@@ -2485,27 +3039,14 @@ class CSSInspector {
     if (element !== this.selectedElement) {
       this.hoveredElement = element;
 
-      // Skip expensive operations during active scrolling for better performance
-      if (!this.isScrolling) {
-        this.updateOverlay("hover", element);
-
-        // Update header to show hovered element identifier (with lower opacity dot)
-        if (!this.selectedElement) {
-          this.updateLockedElementHeader(element, false); // false = not locked, just hovered
-        }
-
-        // Only send update to popup if no element is locked
-        if (!this.selectedElement) {
-          clearTimeout(this.updateTimeout);
-          this.updateTimeout = setTimeout(() => {
-            this.sendElementUpdateToPopup(element, false);
-          }, 50);
-        }
-      } else {
         // During scrolling, just update overlay position (lightweight)
+      if (this.isScrolling) {
         requestAnimationFrame(() => {
           this.updateOverlay("hover", element);
         });
+      } else {
+        // Use debounced update for better performance
+        this.debouncedMouseOver(element);
       }
     }
   }
@@ -2755,7 +3296,7 @@ class CSSInspector {
       if (element.querySelector("img")) {
         return "Image";
       } else {
-        const styles = window.getComputedStyle(element);
+        const styles = this.getCachedComputedStyle(element);
         if (
           styles.backgroundImage &&
           styles.backgroundImage !== "none" &&
@@ -2780,10 +3321,11 @@ class CSSInspector {
   updateLockedElementHeader(element, isLocked = true) {
     if (!this.inspectorPanel) return;
 
-    const lockedInfo = this.inspectorPanel.querySelector(
+    if (!this.shadowRoot) return;
+    const lockedInfo = this.shadowRoot.querySelector(
       "#locked-element-info"
     );
-    const websiteInfo = this.inspectorPanel.querySelector("#website-info");
+    const websiteInfo = this.shadowRoot.querySelector("#website-info");
 
     if (element) {
       // Show element info, hide website info
@@ -2925,7 +3467,7 @@ class CSSInspector {
 
     try {
       // Get the background color of the element
-      const styles = window.getComputedStyle(element);
+      const styles = this.getCachedComputedStyle(element);
       let bgColor = styles.backgroundColor;
 
       // If transparent, check parent elements
@@ -3613,6 +4155,11 @@ class CSSInspector {
   }
 
   extractColors() {
+    // Return cached result if available
+    if (this.colorExtractionCache) {
+      return this.colorExtractionCache;
+    }
+
     const colors = new Map();
 
     const allElements = document.querySelectorAll("*");
@@ -3628,16 +4175,11 @@ class CSSInspector {
         return;
       }
 
-      const styles = window.getComputedStyle(element);
+      const styles = this.getCachedComputedStyle(element);
 
       // Only process visible elements (check rendering, not viewport position)
       const rect = element.getBoundingClientRect();
-      const isVisible =
-        rect.width > 0 &&
-        rect.height > 0 &&
-        styles.display !== "none" &&
-        styles.visibility !== "hidden" &&
-        styles.opacity !== "0";
+      const isVisible = this.isElementVisible(element, styles, rect);
 
       if (!isVisible) {
         return;
@@ -3803,7 +4345,7 @@ class CSSInspector {
       }
     });
 
-    return Array.from(colors.values())
+    const result = Array.from(colors.values())
       .map((color) => ({
         hex: color.hex,
         instances: color.instances,
@@ -3811,9 +4353,18 @@ class CSSInspector {
         categories: Array.from(color.categories),
       }))
       .sort((a, b) => b.area - a.area); // Sort by area instead of instances
+
+    // Cache the result
+    this.colorExtractionCache = result;
+    return result;
   }
 
   extractTypography() {
+    // Return cached result if available
+    if (this.typographyExtractionCache) {
+      return this.typographyExtractionCache;
+    }
+
     const fontFamilyMap = new Map();
 
     const allElements = document.querySelectorAll("*");
@@ -3829,27 +4380,19 @@ class CSSInspector {
         return;
       }
 
-      const styles = window.getComputedStyle(element);
-
-      // Skip elements with no visible text or zero dimensions
-      if (styles.display === "none" || styles.visibility === "hidden") {
-        return;
-      }
+      const styles = this.getCachedComputedStyle(element);
 
       // Only process visible elements (check rendering, not viewport position)
       const rect = element.getBoundingClientRect();
-      const isVisible =
-        rect.width > 0 && rect.height > 0 && styles.opacity !== "0";
+      const isVisible = this.isElementVisible(element, styles, rect);
 
       if (!isVisible) {
         return;
       }
 
-      // Extract font family (clean up the value - take first font from stack)
-      const fontFamily = styles.fontFamily
-        .split(",")[0]
-        .replace(/['"]/g, "")
-        .trim();
+      // Extract font family - detect which font is actually being rendered
+      const fontFamilyStack = styles.fontFamily.split(",");
+      let fontFamily = null;
 
       // List of common system fonts to exclude
       const systemFonts = new Set([
@@ -3860,6 +4403,9 @@ class CSSInspector {
         "monospace",
         "cursive",
         "fantasy",
+        "system-ui",
+        "-apple-system",
+        "BlinkMacSystemFont",
         "Times",
         "Times New Roman",
         "Arial",
@@ -3900,8 +4446,74 @@ class CSSInspector {
         "DejaVu Sans Mono",
       ]);
 
-      // Skip generic/system fonts
-      if (!fontFamily || systemFonts.has(fontFamily)) {
+      // First, try to detect the actually rendered font using canvas measurement
+      // This is the most reliable method - it measures which font actually renders the text
+      const actualRenderedFont = this.getActualRenderedFont(element, fontFamilyStack);
+      if (actualRenderedFont) {
+        // Use the actually rendered font, even if it's a system font
+        // If it's actually being rendered, it's what the user sees, so we should show it
+        fontFamily = actualRenderedFont;
+      } else {
+        // Fallback: Check each font in the stack to find one that's actually loaded
+        for (let i = 0; i < fontFamilyStack.length; i++) {
+          const candidate = fontFamilyStack[i]
+            .replace(/['"]/g, "")
+            .trim();
+          
+          // Skip generic/system fonts initially
+          if (!candidate || systemFonts.has(candidate)) {
+            continue;
+          }
+          
+          // Check if font is actually loaded using Font Loading API
+          if (document.fonts && typeof document.fonts.check === 'function') {
+            // Try different font weights/styles to see if any variant is loaded
+            const weights = [400, 700];
+            const styles = ['normal', 'italic'];
+            let fontLoaded = false;
+            
+            for (const weight of weights) {
+              for (const style of styles) {
+                const fontSpec = `${style} ${weight} 16px "${candidate}"`;
+                if (document.fonts.check(fontSpec)) {
+                  fontFamily = candidate;
+                  fontLoaded = true;
+                  break;
+                }
+              }
+              if (fontLoaded) break;
+            }
+            
+            if (fontLoaded) {
+              break;
+            }
+          }
+          
+          // If Font Loading API check fails or is unavailable, 
+          // check if font is in @font-face rules (indicating it's defined)
+          if (!fontFamily && this.isFontDefined(candidate)) {
+            fontFamily = candidate;
+            break;
+          }
+        }
+
+        // If no custom font found that's loaded, use the first non-system font from stack
+        // (This handles cases where Font Loading API isn't available or fonts load asynchronously)
+        if (!fontFamily) {
+          for (let i = 0; i < fontFamilyStack.length; i++) {
+            const candidate = fontFamilyStack[i]
+              .replace(/['"]/g, "")
+              .trim();
+            if (candidate && !systemFonts.has(candidate)) {
+              fontFamily = candidate;
+              break;
+            }
+          }
+        }
+      }
+
+      // Skip if still no valid font
+      if (!fontFamily) {
         return;
       }
 
@@ -3946,7 +4558,7 @@ class CSSInspector {
     });
 
     // Return font families sorted by text area (visual prominence)
-    return Array.from(fontFamilyMap.values())
+    const result = Array.from(fontFamilyMap.values())
       .map((font) => {
         // Sort sizes and weights for display
         const sortedSizes = Array.from(font.sizes).sort((a, b) => a - b);
@@ -3961,150 +4573,19 @@ class CSSInspector {
         };
       })
       .sort((a, b) => b.instances - a.instances); // Sort by instance count
+
+    // Cache the result
+    this.typographyExtractionCache = result;
+    return result;
   }
 
+  // Color utility methods - using shared colorUtils.js
   isValidColor(color) {
-    if (!color || color === "transparent" || color === "rgba(0, 0, 0, 0)") {
-      return false;
-    }
-    return true;
+    return isValidColor(color);
   }
 
   rgbToHex(rgb) {
-    if (!rgb || rgb === "transparent") return null;
-
-    // Handle rgb() format
-    const rgbMatch = rgb.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
-    if (rgbMatch) {
-      const r = parseInt(rgbMatch[1]).toString(16).padStart(2, "0");
-      const g = parseInt(rgbMatch[2]).toString(16).padStart(2, "0");
-      const b = parseInt(rgbMatch[3]).toString(16).padStart(2, "0");
-      return `#${r}${g}${b}`;
-    }
-
-    // Handle rgba() format - check alpha channel first
-    const rgbaMatch = rgb.match(
-      /^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$/
-    );
-    if (rgbaMatch) {
-      // Check if alpha is 0 or very close to 0 (transparent)
-      const alpha = rgbaMatch[4] ? parseFloat(rgbaMatch[4]) : 1;
-      if (alpha === 0 || alpha < 0.01) {
-        return null; // Transparent, return null
-      }
-      const r = parseInt(rgbaMatch[1]).toString(16).padStart(2, "0");
-      const g = parseInt(rgbaMatch[2]).toString(16).padStart(2, "0");
-      const b = parseInt(rgbaMatch[3]).toString(16).padStart(2, "0");
-      return `#${r}${g}${b}`;
-    }
-
-    // If it's already hex, return it
-    if (rgb.startsWith("#")) {
-      return rgb.toUpperCase();
-    }
-
-    // Explicitly detect LAB, LCH, and other modern color formats
-    const isModernColorFormat = /^(lab|lch|oklab|oklch|color)\(/i.test(rgb);
-
-    // Handle modern color formats (LAB, LCH, etc.) by using browser's conversion
-    // Method 1: Use a temporary element with forced reflow
-    if (document.body) {
-      const tempEl = document.createElement("div");
-      tempEl.style.color = rgb;
-      tempEl.style.position = "absolute";
-      tempEl.style.visibility = "hidden";
-      tempEl.style.top = "-9999px";
-      tempEl.style.left = "-9999px";
-      tempEl.style.width = "1px";
-      tempEl.style.height = "1px";
-      tempEl.style.opacity = "1";
-      tempEl.style.display = "block";
-
-      try {
-        document.body.appendChild(tempEl);
-        // Force a reflow to ensure browser processes the color
-        void tempEl.offsetWidth;
-
-        const computedColor = window.getComputedStyle(tempEl).color;
-
-        // Remove element immediately
-        if (tempEl.parentNode) {
-          document.body.removeChild(tempEl);
-        }
-
-        // If the browser converted it to RGB or hex, recurse to parse the result
-        if (
-          computedColor &&
-          computedColor !== rgb &&
-          computedColor !== "" &&
-          (computedColor.startsWith("rgb") || computedColor.startsWith("#"))
-        ) {
-          const result = this.rgbToHex(computedColor);
-          if (result) return result;
-        }
-      } catch (e) {
-        // Clean up on error
-        if (tempEl.parentNode) {
-          try {
-            document.body.removeChild(tempEl);
-          } catch (cleanupError) {
-            // Ignore cleanup errors
-          }
-        }
-      }
-    }
-
-    // Method 2: Try using canvas as fallback for LAB colors
-    // Canvas can render modern color formats and extract RGB values
-    if (isModernColorFormat) {
-      try {
-        const canvas = document.createElement("canvas");
-        canvas.width = 1;
-        canvas.height = 1;
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.fillStyle = rgb;
-          ctx.fillRect(0, 0, 1, 1);
-          const imageData = ctx.getImageData(0, 0, 1, 1);
-          const r = imageData.data[0];
-          const g = imageData.data[1];
-          const b = imageData.data[2];
-          const a = imageData.data[3];
-
-          // Check if alpha is very low (transparent)
-          if (a < 10) {
-            return null;
-          }
-
-          // Return hex value
-          return (
-            "#" +
-            [r, g, b]
-              .map((x) => x.toString(16).padStart(2, "0"))
-              .join("")
-              .toUpperCase()
-          );
-        }
-      } catch (canvasError) {
-        // Canvas method failed, continue to next method
-      }
-    }
-
-    // Method 3: Try to use CSS color name as fallback
-    const s = new Option().style;
-    s.color = rgb;
-    if (s.color !== "" && s.color !== rgb && s.color.startsWith("rgb")) {
-      // Only recurse if the value changed and is RGB format (prevents infinite recursion)
-      return this.rgbToHex(s.color);
-    }
-
-    // If all methods fail and it's a modern color format, return a default black
-    // This prevents showing raw LAB strings in the UI
-    if (isModernColorFormat) {
-      return "#000000";
-    }
-
-    return null;
+    return rgbToHex(rgb);
   }
 
   parseBorderRadius(radius) {
@@ -4120,51 +4601,11 @@ class CSSInspector {
   }
 
   calculateContrast(color1, color2) {
-    if (!this.isValidColor(color1) || !this.isValidColor(color2)) {
-      return { ratio: null, level: "" };
-    }
-
-    const l1 = this.getLuminance(color1);
-    const l2 = this.getLuminance(color2);
-
-    const lighter = Math.max(l1, l2);
-    const darker = Math.min(l1, l2);
-
-    if (darker === 0) {
-      return { ratio: null, level: "" };
-    }
-
-    const ratio = (lighter + 0.05) / (darker + 0.05);
-
-    let level = "";
-    if (ratio >= 7) {
-      level = "aaa";
-    } else if (ratio >= 4.5) {
-      level = "aa";
-    } else if (ratio >= 3) {
-      level = "aa-large";
-    } else {
-      level = "fail";
-    }
-
-    return {
-      ratio: ratio.toFixed(2),
-      level: level,
-    };
+    return calculateContrast(color1, color2);
   }
 
   getLuminance(color) {
-    const rgb = this.hexToRgb(this.rgbToHex(color));
-    if (!rgb) return 0;
-
-    const [r, g, b] = [rgb.r, rgb.g, rgb.b].map((val) => {
-      val = val / 255;
-      return val <= 0.03928
-        ? val / 12.92
-        : Math.pow((val + 0.055) / 1.055, 2.4);
-    });
-
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    return getLuminance(color);
   }
 
   showToast(message, clickedElement) {
@@ -4187,10 +4628,11 @@ class CSSInspector {
     let headerBottom = panelRect.top + 70; // Default fallback offset
 
     // Try to get the actual header element's bottom position for accuracy
-    const lockedInfo = this.inspectorPanel.querySelector(
+    if (!this.shadowRoot) return;
+    const lockedInfo = this.shadowRoot.querySelector(
       "#locked-element-info"
     );
-    const websiteInfo = this.inspectorPanel.querySelector("#website-info");
+    const websiteInfo = this.shadowRoot.querySelector("#website-info");
 
     // Check which header is visible and use its actual position
     if (lockedInfo) {
@@ -4321,15 +4763,41 @@ class CSSInspector {
   }
 
   hexToRgb(hex) {
-    if (!hex) return null;
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result
-      ? {
-          r: parseInt(result[1], 16),
-          g: parseInt(result[2], 16),
-          b: parseInt(result[3], 16),
-        }
-      : null;
+    return hexToRgb(hex);
+  }
+
+  normalizeInspectorSpacing() {
+    if (!this.shadowRoot) return;
+    const elementInfo = this.shadowRoot.querySelector("#element-info");
+    if (!elementInfo) return;
+
+    // Normalize all inspector sections - use setProperty with !important to override page CSS
+    const sections = elementInfo.querySelectorAll(".inspector-section");
+    sections.forEach((section) => {
+      section.style.setProperty("margin-top", "0", "important");
+      section.style.setProperty("margin-bottom", "16px", "important");
+      
+      const headerDiv = section.firstElementChild;
+      if (headerDiv && headerDiv.tagName === "DIV") {
+        headerDiv.style.setProperty("margin-top", "0", "important");
+        headerDiv.style.setProperty("margin-bottom", "10px", "important");
+      }
+      
+      const h4 = section.querySelector("h4");
+      if (h4) {
+        h4.style.setProperty("margin", "0", "important");
+        h4.style.setProperty("padding", "0", "important");
+      }
+    });
+    
+    // Ensure element-info has no extra spacing
+    elementInfo.style.setProperty("margin", "0", "important");
+    elementInfo.style.setProperty("padding", "0", "important");
+    
+    // Reset margins on all direct children
+    Array.from(elementInfo.children).forEach((child) => {
+      child.style.setProperty("margin-top", "0", "important");
+    });
   }
 }
 
@@ -4370,6 +4838,7 @@ function initializeInspector() {
         window.inspectorInstance = inspector;
         window.inspector = inspector;
         window.cssInspectorReady = true;
+          window.__CSSInspectorLoaded = true; // Set flag only after successful initialization
       }
       console.log(
         "[CSS Inspector] Inspector instance initialized, ready:",
@@ -4402,3 +4871,5 @@ if (typeof window !== "undefined") {
     setTimeout(initializeInspector, 0);
   }
 }
+
+})(); // End IIFE - prevents multiple script injections

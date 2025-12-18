@@ -11,11 +11,11 @@ chrome.action.onClicked.addListener((tab) => {
       if (chrome.runtime.lastError) {
         console.log('[CSS Inspector] Content script not loaded, injecting...', chrome.runtime.lastError.message);
         
-        // Inject both JS and CSS
+        // Inject both JS and CSS (with dependencies)
         Promise.all([
           chrome.scripting.executeScript({
             target: { tabId: tab.id },
-            files: ['content.js']
+            files: ['utils/cache.js', 'utils/colorUtils.js', 'content.js']
           }),
           chrome.scripting.insertCSS({
             target: { tabId: tab.id },

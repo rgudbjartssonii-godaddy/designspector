@@ -28,14 +28,22 @@
               0 0 40px rgba(114, 65, 255, 0.15) !important;
   z-index: 2147483647 !important;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
+  overflow: hidden !important; /* Changed from overflow-y: auto - scrollbar is now on #panel-content inside shadow DOM */
   display: flex !important;
   flex-direction: column !important;
   user-select: none !important;
   color: #E5E5E5 !important;
   transition: height 0.45s cubic-bezier(0.88, 0, 0.12, 1) !important;
   animation: subtleGlow 8s ease-in-out infinite !important;
+  /* Hide scrollbar on host element */
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+#css-inspector-panel::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 #css-inspector-panel::before {
@@ -54,6 +62,12 @@
   z-index: -1 !important;
   animation: glowRotate 8s ease-in-out infinite !important;
   opacity: 0.6 !important;
+}
+
+#css-inspector-panel::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 @keyframes glowRotate {
@@ -80,11 +94,46 @@
 
 #element-info {
   transition: opacity 0.2s ease-out, transform 0.2s ease-out !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Reset any page CSS that might affect spacing - use high specificity */
+#css-inspector-panel #element-info > * {
+  margin-top: 0 !important;
+}
+
+#css-inspector-panel #element-info > *:first-child {
+  margin-top: 0 !important;
 }
 
 .inspector-section {
   transition: opacity 0.2s ease-out, transform 0.2s ease-out, margin-bottom 0.2s ease-out, max-height 0.2s ease-out !important;
   overflow: hidden !important;
+  margin-top: 0 !important;
+  margin-bottom: 16px !important;
+}
+
+.inspector-section:first-child {
+  margin-top: 0 !important;
+}
+
+.inspector-section > div:first-child {
+  margin-top: 0 !important;
+  margin-bottom: 10px !important;
+}
+
+.inspector-section h4 {
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+
+/* Ensure grid containers don't have extra spacing */
+#css-inspector-panel .inspector-section > div[style*="grid"] {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
 }
 
 #panel-drag-handle {
@@ -92,24 +141,7 @@
   z-index: 1 !important;
 }
 
-/* Scrollbar styling */
-#css-inspector-panel::-webkit-scrollbar {
-  width: 8px !important;
-}
-
-#css-inspector-panel::-webkit-scrollbar-track {
-  background: #f1f1f1 !important;
-  border-radius: 4px !important;
-}
-
-#css-inspector-panel::-webkit-scrollbar-thumb {
-  background: #ccc !important;
-  border-radius: 4px !important;
-}
-
-#css-inspector-panel::-webkit-scrollbar-thumb:hover {
-  background: #999 !important;
-}
+/* Scrollbar styling removed - now handled in shadow DOM for #panel-content */
 
 .inspector-header {
   display: flex !important;
@@ -571,24 +603,7 @@
   color: white !important;
 }
 
-/* Scrollbar styling */
-#css-inspector-panel::-webkit-scrollbar {
-  width: 8px !important;
-}
-
-#css-inspector-panel::-webkit-scrollbar-track {
-  background: #f1f1f1 !important;
-  border-radius: 4px !important;
-}
-
-#css-inspector-panel::-webkit-scrollbar-thumb {
-  background: #ccc !important;
-  border-radius: 4px !important;
-}
-
-#css-inspector-panel::-webkit-scrollbar-thumb:hover {
-  background: #999 !important;
-}
+/* Scrollbar styling removed - now handled in shadow DOM for #panel-content */
 
 /* Overview Mode Styles */
 .stats-overview {
@@ -648,5 +663,51 @@
 
 .button-panel:hover {
   background: #e0e0e0 !important;
+}
+
+/* Reset spacing for inspector panel content to prevent page CSS interference */
+#css-inspector-panel #element-info {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+#css-inspector-panel #panel-content {
+  padding: 16px !important;
+}
+
+#css-inspector-panel .inspector-section {
+  margin-top: 0 !important;
+  margin-bottom: 16px !important;
+}
+
+#css-inspector-panel .inspector-section:first-child {
+  margin-top: 0 !important;
+}
+
+#css-inspector-panel .inspector-section > div:first-child {
+  margin-top: 0 !important;
+  margin-bottom: 10px !important;
+}
+
+#css-inspector-panel .inspector-section h4 {
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+
+/* Reset any page CSS that might affect spacing */
+#css-inspector-panel #element-info > * {
+  margin-top: 0 !important;
+}
+
+#css-inspector-panel #element-info > *:first-child {
+  margin-top: 0 !important;
+}
+
+/* Ensure grid containers don't have extra spacing */
+#css-inspector-panel .inspector-section > div[style*="grid"] {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
 }
 
