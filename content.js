@@ -1,9 +1,13 @@
 // Prevent multiple script injections - wrap everything in IIFE
-(function() {
-  'use strict';
-  
+(function () {
+  "use strict";
+
   // Check if already loaded AND initialized
-  if (typeof window !== 'undefined' && window.__CSSInspectorLoaded && window.cssInspector) {
+  if (
+    typeof window !== "undefined" &&
+    window.__CSSInspectorLoaded &&
+    window.cssInspector
+  ) {
     // Already loaded and initialized, ensure message listener is set up
     if (!window.__CSSInspectorMessageListenerSet) {
       chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -12,7 +16,7 @@
           sendResponse({ success: false, error: "Inspector not initialized" });
           return false;
         }
-        
+
         if (message.action === "togglePanel") {
           const existingPanel = document.getElementById("css-inspector-panel");
           if (existingPanel) {
@@ -20,178 +24,6 @@
             instance.inspectorPanel = null;
             instance.isActive = false;
             // Clean up event listeners
-            if (instance.boundHandleMouseOver) {
-              document.removeEventListener("mouseover", instance.boundHandleMouseOver, true);
-            }
-            if (instance.boundHandleMouseOut) {
-              document.removeEventListener("mouseout", instance.boundHandleMouseOut, true);
-            }
-            if (instance.boundHandleClick) {
-              document.removeEventListener("click", instance.boundHandleClick, true);
-            }
-            if (instance.boundHandleMouseDown) {
-              document.removeEventListener("mousedown", instance.boundHandleMouseDown, true);
-            }
-            document.querySelectorAll(".css-inspector-highlight").forEach((el) => {
-              el.classList.remove("css-inspector-highlight");
-            });
-            document.querySelectorAll(".css-inspector-selected").forEach((el) => {
-              el.classList.remove("css-inspector-selected");
-            });
-            instance.removeOverlay("hover");
-            instance.removeOverlay("selected");
-            instance.selectedElement = null;
-            instance.hoveredElement = null;
-          } else {
-            instance.inspectorPanel = null;
-            instance.createPanel();
-          }
-          sendResponse({ success: true });
-          return true;
-        }
-        return true;
-      });
-      window.__CSSInspectorMessageListenerSet = true;
-    }
-    return; // Already loaded and initialized, exit
-  }
-  
-  // Don't set the flag yet - we'll set it after successful initialization
-
-// Content script that runs on every page
-class CSSInspector {
-  constructor() {
-    this.isActive = false;
-    this.inspectorPanel = null;
-    this.selectedElement = null;
-    this.hoveredElement = null;
-    this.updateTimeout = null;
-    this.hoverOverlay = null;
-    this.selectedOverlay = null;
-    this.theme = "dark"; // Will be set properly in init()
-    this.toastElement = null;
-    this.toastTimeout = null;
-    this.isScrolling = false;
-    this.scrollEndTimeout = null;
-    this.scrollAnimationFrame = null;
-    this.lastMouseDownPos = null;
-
-    // Performance optimizations: caching
-    // Use window.LRUCache (exposed from utils/cache.js)
-    const CacheClass = (typeof window !== 'undefined' && window.LRUCache) ? window.LRUCache : null;
-    if (!CacheClass) {
-      console.error('[CSS Inspector] LRUCache not found. Make sure utils/cache.js is loaded before content.js');
-      // Fallback: simple cache implementation
-      this.styleCache = {
-        get: () => null,
-        set: () => {},
-        clear: () => {},
-        has: () => false
-      };
-    } else {
-      this.styleCache = new CacheClass(200); // Cache computed styles
-    }
-    this.colorExtractionCache = null; // Cache color extraction results
-    this.typographyExtractionCache = null; // Cache typography extraction results
-    this.domMutationObserver = null; // Observer for DOM changes
-
-    // Debounced functions
-    // Use window.debounce (exposed from utils/cache.js)
-    const debounceFunc = (typeof window !== 'undefined' && window.debounce) ? window.debounce : debounce;
-    if (!debounceFunc) {
-      console.error('[CSS Inspector] debounce not found. Make sure utils/cache.js is loaded before content.js');
-      // Fallback: no debouncing
-      this.debouncedMouseOver = (element) => {
-        if (!this.isScrolling && element !== this.selectedElement) {
-          this.updateOverlay("hover", element);
-          if (!this.selectedElement) {
-            this.updateLockedElementHeader(element, false);
-            this.sendElementUpdateToPopup(element, false);
-          }
-        }
-      };
-    } else {
-      this.debouncedMouseOver = debounceFunc((element) => {
-        if (!this.isScrolling && element !== this.selectedElement) {
-          this.updateOverlay("hover", element);
-          if (!this.selectedElement) {
-            this.updateLockedElementHeader(element, false);
-            this.sendElementUpdateToPopup(element, false);
-          }
-        }
-      }, 50);
-    }
-
-    this.init();
-  }
-
-  init() {
-    console.log("[CSS Inspector] Initializing inspector instance...");
-
-    // Initialize theme
-    this.theme = this.getInitialTheme();
-
-    // Store reference to this instance
-    const inspectorInstance = this;
-
-    // Update global inspector reference
-    inspector = inspectorInstance;
-    if (typeof window !== "undefined") {
-      window.cssInspector = inspectorInstance;
-      window.inspectorInstance = inspectorInstance;
-      window.inspector = inspectorInstance;
-    }
-    console.log(
-      "[CSS Inspector] Inspector instance created and stored globally"
-    );
-
-    // Listen for messages from background/action clicks
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      console.log("[CSS Inspector] Message received:", message.action);
-      // Use the inspector instance (support both loaded and dynamically injected)
-      const instance =
-        inspector || inspectorInstance || (window && window.cssInspector);
-      if (!instance) {
-        console.error("[CSS Inspector] Inspector instance not found");
-        sendResponse({ success: false, error: "Inspector not initialized" });
-        return false;
-      }
-
-      if (message.action === "toggleInspector") {
-        const enabled =
-          message.enabled !== undefined ? message.enabled : !instance.isActive;
-        instance.setInspectorState(enabled);
-        sendResponse({ success: true, isActive: instance.isActive });
-        return true;
-      } else if (message.action === "togglePanel") {
-        console.log("[CSS Inspector] togglePanel action received");
-        // Use a debounce flag to prevent multiple rapid toggles
-        if (instance._toggleInProgress) {
-          console.log(
-            "[CSS Inspector] Toggle already in progress, ignoring duplicate message"
-          );
-          sendResponse({ success: true, skipped: true });
-          return true;
-        }
-
-        instance._toggleInProgress = true;
-
-        // Ensure we're ready to handle the toggle
-        const handleToggle = () => {
-          console.log(
-            "[CSS Inspector] Handling toggle, document.readyState:",
-            document.readyState
-          );
-          // Toggle panel visibility
-          const existingPanel = document.getElementById("css-inspector-panel");
-
-          if (existingPanel) {
-            console.log("[CSS Inspector] Panel exists, removing it...");
-            // Panel exists in DOM - remove it
-            existingPanel.remove();
-            instance.inspectorPanel = null;
-            // Disable inspector without recreating panel
-            instance.isActive = false;
             if (instance.boundHandleMouseOver) {
               document.removeEventListener(
                 "mouseover",
@@ -220,7 +52,6 @@ class CSSInspector {
                 true
               );
             }
-            // Remove ALL highlight classes
             document
               .querySelectorAll(".css-inspector-highlight")
               .forEach((el) => {
@@ -231,676 +62,2462 @@ class CSSInspector {
               .forEach((el) => {
                 el.classList.remove("css-inspector-selected");
               });
-            // Remove overlays
             instance.removeOverlay("hover");
             instance.removeOverlay("selected");
             instance.selectedElement = null;
             instance.hoveredElement = null;
-            console.log("[CSS Inspector] Panel removed");
           } else {
-            console.log("[CSS Inspector] Panel does not exist, creating it...");
-            // Panel doesn't exist - create it
-            instance.inspectorPanel = null; // Reset reference
+            instance.inspectorPanel = null;
             instance.createPanel();
-            console.log("[CSS Inspector] Panel created");
+          }
+          sendResponse({ success: true });
+          return true;
+        }
+        return true;
+      });
+      window.__CSSInspectorMessageListenerSet = true;
+    }
+    return; // Already loaded and initialized, exit
+  }
+
+  // Don't set the flag yet - we'll set it after successful initialization
+
+  // Content script that runs on every page
+  class CSSInspector {
+    constructor() {
+      this.isActive = false;
+      this.inspectorPanel = null;
+      this.selectedElement = null;
+      this.hoveredElement = null;
+      this.updateTimeout = null;
+      this.hoverOverlay = null;
+      this.selectedOverlay = null;
+      this.theme = "dark"; // Will be set properly in init()
+      this.toastElement = null;
+      this.toastTimeout = null;
+      this.isScrolling = false;
+      this.scrollEndTimeout = null;
+      this.scrollAnimationFrame = null;
+      this.lastMouseDownPos = null;
+      this.isUpdatingHeight = false; // Flag to prevent multiple simultaneous height updates
+      this.isRenderingColors = false; // Flag to prevent duplicate renderColorsView calls
+      this.isRenderingFonts = false; // Flag to prevent duplicate renderFontsView calls
+      this.isSwitchingMode = false; // Flag to prevent duplicate mode switches
+
+      // Performance optimizations: caching
+      // Use window.LRUCache (exposed from utils/cache.js)
+      const CacheClass =
+        typeof window !== "undefined" && window.LRUCache
+          ? window.LRUCache
+          : null;
+      if (!CacheClass) {
+        console.error(
+          "[CSS Inspector] LRUCache not found. Make sure utils/cache.js is loaded before content.js"
+        );
+        // Fallback: simple cache implementation
+        this.styleCache = {
+          get: () => null,
+          set: () => {},
+          clear: () => {},
+          has: () => false,
+        };
+      } else {
+        this.styleCache = new CacheClass(200); // Cache computed styles
+      }
+      this.colorExtractionCache = null; // Cache color extraction results
+      this.typographyExtractionCache = null; // Cache typography extraction results
+      this.domMutationObserver = null; // Observer for DOM changes
+
+      // Debounced functions
+      // Use window.debounce (exposed from utils/cache.js)
+      const debounceFunc =
+        typeof window !== "undefined" && window.debounce
+          ? window.debounce
+          : debounce;
+      if (!debounceFunc) {
+        console.error(
+          "[CSS Inspector] debounce not found. Make sure utils/cache.js is loaded before content.js"
+        );
+        // Fallback: no debouncing
+        this.debouncedMouseOver = (element) => {
+          if (!this.isScrolling && element !== this.selectedElement) {
+            this.updateOverlay("hover", element);
+            if (!this.selectedElement) {
+              this.updateLockedElementHeader(element, false);
+              this.sendElementUpdateToPopup(element, false);
+            }
+          }
+        };
+      } else {
+        this.debouncedMouseOver = debounceFunc((element) => {
+          if (!this.isScrolling && element !== this.selectedElement) {
+            this.updateOverlay("hover", element);
+            if (!this.selectedElement) {
+              this.updateLockedElementHeader(element, false);
+              this.sendElementUpdateToPopup(element, false);
+            }
+          }
+        }, 50);
+      }
+
+      this.init();
+    }
+
+    init() {
+      console.log("[CSS Inspector] Initializing inspector instance...");
+
+      // Initialize theme
+      this.theme = this.getInitialTheme();
+
+      // Store reference to this instance
+      const inspectorInstance = this;
+
+      // Update global inspector reference
+      inspector = inspectorInstance;
+      if (typeof window !== "undefined") {
+        window.cssInspector = inspectorInstance;
+        window.inspectorInstance = inspectorInstance;
+        window.inspector = inspectorInstance;
+      }
+      console.log(
+        "[CSS Inspector] Inspector instance created and stored globally"
+      );
+
+      // Listen for messages from background/action clicks
+      chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        console.log("[CSS Inspector] Message received:", message.action);
+        // Use the inspector instance (support both loaded and dynamically injected)
+        const instance =
+          inspector || inspectorInstance || (window && window.cssInspector);
+        if (!instance) {
+          console.error("[CSS Inspector] Inspector instance not found");
+          sendResponse({ success: false, error: "Inspector not initialized" });
+          return false;
+        }
+
+        if (message.action === "toggleInspector") {
+          const enabled =
+            message.enabled !== undefined
+              ? message.enabled
+              : !instance.isActive;
+          instance.setInspectorState(enabled);
+          sendResponse({ success: true, isActive: instance.isActive });
+          return true;
+        } else if (message.action === "togglePanel") {
+          console.log("[CSS Inspector] togglePanel action received");
+          // Use a debounce flag to prevent multiple rapid toggles
+          if (instance._toggleInProgress) {
+            console.log(
+              "[CSS Inspector] Toggle already in progress, ignoring duplicate message"
+            );
+            sendResponse({ success: true, skipped: true });
+            return true;
           }
 
-          // Clear the debounce flag after a short delay
-          setTimeout(() => {
-            instance._toggleInProgress = false;
-          }, 100);
-        };
+          instance._toggleInProgress = true;
 
-        // If document is ready, handle immediately; otherwise wait
-        if (document.readyState === "loading") {
-          console.log(
-            "[CSS Inspector] Document still loading, waiting for DOMContentLoaded..."
-          );
-          document.addEventListener("DOMContentLoaded", handleToggle, {
-            once: true,
+          // Ensure we're ready to handle the toggle
+          const handleToggle = () => {
+            console.log(
+              "[CSS Inspector] Handling toggle, document.readyState:",
+              document.readyState
+            );
+            // Toggle panel visibility
+            const existingPanel = document.getElementById(
+              "css-inspector-panel"
+            );
+
+            if (existingPanel) {
+              console.log("[CSS Inspector] Panel exists, removing it...");
+              // Panel exists in DOM - remove it
+              existingPanel.remove();
+              instance.inspectorPanel = null;
+              // Disable inspector without recreating panel
+              instance.isActive = false;
+              if (instance.boundHandleMouseOver) {
+                document.removeEventListener(
+                  "mouseover",
+                  instance.boundHandleMouseOver,
+                  true
+                );
+              }
+              if (instance.boundHandleMouseOut) {
+                document.removeEventListener(
+                  "mouseout",
+                  instance.boundHandleMouseOut,
+                  true
+                );
+              }
+              if (instance.boundHandleClick) {
+                document.removeEventListener(
+                  "click",
+                  instance.boundHandleClick,
+                  true
+                );
+              }
+              if (instance.boundHandleMouseDown) {
+                document.removeEventListener(
+                  "mousedown",
+                  instance.boundHandleMouseDown,
+                  true
+                );
+              }
+              // Remove ALL highlight classes
+              document
+                .querySelectorAll(".css-inspector-highlight")
+                .forEach((el) => {
+                  el.classList.remove("css-inspector-highlight");
+                });
+              document
+                .querySelectorAll(".css-inspector-selected")
+                .forEach((el) => {
+                  el.classList.remove("css-inspector-selected");
+                });
+              // Remove overlays
+              instance.removeOverlay("hover");
+              instance.removeOverlay("selected");
+              instance.selectedElement = null;
+              instance.hoveredElement = null;
+              console.log("[CSS Inspector] Panel removed");
+            } else {
+              console.log(
+                "[CSS Inspector] Panel does not exist, creating it..."
+              );
+              // Panel doesn't exist - create it
+              instance.inspectorPanel = null; // Reset reference
+              instance.createPanel();
+              console.log("[CSS Inspector] Panel created");
+            }
+
+            // Clear the debounce flag after a short delay
+            setTimeout(() => {
+              instance._toggleInProgress = false;
+            }, 100);
+          };
+
+          // If document is ready, handle immediately; otherwise wait
+          if (document.readyState === "loading") {
+            console.log(
+              "[CSS Inspector] Document still loading, waiting for DOMContentLoaded..."
+            );
+            document.addEventListener("DOMContentLoaded", handleToggle, {
+              once: true,
+            });
+          } else {
+            handleToggle();
+          }
+
+          sendResponse({ success: true });
+          return true;
+        } else if (message.action === "getInspectorStatus") {
+          sendResponse({ isActive: instance.isActive });
+        } else if (message.action === "getColors") {
+          sendResponse({ colors: instance.extractColors() });
+        } else if (message.action === "getTypography") {
+          sendResponse({ typography: instance.extractTypography() });
+        } else if (message.action === "getStats") {
+          const colors = instance.extractColors();
+          const typography = instance.extractTypography();
+          sendResponse({
+            colorCount: colors.length,
+            typographyCount: typography.length,
           });
-        } else {
-          handleToggle();
+        } else if (message.action === "openColorsWindow") {
+          const colors = instance.extractColors();
+          instance.openColorsWindow(colors);
+          sendResponse({ success: true });
+        } else if (message.action === "openTypographyWindow") {
+          const typography = instance.extractTypography();
+          instance.openTypographyWindow(typography);
+          sendResponse({ success: true });
         }
-
-        sendResponse({ success: true });
         return true;
-      } else if (message.action === "getInspectorStatus") {
-        sendResponse({ isActive: instance.isActive });
-      } else if (message.action === "getColors") {
-        sendResponse({ colors: instance.extractColors() });
-      } else if (message.action === "getTypography") {
-        sendResponse({ typography: instance.extractTypography() });
-      } else if (message.action === "getStats") {
-        const colors = instance.extractColors();
-        const typography = instance.extractTypography();
-        sendResponse({
-          colorCount: colors.length,
-          typographyCount: typography.length,
-        });
-      } else if (message.action === "openColorsWindow") {
-        const colors = instance.extractColors();
-        instance.openColorsWindow(colors);
-        sendResponse({ success: true });
-      } else if (message.action === "openTypographyWindow") {
-        const typography = instance.extractTypography();
-        instance.openTypographyWindow(typography);
-        sendResponse({ success: true });
-      }
-      return true;
-    });
-  }
+      });
+    }
 
-  // Theme detection and management
-  detectWebsiteTheme() {
-    try {
-      // Get computed background color from body or html
-      const body = document.body;
-      const html = document.documentElement;
+    // Theme detection and management
+    detectWebsiteTheme() {
+      try {
+        // Get computed background color from body or html
+        const body = document.body;
+        const html = document.documentElement;
 
-      // Try body first, then html
-      const bgColor =
-        window.getComputedStyle(body).backgroundColor ||
-        window.getComputedStyle(html).backgroundColor;
+        // Try body first, then html
+        const bgColor =
+          window.getComputedStyle(body).backgroundColor ||
+          window.getComputedStyle(html).backgroundColor;
 
-      if (
-        !bgColor ||
-        bgColor === "transparent" ||
-        bgColor === "rgba(0, 0, 0, 0)"
-      ) {
-        // Fallback: check html element
-        const htmlBg = window.getComputedStyle(html).backgroundColor;
         if (
-          htmlBg &&
-          htmlBg !== "transparent" &&
-          htmlBg !== "rgba(0, 0, 0, 0)"
+          !bgColor ||
+          bgColor === "transparent" ||
+          bgColor === "rgba(0, 0, 0, 0)"
         ) {
-          return this.isColorLight(htmlBg) ? "light" : "dark";
+          // Fallback: check html element
+          const htmlBg = window.getComputedStyle(html).backgroundColor;
+          if (
+            htmlBg &&
+            htmlBg !== "transparent" &&
+            htmlBg !== "rgba(0, 0, 0, 0)"
+          ) {
+            return this.isColorLight(htmlBg) ? "light" : "dark";
+          }
+          // Default to light if we can't determine
+          return "light";
         }
-        // Default to light if we can't determine
-        return "light";
+
+        return this.isColorLight(bgColor) ? "light" : "dark";
+      } catch (e) {
+        console.error("[CSS Inspector] Error detecting website theme:", e);
+        return "light"; // Default to light
       }
-
-      return this.isColorLight(bgColor) ? "light" : "dark";
-    } catch (e) {
-      console.error("[CSS Inspector] Error detecting website theme:", e);
-      return "light"; // Default to light
     }
-  }
 
-  isColorLight(color) {
-    // Convert color to RGB values
-    let r, g, b;
+    isColorLight(color) {
+      // Convert color to RGB values
+      let r, g, b;
 
-    if (color.startsWith("rgb")) {
-      const match = color.match(/\d+/g);
-      if (match && match.length >= 3) {
-        r = parseInt(match[0]);
-        g = parseInt(match[1]);
-        b = parseInt(match[2]);
+      if (color.startsWith("rgb")) {
+        const match = color.match(/\d+/g);
+        if (match && match.length >= 3) {
+          r = parseInt(match[0]);
+          g = parseInt(match[1]);
+          b = parseInt(match[2]);
+        } else {
+          return true; // Default to light
+        }
+      } else if (color.startsWith("#")) {
+        const hex = color.slice(1);
+        r = parseInt(hex.slice(0, 2), 16);
+        g = parseInt(hex.slice(2, 4), 16);
+        b = parseInt(hex.slice(4, 6), 16);
       } else {
-        return true; // Default to light
+        return true; // Default to light for unknown formats
       }
-    } else if (color.startsWith("#")) {
-      const hex = color.slice(1);
-      r = parseInt(hex.slice(0, 2), 16);
-      g = parseInt(hex.slice(2, 4), 16);
-      b = parseInt(hex.slice(4, 6), 16);
-    } else {
-      return true; // Default to light for unknown formats
+
+      // Calculate relative luminance (per WCAG)
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      return luminance > 0.5; // Light if luminance > 0.5
     }
 
-    // Calculate relative luminance (per WCAG)
-    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-    return luminance > 0.5; // Light if luminance > 0.5
-  }
+    getInitialTheme() {
+      // Check localStorage for manual preference first
+      const storedTheme = localStorage.getItem("css-inspector-theme");
+      if (storedTheme === "light" || storedTheme === "dark") {
+        console.log(
+          "[CSS Inspector] Using stored theme preference:",
+          storedTheme
+        );
+        return storedTheme;
+      }
 
-  getInitialTheme() {
-    // Check localStorage for manual preference first
-    const storedTheme = localStorage.getItem("css-inspector-theme");
-    if (storedTheme === "light" || storedTheme === "dark") {
+      // Auto-detect: use opposite of website theme (only if no preference is stored)
+      const websiteTheme = this.detectWebsiteTheme();
+      const autoTheme = websiteTheme === "light" ? "dark" : "light";
       console.log(
-        "[CSS Inspector] Using stored theme preference:",
-        storedTheme
+        "[CSS Inspector] Auto-detected theme (website is",
+        websiteTheme + ", inspector will be",
+        autoTheme + ")"
       );
-      return storedTheme;
+      return autoTheme;
     }
 
-    // Auto-detect: use opposite of website theme (only if no preference is stored)
-    const websiteTheme = this.detectWebsiteTheme();
-    const autoTheme = websiteTheme === "light" ? "dark" : "light";
-    console.log(
-      "[CSS Inspector] Auto-detected theme (website is",
-      websiteTheme + ", inspector will be",
-      autoTheme + ")"
-    );
-    return autoTheme;
-  }
+    setTheme(theme) {
+      if (theme !== "light" && theme !== "dark") {
+        console.error("[CSS Inspector] Invalid theme:", theme);
+        return;
+      }
 
-  setTheme(theme) {
-    if (theme !== "light" && theme !== "dark") {
-      console.error("[CSS Inspector] Invalid theme:", theme);
-      return;
+      // #region agent log
+      fetch(
+        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "content.js:381",
+            message: "setTheme entry",
+            data: {
+              theme,
+              oldTheme: this.theme,
+              currentHeight: this.inspectorPanel
+                ? this.inspectorPanel.offsetHeight
+                : null,
+              isActive: this.isActive,
+            },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "C",
+          }),
+        }
+      ).catch(() => {});
+      // #endregion
+
+      this.theme = theme;
+      localStorage.setItem("css-inspector-theme", theme);
+
+      // Update panel's background and border colors directly (using setProperty with !important to override CSS)
+      if (this.inspectorPanel) {
+        const colors = this.getThemeColors();
+        this.inspectorPanel.style.setProperty(
+          "background",
+          colors.panelBg,
+          "important"
+        );
+        this.inspectorPanel.style.setProperty(
+          "border-color",
+          colors.border,
+          "important"
+        );
+        this.inspectorPanel.style.setProperty(
+          "color",
+          colors.textPrimary,
+          "important"
+        );
+      }
+
+      // Re-render panel if it exists
+      if (this.inspectorPanel) {
+        // Save scroll position before re-rendering
+        const panelContent = this.shadowRoot
+          ? this.shadowRoot.querySelector("#panel-content")
+          : null;
+        const savedScrollTop = panelContent ? panelContent.scrollTop : 0;
+        const currentHeight = this.inspectorPanel.offsetHeight;
+
+        // #region agent log
+        fetch(
+          "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              location: "content.js:411",
+              message: "setTheme before re-render",
+              data: { currentHeight, savedScrollTop, isActive: this.isActive },
+              timestamp: Date.now(),
+              sessionId: "debug-session",
+              runId: "run1",
+              hypothesisId: "C",
+            }),
+          }
+        ).catch(() => {});
+        // #endregion
+
+        if (this.isActive) {
+          this.switchPanelToInspectorMode();
+          // #region agent log
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:417",
+                message: "setTheme after switchPanelToInspectorMode",
+                data: {
+                  heightAfterSwitch: this.inspectorPanel.offsetHeight,
+                  currentHeight,
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "C",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
+          // Restore scroll position after re-rendering
+          if (panelContent && savedScrollTop > 0) {
+            setTimeout(() => {
+              const newPanelContent = this.shadowRoot
+                ? this.shadowRoot.querySelector("#panel-content")
+                : null;
+              if (newPanelContent) {
+                newPanelContent.scrollTop = savedScrollTop;
+              }
+            }, 0);
+          }
+          // If there's a selected element, update its display with new theme
+          // Use setTimeout to ensure the panel is fully rendered first
+          // Skip animation for instant theme change
+          if (this.selectedElement) {
+            setTimeout(() => {
+              this.updateInspectorPanel(this.selectedElement, true, true);
+              // Restore scroll position again after element info is updated
+              const newPanelContent = this.shadowRoot
+                ? this.shadowRoot.querySelector("#panel-content")
+                : null;
+              if (newPanelContent && savedScrollTop > 0) {
+                newPanelContent.scrollTop = savedScrollTop;
+              }
+            }, 0);
+          }
+        } else {
+          // Save which overview tab is active before re-rendering
+          const colorsView = this.shadowRoot
+            ? this.shadowRoot.querySelector("#overview-colors-view")
+            : null;
+          const fontsView = this.shadowRoot
+            ? this.shadowRoot.querySelector("#overview-fonts-view")
+            : null;
+          const activeTab =
+            fontsView && fontsView.style.display !== "none"
+              ? "fonts"
+              : "colors";
+
+          this.switchPanelToOverviewMode(activeTab);
+          // #region agent log
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:451",
+                message: "setTheme after switchPanelToOverviewMode",
+                data: {
+                  heightAfterSwitch: this.inspectorPanel.offsetHeight,
+                  currentHeight,
+                  activeTab,
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "C",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
+
+          // Restore scroll position after re-rendering
+          if (panelContent && savedScrollTop > 0) {
+            setTimeout(() => {
+              const newPanelContent = this.shadowRoot
+                ? this.shadowRoot.querySelector("#panel-content")
+                : null;
+              if (newPanelContent) {
+                newPanelContent.scrollTop = savedScrollTop;
+              }
+            }, 0);
+          }
+        }
+      }
     }
 
-    this.theme = theme;
-    localStorage.setItem("css-inspector-theme", theme);
-
-    // Update panel's background and border colors directly (using setProperty with !important to override CSS)
-    if (this.inspectorPanel) {
-      const colors = this.getThemeColors();
-      this.inspectorPanel.style.setProperty(
-        "background",
-        colors.panelBg,
-        "important"
+    toggleTheme() {
+      const newTheme = this.theme === "light" ? "dark" : "light";
+      console.log(
+        "[CSS Inspector] Toggling theme from",
+        this.theme,
+        "to",
+        newTheme
       );
-      this.inspectorPanel.style.setProperty(
-        "border-color",
-        colors.border,
-        "important"
-      );
-      this.inspectorPanel.style.setProperty(
-        "color",
-        colors.textPrimary,
-        "important"
-      );
+      this.setTheme(newTheme);
     }
 
-    // Re-render panel if it exists
-    if (this.inspectorPanel) {
-      // Save scroll position before re-rendering
-      const panelContent = this.shadowRoot ? this.shadowRoot.querySelector("#panel-content") : null;
-      const savedScrollTop = panelContent ? panelContent.scrollTop : 0;
+    getThemeColors() {
+      if (this.theme === "light") {
+        return {
+          // Backgrounds
+          bgPrimary: "#FFFFFF",
+          bgSecondary: "#F5F5F5",
+          bgTertiary: "#E5E5E5",
+          bgHover: "#F0F0F0",
+          bgActive: "#E0E0E0",
+
+          // Borders
+          border: "#E0E0E0",
+          borderHover: "#D0D0D0",
+
+          // Text
+          textPrimary: "#0D0D0D",
+          textSecondary: "#666666",
+          textTertiary: "#999999",
+
+          // Special
+          panelBg: "#FFFFFF",
+          headerBg: "#FFFFFF",
+          segmentBg: "#F5F5F5",
+          segmentActive: "#E5E5E5",
+        };
+      } else {
+        // Dark theme (current)
+        return {
+          // Backgrounds
+          bgPrimary: "#0D0D0D",
+          bgSecondary: "#1A1A1A",
+          bgTertiary: "#2A2A2A",
+          bgHover: "#1F1F1F",
+          bgActive: "#2A2A2A",
+
+          // Borders
+          border: "#1F1F1F",
+          borderHover: "#2A2A2A",
+
+          // Text
+          textPrimary: "#E5E5E5",
+          textSecondary: "#8B8B8B",
+          textTertiary: "#666666",
+
+          // Special
+          panelBg: "#0D0D0D",
+          headerBg: "#0D0D0D",
+          segmentBg: "#1A1A1A",
+          segmentActive: "#2A2A2A",
+        };
+      }
+    }
+
+    setInspectorState(enabled) {
+      this.isActive = enabled;
+
+      // Ensure panel exists - create if it doesn't
+      if (!this.inspectorPanel) {
+        this.createPanel();
+      }
 
       if (this.isActive) {
-        this.switchPanelToInspectorMode();
-        // Restore scroll position after re-rendering
-        if (panelContent && savedScrollTop > 0) {
-          setTimeout(() => {
-            const newPanelContent = this.shadowRoot ? this.shadowRoot.querySelector("#panel-content") : null;
-            if (newPanelContent) {
-              newPanelContent.scrollTop = savedScrollTop;
-            }
-          }, 0);
-        }
-        // If there's a selected element, update its display with new theme
-        // Use setTimeout to ensure the panel is fully rendered first
-        // Skip animation for instant theme change
-        if (this.selectedElement) {
-          setTimeout(() => {
-            this.updateInspectorPanel(this.selectedElement, true, true);
-            // Restore scroll position again after element info is updated
-            const newPanelContent = this.shadowRoot ? this.shadowRoot.querySelector("#panel-content") : null;
-            if (newPanelContent && savedScrollTop > 0) {
-              newPanelContent.scrollTop = savedScrollTop;
-            }
-          }, 0);
-        }
+        this.activateInspector();
       } else {
-        // Save which overview tab is active before re-rendering
-        const colorsView = this.shadowRoot ? this.shadowRoot.querySelector(
-          "#overview-colors-view"
-        ) : null;
-        const fontsView = this.shadowRoot ? this.shadowRoot.querySelector(
-          "#overview-fonts-view"
-        ) : null;
-        const activeTab =
-          fontsView && fontsView.style.display !== "none" ? "fonts" : "colors";
-
-        this.switchPanelToOverviewMode(activeTab);
-
-        // Restore scroll position after re-rendering
-        if (panelContent && savedScrollTop > 0) {
-          setTimeout(() => {
-            const newPanelContent = this.shadowRoot ? this.shadowRoot.querySelector("#panel-content") : null;
-            if (newPanelContent) {
-              newPanelContent.scrollTop = savedScrollTop;
-            }
-          }, 0);
-        }
+        this.deactivateInspector();
       }
     }
-  }
 
-  toggleTheme() {
-    const newTheme = this.theme === "light" ? "dark" : "light";
-    console.log(
-      "[CSS Inspector] Toggling theme from",
-      this.theme,
-      "to",
-      newTheme
-    );
-    this.setTheme(newTheme);
-  }
+    activateInspector() {
+      // Switch panel to inspector mode
+      this.switchPanelToInspectorMode();
 
-  getThemeColors() {
-    if (this.theme === "light") {
-      return {
-        // Backgrounds
-        bgPrimary: "#FFFFFF",
-        bgSecondary: "#F5F5F5",
-        bgTertiary: "#E5E5E5",
-        bgHover: "#F0F0F0",
-        bgActive: "#E0E0E0",
+      // Change cursor to custom inspector cursor (always black with white stroke)
+      this.originalCursor = document.body.style.cursor;
+      document.body.style.cursor = this.getInspectorCursor();
 
-        // Borders
-        border: "#E0E0E0",
-        borderHover: "#D0D0D0",
+      // Store bound handlers so we can properly remove them later
+      this.boundHandleMouseOver = this.handleMouseOver.bind(this);
+      this.boundHandleMouseOut = this.handleMouseOut.bind(this);
+      this.boundHandleClick = this.handleClick.bind(this);
+      this.boundHandleMouseDown = this.handleMouseDown.bind(this);
 
-        // Text
-        textPrimary: "#0D0D0D",
-        textSecondary: "#666666",
-        textTertiary: "#999999",
+      // Enable element hover detection (highlight only, no auto-lock)
+      document.addEventListener("mouseover", this.boundHandleMouseOver, true);
+      document.addEventListener("mouseout", this.boundHandleMouseOut, true);
 
-        // Special
-        panelBg: "#FFFFFF",
-        headerBg: "#FFFFFF",
-        segmentBg: "#F5F5F5",
-        segmentActive: "#E5E5E5",
-      };
-    } else {
-      // Dark theme (current)
-      return {
-        // Backgrounds
-        bgPrimary: "#0D0D0D",
-        bgSecondary: "#1A1A1A",
-        bgTertiary: "#2A2A2A",
-        bgHover: "#1F1F1F",
-        bgActive: "#2A2A2A",
+      // Track mousedown to distinguish between clicks and drags (for scrolling)
+      document.addEventListener("mousedown", this.boundHandleMouseDown, true);
 
-        // Borders
-        border: "#1F1F1F",
-        borderHover: "#2A2A2A",
+      // Enable click to lock elements
+      document.addEventListener("click", this.boundHandleClick, true);
 
-        // Text
-        textPrimary: "#E5E5E5",
-        textSecondary: "#8B8B8B",
-        textTertiary: "#666666",
+      // Update overlays on scroll
+      this.boundHandleScroll = this.handleScroll.bind(this);
+      window.addEventListener("scroll", this.boundHandleScroll, true);
+      window.addEventListener("resize", this.boundHandleScroll, true);
 
-        // Special
-        panelBg: "#0D0D0D",
-        headerBg: "#0D0D0D",
-        segmentBg: "#1A1A1A",
-        segmentActive: "#2A2A2A",
-      };
-    }
-  }
+      // Setup MutationObserver to invalidate caches on DOM changes
+      if (!this.domMutationObserver) {
+        this.domMutationObserver = new MutationObserver(() => {
+          // Invalidate caches when DOM changes significantly
+          this.colorExtractionCache = null;
+          this.typographyExtractionCache = null;
+          // Clear style cache periodically (keep it for performance but limit size)
+          if (this.styleCache && this.styleCache.cache.size > 500) {
+            this.styleCache.clear();
+          }
+        });
+        this.domMutationObserver.observe(document.body, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          attributeFilter: ["style", "class"],
+        });
+      }
 
-  setInspectorState(enabled) {
-    this.isActive = enabled;
-
-    // Ensure panel exists - create if it doesn't
-    if (!this.inspectorPanel) {
-      this.createPanel();
+      // Add styles to document
+      this.injectInspectorStyles();
     }
 
-    if (this.isActive) {
-      this.activateInspector();
-    } else {
-      this.deactivateInspector();
-    }
-  }
+    handleScroll() {
+      // Mark that user is actively scrolling
+      this.isScrolling = true;
 
-  activateInspector() {
-    // Switch panel to inspector mode
-    this.switchPanelToInspectorMode();
+      // Clear existing timeout
+      if (this.scrollEndTimeout) {
+        clearTimeout(this.scrollEndTimeout);
+      }
 
-    // Change cursor to custom inspector cursor (always black with white stroke)
-    this.originalCursor = document.body.style.cursor;
-    document.body.style.cursor = this.getInspectorCursor();
+      // Set flag to false after scrolling stops (debounce) - reduced from 150ms to 100ms
+      this.scrollEndTimeout = setTimeout(() => {
+        this.isScrolling = false;
+      }, 100);
 
-    // Store bound handlers so we can properly remove them later
-    this.boundHandleMouseOver = this.handleMouseOver.bind(this);
-    this.boundHandleMouseOut = this.handleMouseOut.bind(this);
-    this.boundHandleClick = this.handleClick.bind(this);
-    this.boundHandleMouseDown = this.handleMouseDown.bind(this);
+      // Throttle overlay updates using requestAnimationFrame
+      if (this.scrollAnimationFrame) {
+        cancelAnimationFrame(this.scrollAnimationFrame);
+      }
 
-    // Enable element hover detection (highlight only, no auto-lock)
-    document.addEventListener("mouseover", this.boundHandleMouseOver, true);
-    document.addEventListener("mouseout", this.boundHandleMouseOut, true);
-
-    // Track mousedown to distinguish between clicks and drags (for scrolling)
-    document.addEventListener("mousedown", this.boundHandleMouseDown, true);
-
-    // Enable click to lock elements
-    document.addEventListener("click", this.boundHandleClick, true);
-
-    // Update overlays on scroll
-    this.boundHandleScroll = this.handleScroll.bind(this);
-    window.addEventListener("scroll", this.boundHandleScroll, true);
-    window.addEventListener("resize", this.boundHandleScroll, true);
-
-    // Setup MutationObserver to invalidate caches on DOM changes
-    if (!this.domMutationObserver) {
-      this.domMutationObserver = new MutationObserver(() => {
-        // Invalidate caches when DOM changes significantly
-        this.colorExtractionCache = null;
-        this.typographyExtractionCache = null;
-        // Clear style cache periodically (keep it for performance but limit size)
-        if (this.styleCache && this.styleCache.cache.size > 500) {
-          this.styleCache.clear();
+      this.scrollAnimationFrame = requestAnimationFrame(() => {
+        // Update overlays when page scrolls or resizes
+        if (this.hoveredElement) {
+          this.updateOverlay("hover", this.hoveredElement);
         }
-      });
-      this.domMutationObserver.observe(document.body, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: ["style", "class"],
+        if (this.selectedElement) {
+          this.updateOverlay("selected", this.selectedElement);
+        }
+        this.scrollAnimationFrame = null;
       });
     }
 
-    // Add styles to document
-    this.injectInspectorStyles();
-  }
+    // Helper function to measure content height and return target height
+    // This allows us to calculate height first, then animate separately
+    measureContentHeight(currentHeightToRestore = null) {
+      if (!this.inspectorPanel || !this.shadowRoot) return null;
 
-  handleScroll() {
-    // Mark that user is actively scrolling
-    this.isScrolling = true;
+      const panelContent = this.shadowRoot.querySelector("#panel-content");
+      if (!panelContent) return null;
 
-    // Clear existing timeout
-    if (this.scrollEndTimeout) {
-      clearTimeout(this.scrollEndTimeout);
-    }
+      // Temporarily remove ALL constraints to get natural content height
+      const originalFlex = panelContent.style.getPropertyValue("flex");
+      const originalHeight = panelContent.style.getPropertyValue("height");
+      const originalOverflowY =
+        panelContent.style.getPropertyValue("overflow-y");
+      const originalPanelHeight =
+        this.inspectorPanel.style.getPropertyValue("height");
+      const originalPanelMaxHeight =
+        this.inspectorPanel.style.getPropertyValue("max-height");
+      // Capture current height before measurement in case we need to restore it
+      const heightBeforeMeasurement =
+        currentHeightToRestore || this.inspectorPanel.offsetHeight;
+      const computedStyle = window.getComputedStyle(panelContent);
+      const hasFlexInCSS =
+        computedStyle.flex !== "none" && computedStyle.flex !== "0 0 auto";
 
-    // Set flag to false after scrolling stops (debounce) - reduced from 150ms to 100ms
-    this.scrollEndTimeout = setTimeout(() => {
-      this.isScrolling = false;
-    }, 100);
-
-    // Throttle overlay updates using requestAnimationFrame
-    if (this.scrollAnimationFrame) {
-      cancelAnimationFrame(this.scrollAnimationFrame);
-    }
-
-    this.scrollAnimationFrame = requestAnimationFrame(() => {
-      // Update overlays when page scrolls or resizes
-      if (this.hoveredElement) {
-        this.updateOverlay("hover", this.hoveredElement);
+      // Temporarily remove ALL constraints to get natural content height
+      if (hasFlexInCSS) {
+        panelContent.style.setProperty("flex", "0 0 auto", "important");
       }
-      if (this.selectedElement) {
-        this.updateOverlay("selected", this.selectedElement);
-      }
-      this.scrollAnimationFrame = null;
-    });
-  }
+      panelContent.style.removeProperty("height");
+      panelContent.style.setProperty("overflow-y", "visible", "important");
 
-  updatePanelHeight() {
-    if (!this.inspectorPanel || !this.shadowRoot) return;
-
-    // Get the panel content element from shadow root
-    const panelContent = this.shadowRoot.querySelector("#panel-content");
-    if (!panelContent) return;
-
-    // Use requestAnimationFrame to ensure DOM is fully rendered
-    requestAnimationFrame(() => {
-      // Get current height first (before changing anything)
-      const currentHeight =
-        this.inspectorPanel.offsetHeight || this.inspectorPanel.scrollHeight;
-
-      // Temporarily disable transition and set to auto to measure natural height
-      this.inspectorPanel.style.setProperty("transition", "none", "important");
+      // Temporarily remove parent panel height constraints to allow content to expand naturally
       this.inspectorPanel.style.setProperty("height", "auto", "important");
       this.inspectorPanel.style.setProperty("max-height", "none", "important");
 
-      // Force multiple reflows to ensure layout is complete (especially for grid layouts)
-      this.inspectorPanel.offsetHeight;
+      // Force multiple reflows to ensure content is fully laid out
+      // CRITICAL: Also temporarily set opacity to 1 on the views to ensure accurate measurement
+      const colorsView = this.shadowRoot.querySelector("#overview-colors-view");
+      const fontsView = this.shadowRoot.querySelector("#overview-fonts-view");
+      const originalColorsOpacity = colorsView ? colorsView.style.opacity : "";
+      const originalFontsOpacity = fontsView ? fontsView.style.opacity : "";
+
+      // Temporarily set opacity to 1 for accurate measurement
+      if (colorsView && colorsView.style.display !== "none") {
+        colorsView.style.setProperty("opacity", "1", "important");
+      }
+      if (fontsView && fontsView.style.display !== "none") {
+        fontsView.style.setProperty("opacity", "1", "important");
+      }
+
       panelContent.offsetHeight;
-      
-      // Wait one more frame to ensure grid layout is fully calculated
-      requestAnimationFrame(() => {
-        // Measure the actual natural height of the panel when set to auto
-        const naturalHeight = this.inspectorPanel.offsetHeight;
-        
-        // Also measure content height as fallback
-        const contentHeight = panelContent.scrollHeight;
-        const headerElement = this.shadowRoot.querySelector("div:first-child");
-        const headerHeight = headerElement ? headerElement.offsetHeight : 0;
-        const calculatedHeight = contentHeight + headerHeight;
-        
-        // Use the larger of the two measurements to ensure nothing is cut off
-        const totalHeight = Math.max(naturalHeight, calculatedHeight);
+      this.inspectorPanel.offsetHeight;
+      panelContent.offsetHeight; // Second reflow
+      this.inspectorPanel.offsetHeight;
 
-        // Get max height (80vh)
-        const maxHeight = window.innerHeight * 0.8;
+      // Measure overview-content height (this includes segmented control + content view)
+      const panelContentComputedStyle = window.getComputedStyle(panelContent);
+      const panelContentPaddingTop =
+        parseInt(panelContentComputedStyle.paddingTop) || 0;
+      const panelContentPaddingBottom =
+        parseInt(panelContentComputedStyle.paddingBottom) || 0;
+      const totalPadding = panelContentPaddingTop + panelContentPaddingBottom;
 
-        // Set height to content height, but not exceeding max-height
-        const finalHeight = Math.min(totalHeight, maxHeight);
-        
-        // Restore max-height
-        this.inspectorPanel.style.setProperty("max-height", "80vh", "important");
+      const overviewContent =
+        this.shadowRoot.querySelector("#overview-content");
+      const overviewContentHeight = overviewContent
+        ? overviewContent.scrollHeight
+        : 0;
 
-        // If the height hasn't changed, don't animate
-        if (Math.abs(currentHeight - finalHeight) < 1) {
-          this.inspectorPanel.style.setProperty(
-            "height",
-            `${finalHeight}px`,
-            "important"
-          );
-          // Re-enable transition (CSS will handle it)
-          this.inspectorPanel.style.setProperty("transition", "", "important");
-          return;
+      // Calculate total content height: overview-content + padding
+      const contentHeight =
+        overviewContentHeight > 0
+          ? overviewContentHeight + totalPadding
+          : panelContent.scrollHeight;
+
+      // Restore original opacity values
+      if (colorsView && originalColorsOpacity !== "") {
+        colorsView.style.setProperty(
+          "opacity",
+          originalColorsOpacity,
+          "important"
+        );
+      } else if (colorsView) {
+        colorsView.style.removeProperty("opacity");
+      }
+      if (fontsView && originalFontsOpacity !== "") {
+        fontsView.style.setProperty(
+          "opacity",
+          originalFontsOpacity,
+          "important"
+        );
+      } else if (fontsView) {
+        fontsView.style.removeProperty("opacity");
+      }
+
+      // Use the actual measured panelContent.scrollHeight
+      const actualPanelContentHeight = panelContent.scrollHeight;
+
+      const headerElement = this.shadowRoot.querySelector("div:first-child");
+      const headerHeight = headerElement ? headerElement.offsetHeight : 0;
+
+      // CRITICAL FIX: After setting panel to height: auto and forcing reflows,
+      // the panel's offsetHeight is the natural height we need (includes header, content, padding, and border)
+      // This matches what you see when you uncheck the height in DevTools
+      const totalHeight = this.inspectorPanel.offsetHeight;
+
+      // #region agent log
+      const overviewContentMeasured =
+        this.shadowRoot.querySelector("#overview-content");
+      const colorsViewMeasured =
+        this.shadowRoot.querySelector("#overview-colors-view") ||
+        this.shadowRoot.querySelector("#colors-view");
+      const fontsViewMeasured =
+        this.shadowRoot.querySelector("#overview-fonts-view") ||
+        this.shadowRoot.querySelector("#fonts-view");
+      const segmentedControlMeasured = this.shadowRoot.querySelector(
+        "#overview-segment-container"
+      );
+      const panelContentComputedStyleForFlex =
+        window.getComputedStyle(panelContent);
+      fetch(
+        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "content.js:870",
+            message: "measureContentHeight - detailed measurement",
+            data: {
+              actualPanelContentHeight,
+              headerHeight,
+              totalHeight,
+              panelContentPaddingTop,
+              panelContentPaddingBottom,
+              totalPadding,
+              panelContentOffsetHeight: panelContent.offsetHeight,
+              panelContentClientHeight: panelContent.clientHeight,
+              panelHeight: this.inspectorPanel.offsetHeight,
+              overviewContentScrollHeight: overviewContentMeasured
+                ? overviewContentMeasured.scrollHeight
+                : 0,
+              overviewContentOffsetHeight: overviewContentMeasured
+                ? overviewContentMeasured.offsetHeight
+                : 0,
+              colorsViewScrollHeight: colorsViewMeasured
+                ? colorsViewMeasured.scrollHeight
+                : 0,
+              fontsViewScrollHeight: fontsViewMeasured
+                ? fontsViewMeasured.scrollHeight
+                : 0,
+              colorsViewOpacity: colorsViewMeasured
+                ? window.getComputedStyle(colorsViewMeasured).opacity
+                : "",
+              fontsViewOpacity: fontsViewMeasured
+                ? window.getComputedStyle(fontsViewMeasured).opacity
+                : "",
+              colorsViewDisplay: colorsViewMeasured
+                ? window.getComputedStyle(colorsViewMeasured).display
+                : "",
+              fontsViewDisplay: fontsViewMeasured
+                ? window.getComputedStyle(fontsViewMeasured).display
+                : "",
+              segmentedControlHeight: segmentedControlMeasured
+                ? segmentedControlMeasured.offsetHeight
+                : 0,
+              panelContentFlex: panelContentComputedStyleForFlex.flex,
+            },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "A,B",
+          }),
         }
+      ).catch(() => {});
+      // #endregion
 
-        // Set current height explicitly first (to establish a starting point for transition)
+      // Restore original styles
+      // Always keep overflow-y: auto - don't restore original value which might be hidden
+      // This ensures scrolling works after view switches
+      panelContent.style.setProperty("overflow-y", "auto", "important");
+
+      // #region agent log
+      fetch(
+        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "content.js:947",
+            message:
+              "measureContentHeight: Set overflow-y to auto (not restoring original)",
+            data: {
+              originalOverflowY,
+              scrollHeight: panelContent.scrollHeight,
+              clientHeight: panelContent.clientHeight,
+            },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "G",
+          }),
+        }
+      ).catch(() => {});
+      // #endregion
+      // CRITICAL: Restore panel height to original value so finishHeightUpdate can animate correctly
+      // We saved originalPanelHeight before setting it to 'auto', so restore it now
+      // If originalPanelHeight was empty, restore to heightBeforeMeasurement (the height before we set it to 'auto')
+      if (originalPanelHeight) {
         this.inspectorPanel.style.setProperty(
           "height",
-          `${currentHeight}px`,
+          originalPanelHeight,
           "important"
         );
-
-        // Re-enable transition
-        this.inspectorPanel.style.setProperty(
-          "transition",
-          "height 0.45s cubic-bezier(0.88, 0, 0.12, 1)",
-          "important"
-        );
-
-        // Force a reflow
-        this.inspectorPanel.offsetHeight;
-
-        // Use requestAnimationFrame to trigger the transition
-        requestAnimationFrame(() => {
+      } else {
+        // If no original height was set, restore to the height we captured before measurement
+        // This ensures we restore to the correct starting height for animation
+        if (heightBeforeMeasurement > 0) {
           this.inspectorPanel.style.setProperty(
             "height",
-            `${finalHeight}px`,
+            `${heightBeforeMeasurement}px`,
             "important"
+          );
+        }
+      }
+      if (originalPanelMaxHeight) {
+        this.inspectorPanel.style.setProperty(
+          "max-height",
+          originalPanelMaxHeight,
+          "important"
+        );
+      } else {
+        this.inspectorPanel.style.setProperty(
+          "max-height",
+          "80vh",
+          "important"
+        );
+      }
+
+      // Force reflow after restoring
+      panelContent.offsetHeight;
+      this.inspectorPanel.offsetHeight;
+
+      return {
+        totalHeight,
+        measuredContentHeight: actualPanelContentHeight,
+        headerHeight,
+      };
+    }
+
+    updatePanelHeight(immediate = false, skipAuto = false) {
+      if (!this.inspectorPanel || !this.shadowRoot) return;
+
+      // Prevent multiple simultaneous height updates
+      if (this.isUpdatingHeight && !immediate) {
+        // #region agent log
+        fetch(
+          "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              location: "content.js:632",
+              message: "updatePanelHeight blocked - already updating",
+              data: {
+                isUpdatingHeight: this.isUpdatingHeight,
+                immediate,
+                skipAuto,
+              },
+              timestamp: Date.now(),
+              sessionId: "debug-session",
+              runId: "run1",
+              hypothesisId: "D",
+            }),
+          }
+        ).catch(() => {});
+        // #endregion
+        return;
+      }
+      this.isUpdatingHeight = true;
+
+      // #region agent log
+      fetch(
+        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "content.js:628",
+            message: "updatePanelHeight entry",
+            data: {
+              immediate,
+              skipAuto,
+              currentHeight: this.inspectorPanel.offsetHeight,
+              currentTransition: this.inspectorPanel.style.transition,
+            },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "A,B,C,D,E",
+          }),
+        }
+      ).catch(() => {});
+      // #endregion
+
+      // Get the panel content element from shadow root
+      const panelContent = this.shadowRoot.querySelector("#panel-content");
+      if (!panelContent) {
+        this.isUpdatingHeight = false;
+        return;
+      }
+
+      // Get current height first (before changing anything) - lock it to prevent jumps
+      const currentHeight =
+        this.inspectorPanel.offsetHeight || this.inspectorPanel.scrollHeight;
+
+      // CRITICAL: Never set height to "auto" - it causes visible jumps
+      // Always use scrollHeight-based calculation which doesn't require "auto"
+      // Use double RAF to ensure layout is complete (especially for grid layouts)
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          // CRITICAL FIX: Measure content accurately by temporarily removing ALL height constraints
+          // The issue is that measuring scrollHeight while flex:1 is active OR while parent has fixed height
+          // gives incorrect measurements. We need to temporarily remove BOTH constraints.
+          const originalFlex = panelContent.style.getPropertyValue("flex");
+          const originalHeight = panelContent.style.getPropertyValue("height");
+          const originalOverflowY =
+            panelContent.style.getPropertyValue("overflow-y");
+          const originalPanelHeight =
+            this.inspectorPanel.style.getPropertyValue("height");
+          const originalPanelMaxHeight =
+            this.inspectorPanel.style.getPropertyValue("max-height");
+          const computedStyle = window.getComputedStyle(panelContent);
+          const hasFlexInCSS =
+            computedStyle.flex !== "none" && computedStyle.flex !== "0 0 auto";
+
+          // #region agent log - Before measurement
+          const cssInspectorPanel = this.inspectorPanel;
+          const cssInspectorPanelRect = cssInspectorPanel
+            ? cssInspectorPanel.getBoundingClientRect()
+            : {};
+          const panelContentRectBefore = panelContent
+            ? panelContent.getBoundingClientRect()
+            : {};
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:699",
+                message: "updatePanelHeight - Before measurement",
+                data: {
+                  cssInspectorPanelHeight: cssInspectorPanelRect.height,
+                  panelContentRectBefore,
+                  originalHeight,
+                  originalFlex,
+                  originalOverflowY,
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run2",
+                hypothesisId: "A,B",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
+
+          // Temporarily remove ALL constraints to get natural content height
+          if (hasFlexInCSS) {
+            panelContent.style.setProperty("flex", "0 0 auto", "important");
+          }
+          panelContent.style.removeProperty("height");
+          panelContent.style.setProperty("overflow-y", "visible", "important");
+
+          // Temporarily remove parent panel height constraints to allow content to expand naturally
+          this.inspectorPanel.style.setProperty("height", "auto", "important");
+          this.inspectorPanel.style.setProperty(
+            "max-height",
+            "none",
+            "important"
+          );
+
+          // Force multiple reflows to ensure content is fully laid out
+          // CRITICAL: Also temporarily set opacity to 1 on the views to ensure accurate measurement
+          // opacity: 0 can sometimes affect layout calculations
+          const colorsView = this.shadowRoot.querySelector(
+            "#overview-colors-view"
+          );
+          const fontsView = this.shadowRoot.querySelector(
+            "#overview-fonts-view"
+          );
+          const originalColorsOpacity = colorsView
+            ? colorsView.style.opacity
+            : "";
+          const originalFontsOpacity = fontsView ? fontsView.style.opacity : "";
+
+          // Temporarily set opacity to 1 for accurate measurement
+          if (colorsView && colorsView.style.display !== "none") {
+            colorsView.style.setProperty("opacity", "1", "important");
+          }
+          if (fontsView && fontsView.style.display !== "none") {
+            fontsView.style.setProperty("opacity", "1", "important");
+          }
+
+          panelContent.offsetHeight;
+          this.inspectorPanel.offsetHeight;
+          panelContent.offsetHeight; // Second reflow
+          this.inspectorPanel.offsetHeight;
+
+          // CRITICAL FIX: Measure the actual content element (#overview-content) and add padding explicitly
+          // This is more accurate than measuring panelContent.scrollHeight which might be affected by constraints
+          // Get padding values first
+          const panelContentComputedStyle =
+            window.getComputedStyle(panelContent);
+          const panelContentPaddingTop =
+            parseInt(panelContentComputedStyle.paddingTop) || 0;
+          const panelContentPaddingBottom =
+            parseInt(panelContentComputedStyle.paddingBottom) || 0;
+          const totalPadding =
+            panelContentPaddingTop + panelContentPaddingBottom;
+
+          // Measure overview-content height (this includes segmented control + content view)
+          const overviewContent =
+            this.shadowRoot.querySelector("#overview-content");
+          const overviewContentHeight = overviewContent
+            ? overviewContent.scrollHeight
+            : 0;
+
+          // Calculate total content height: overview-content + padding
+          // Use overview-content measurement if available, otherwise fallback to panelContent.scrollHeight
+          const contentHeight =
+            overviewContentHeight > 0
+              ? overviewContentHeight + totalPadding
+              : panelContent.scrollHeight;
+
+          // Restore original opacity values
+          if (colorsView && originalColorsOpacity !== "") {
+            colorsView.style.setProperty(
+              "opacity",
+              originalColorsOpacity,
+              "important"
+            );
+          } else if (colorsView) {
+            colorsView.style.removeProperty("opacity");
+          }
+          if (fontsView && originalFontsOpacity !== "") {
+            fontsView.style.setProperty(
+              "opacity",
+              originalFontsOpacity,
+              "important"
+            );
+          } else if (fontsView) {
+            fontsView.style.removeProperty("opacity");
+          }
+
+          // #region agent log - After measurement, before restore
+          const panelContentRectAfter = panelContent
+            ? panelContent.getBoundingClientRect()
+            : {};
+          // overviewContent, panelContentComputedStyle, panelContentPaddingTop, panelContentPaddingBottom, totalPadding already declared above
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:720",
+                message:
+                  "updatePanelHeight - After measurement, before restore",
+                data: {
+                  contentHeight,
+                  panelContentScrollHeight: panelContent.scrollHeight,
+                  panelContentOffsetHeight: panelContent.offsetHeight,
+                  panelContentClientHeight: panelContent.clientHeight,
+                  panelContentRectAfter,
+                  panelContentPaddingTop,
+                  panelContentPaddingBottom,
+                  totalPadding,
+                  overviewContentScrollHeight: overviewContent
+                    ? overviewContent.scrollHeight
+                    : 0,
+                  overviewContentOffsetHeight: overviewContent
+                    ? overviewContent.offsetHeight
+                    : 0,
+                  overviewContentClientHeight: overviewContent
+                    ? overviewContent.clientHeight
+                    : 0,
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run2",
+                hypothesisId: "A,B",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
+
+          // Restore original styles
+          // CRITICAL: Don't restore height or flex - let finishHeightUpdate set them correctly
+          // Restoring the old values can interfere with the measurement and cause incorrect sizing
+          // Keep flex: 0 0 auto until finishHeightUpdate sets the correct height
+          // if (hasFlexInCSS) {
+          //   if (originalFlex) {
+          //     panelContent.style.setProperty('flex', originalFlex, 'important');
+          //   } else {
+          //     panelContent.style.removeProperty('flex');
+          //   }
+          // }
+          // Don't restore height - finishHeightUpdate will set it correctly
+          // if (originalHeight) {
+          //   panelContent.style.setProperty('height', originalHeight, 'important');
+          // }
+          // Always keep overflow-y: auto - don't restore original value which might be hidden
+          // This ensures scrolling works after view switches
+          panelContent.style.setProperty("overflow-y", "auto", "important");
+
+          // #region agent log
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:1282",
+                message:
+                  "measureContentHeight (delayed): Set overflow-y to auto (not restoring original)",
+                data: {
+                  originalOverflowY,
+                  scrollHeight: panelContent.scrollHeight,
+                  clientHeight: panelContent.clientHeight,
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "G",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
+          // CRITICAL: Don't restore panel height here - it constrains panelContent and affects measurement
+          // finishHeightUpdate will set the correct panel height based on our measurement
+          // if (originalPanelHeight) {
+          //   this.inspectorPanel.style.setProperty('height', originalPanelHeight, 'important');
+          // }
+          if (originalPanelMaxHeight) {
+            this.inspectorPanel.style.setProperty(
+              "max-height",
+              originalPanelMaxHeight,
+              "important"
+            );
+          } else {
+            this.inspectorPanel.style.setProperty(
+              "max-height",
+              "80vh",
+              "important"
+            );
+          }
+
+          // Force reflow after restoring (but panel height stays as 'auto' until finishHeightUpdate sets it)
+          panelContent.offsetHeight;
+          this.inspectorPanel.offsetHeight;
+
+          const headerElement =
+            this.shadowRoot.querySelector("div:first-child");
+          const headerHeight = headerElement ? headerElement.offsetHeight : 0;
+          const calculatedHeight = contentHeight + headerHeight;
+          // CRITICAL: Use the actual measured panelContent.scrollHeight instead of calculated contentHeight
+          // This ensures we account for all content including any elements not in overviewContent
+          const actualPanelContentHeight = panelContent.scrollHeight;
+
+          // CRITICAL FIX: After setting panel to height: auto and forcing reflows,
+          // the panel's offsetHeight is the natural height we need (includes header, content, padding, and border)
+          // This matches what you see when you uncheck the height in DevTools
+          const totalHeight = this.inspectorPanel.offsetHeight;
+
+          // #region agent log - Comprehensive measurement data
+          // colorsView and fontsView already declared above in the opacity handling section
+          // overviewContent already declared above in "After measurement, before restore" section
+          const panelContentComputed = window.getComputedStyle(panelContent);
+          const panelContentOpacity = panelContentComputed.opacity;
+          const panelContentDisplay = panelContentComputed.display;
+          const colorsViewDisplay = colorsView
+            ? window.getComputedStyle(colorsView).display
+            : "N/A";
+          const fontsViewDisplay = fontsView
+            ? window.getComputedStyle(fontsView).display
+            : "N/A";
+          const colorsViewOpacity = colorsView
+            ? window.getComputedStyle(colorsView).opacity
+            : "N/A";
+          const fontsViewOpacity = fontsView
+            ? window.getComputedStyle(fontsView).opacity
+            : "N/A";
+          const colorsViewScrollHeight = colorsView
+            ? colorsView.scrollHeight
+            : 0;
+          const fontsViewScrollHeight = fontsView ? fontsView.scrollHeight : 0;
+          const colorsViewOffsetHeight = colorsView
+            ? colorsView.offsetHeight
+            : 0;
+          const fontsViewOffsetHeight = fontsView ? fontsView.offsetHeight : 0;
+          const needsScrolling =
+            panelContent.scrollHeight > panelContent.clientHeight;
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:680",
+                message: "updatePanelHeight measurement",
+                data: {
+                  currentHeight,
+                  totalHeight,
+                  calculatedHeight,
+                  contentHeight,
+                  actualPanelContentHeight,
+                  headerHeight,
+                  panelHeight: this.inspectorPanel.offsetHeight,
+                  panelContentScrollHeight: panelContent.scrollHeight,
+                  panelContentClientHeight: panelContent.clientHeight,
+                  panelContentOffsetHeight: panelContent.offsetHeight,
+                  needsScrolling,
+                  panelContentOpacity,
+                  panelContentDisplay,
+                  colorsViewDisplay,
+                  fontsViewDisplay,
+                  colorsViewOpacity,
+                  fontsViewOpacity,
+                  colorsViewScrollHeight,
+                  fontsViewScrollHeight,
+                  colorsViewOffsetHeight,
+                  fontsViewOffsetHeight,
+                  overviewContentScrollHeight: overviewContent
+                    ? overviewContent.scrollHeight
+                    : 0,
+                  overviewContentOffsetHeight: overviewContent
+                    ? overviewContent.offsetHeight
+                    : 0,
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "A,B,C,D,E",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
+
+          this.finishHeightUpdate(
+            currentHeight,
+            totalHeight,
+            immediate,
+            actualPanelContentHeight
           );
         });
       });
-    });
-  }
-
-  deactivateInspector() {
-    // Switch panel to overview mode
-    this.switchPanelToOverviewMode();
-
-    // Clear all timeouts
-    if (this.updateTimeout) {
-      clearTimeout(this.updateTimeout);
-      this.updateTimeout = null;
-    }
-    if (this.scrollEndTimeout) {
-      clearTimeout(this.scrollEndTimeout);
-      this.scrollEndTimeout = null;
-    }
-    if (this.toastTimeout) {
-      clearTimeout(this.toastTimeout);
-      this.toastTimeout = null;
     }
 
-    // Cancel animation frames
-    if (this.scrollAnimationFrame) {
-      cancelAnimationFrame(this.scrollAnimationFrame);
-      this.scrollAnimationFrame = null;
-    }
+    finishHeightUpdate(
+      currentHeight,
+      totalHeight,
+      immediate,
+      measuredContentHeight = null
+    ) {
+      // Get max height (80vh)
+      const maxHeight = window.innerHeight * 0.8;
 
-    // Disconnect mutation observer if it exists
-    if (this.domMutationObserver) {
-      this.domMutationObserver.disconnect();
-      this.domMutationObserver = null;
-    }
+      // Set height to content height, but not exceeding max-height
+      const finalHeight = Math.min(totalHeight, maxHeight);
 
-    // Restore original cursor
-    if (this.originalCursor !== undefined) {
-      document.body.style.cursor = this.originalCursor || "";
-    } else {
-      document.body.style.cursor = "";
-    }
+      // #region agent log - Final height calculation with border/box-sizing check
+      const panelContent = this.shadowRoot.querySelector("#panel-content");
+      const actualContentHeight = panelContent ? panelContent.scrollHeight : 0;
+      const actualNeedsScrolling = panelContent
+        ? panelContent.scrollHeight > panelContent.clientHeight
+        : false;
+      const panelComputedStyle = window.getComputedStyle(this.inspectorPanel);
+      const panelBoxSizing = panelComputedStyle.boxSizing;
+      const panelBorderTop = parseInt(panelComputedStyle.borderTopWidth) || 0;
+      const panelBorderBottom =
+        parseInt(panelComputedStyle.borderBottomWidth) || 0;
+      const panelBorderTotal = panelBorderTop + panelBorderBottom;
+      const panelOffsetHeight = this.inspectorPanel.offsetHeight;
+      const panelClientHeight = this.inspectorPanel.clientHeight;
+      const heightDiff = panelOffsetHeight - panelClientHeight; // Should equal border if box-sizing is content-box
+      fetch(
+        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "content.js:693",
+            message: "Total height before finishHeightUpdate",
+            data: {
+              totalHeight,
+              currentHeight,
+              finalHeight,
+              maxHeight,
+              actualContentHeight,
+              measuredContentHeight,
+              actualNeedsScrolling,
+              chosenValue:
+                Math.abs(currentHeight - finalHeight) < 1
+                  ? "noChange"
+                  : immediate
+                  ? "immediate"
+                  : "animate",
+              panelBoxSizing,
+              panelBorderTop,
+              panelBorderBottom,
+              panelBorderTotal,
+              panelOffsetHeight,
+              panelClientHeight,
+              heightDiff,
+            },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "A,B,C,D,E",
+          }),
+        }
+      ).catch(() => {});
+      // #endregion
 
-    if (this.boundHandleMouseOver) {
-      document.removeEventListener(
-        "mouseover",
-        this.boundHandleMouseOver,
-        true
+      // CRITICAL FIX: Use the measured content height directly instead of calculating from finalHeight
+      // This ensures we use the actual measured scrollHeight which accounts for all content
+      const headerElement = this.shadowRoot
+        ? this.shadowRoot.querySelector("div:first-child")
+        : null;
+      const headerHeight = headerElement ? headerElement.offsetHeight : 48; // Default to 48 if not found
+      // Use measuredContentHeight if provided (from updatePanelHeight measurement), otherwise fallback to calculated
+      const contentAreaHeight =
+        measuredContentHeight !== null
+          ? measuredContentHeight
+          : finalHeight - headerHeight;
+
+      // Restore max-height
+      this.inspectorPanel.style.setProperty("max-height", "80vh", "important");
+
+      // CRITICAL FIX: Don't set panelContent properties until AFTER animation completes
+      // During animation, let panelContent use default flex:1 (from CSS) to fill available space
+      // After animation completes, check if content fits and decide whether to hug or scroll
+      // This ensures panelContent sizes based on final panel height, not intermediate animation heights
+      // We'll set panelContent properties after animation completes for both cases (totalHeight <= maxHeight and totalHeight > maxHeight)
+
+      // If the height hasn't changed, don't animate
+      if (Math.abs(currentHeight - finalHeight) < 1) {
+        // #region agent log
+        fetch(
+          "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              location: "content.js:708",
+              message: "finishHeightUpdate - no change path",
+              data: {
+                currentHeight,
+                finalHeight,
+                heightDiff: Math.abs(currentHeight - finalHeight),
+              },
+              timestamp: Date.now(),
+              sessionId: "debug-session",
+              runId: "run1",
+              hypothesisId: "A,B",
+            }),
+          }
+        ).catch(() => {});
+        // #endregion
+        this.inspectorPanel.style.setProperty(
+          "height",
+          `${finalHeight}px`,
+          "important"
+        );
+
+        // CRITICAL: Even in no-change path, ensure flex: 1 and overflow-y: auto are set
+        // This ensures scrolling works after view switches when height doesn't change
+        const panelContent = this.shadowRoot.querySelector("#panel-content");
+        if (panelContent) {
+          panelContent.style.setProperty("flex", "1", "important");
+          panelContent.style.setProperty("overflow-y", "auto", "important");
+          panelContent.style.setProperty("min-height", "0", "important");
+
+          // #region agent log
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:1540",
+                message:
+                  "finishHeightUpdate - no change path: Set flex:1 and overflow-y:auto",
+                data: {
+                  scrollHeight: panelContent.scrollHeight,
+                  clientHeight: panelContent.clientHeight,
+                  isScrollable:
+                    panelContent.scrollHeight > panelContent.clientHeight,
+                  computedFlex: window.getComputedStyle(panelContent).flex,
+                  computedOverflowY:
+                    window.getComputedStyle(panelContent).overflowY,
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "J",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
+        }
+
+        // Re-enable transition (CSS will handle it)
+        this.inspectorPanel.style.setProperty("transition", "", "important");
+        this.isUpdatingHeight = false;
+        return;
+      }
+
+      // If immediate is true, set height without animation
+      if (immediate) {
+        // #region agent log
+        fetch(
+          "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              location: "content.js:721",
+              message: "finishHeightUpdate - immediate path",
+              data: { currentHeight, finalHeight },
+              timestamp: Date.now(),
+              sessionId: "debug-session",
+              runId: "run1",
+              hypothesisId: "A,B",
+            }),
+          }
+        ).catch(() => {});
+        // #endregion
+        this.inspectorPanel.style.setProperty(
+          "height",
+          `${finalHeight}px`,
+          "important"
+        );
+        // Re-enable transition (CSS will handle it)
+        this.inspectorPanel.style.setProperty("transition", "", "important");
+        this.isUpdatingHeight = false;
+        return;
+      }
+
+      // Set current height explicitly first (to establish a starting point for transition)
+      // #region agent log
+      fetch(
+        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "content.js:700",
+            message: "finishHeightUpdate entry",
+            data: {
+              currentHeight,
+              totalHeight,
+              maxHeight,
+              finalHeight,
+              immediate,
+            },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "A,B,C",
+          }),
+        }
+      ).catch(() => {});
+      // #endregion
+      this.inspectorPanel.style.setProperty(
+        "height",
+        `${currentHeight}px`,
+        "important"
       );
-      this.boundHandleMouseOver = null;
-    }
-    if (this.boundHandleMouseOut) {
-      document.removeEventListener("mouseout", this.boundHandleMouseOut, true);
-      this.boundHandleMouseOut = null;
-    }
-    if (this.boundHandleClick) {
-      document.removeEventListener("click", this.boundHandleClick, true);
-      this.boundHandleClick = null;
-    }
-    if (this.boundHandleMouseDown) {
-      document.removeEventListener(
-        "mousedown",
-        this.boundHandleMouseDown,
-        true
+
+      // CRITICAL FIX: Don't set flex or overflow before animation
+      // Let panel-content keep its default flex: 1 and overflow-y: auto from CSS during animation
+      // This matches the immediate path behavior and allows content to size correctly
+      // We'll set flex: 0 0 auto and overflow-y: hidden AFTER animation completes if content fits
+
+      // Re-enable transition (use same bezier as CSS: 0.45s cubic-bezier(0.88, 0, 0.12, 1))
+      this.inspectorPanel.style.setProperty(
+        "transition",
+        "height 0.45s cubic-bezier(0.88, 0, 0.12, 1)",
+        "important"
       );
-      this.boundHandleMouseDown = null;
+
+      // Force a reflow to ensure transition is applied
+      this.inspectorPanel.offsetHeight;
+
+      // #region agent log
+      const panelContentBeforeAnim =
+        this.shadowRoot.querySelector("#panel-content");
+      const overviewContentBeforeAnim =
+        this.shadowRoot.querySelector("#overview-content");
+      fetch(
+        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "content.js:1548",
+            message: "BEFORE animation - panel-content keeps default flex: 1",
+            data: {
+              totalHeight,
+              maxHeight,
+              finalHeight,
+              currentHeight,
+              panelContentFlex: panelContentBeforeAnim
+                ? window.getComputedStyle(panelContentBeforeAnim).flex
+                : "",
+              panelContentOverflow: panelContentBeforeAnim
+                ? window.getComputedStyle(panelContentBeforeAnim).overflowY
+                : "",
+              panelContentScrollHeight: panelContentBeforeAnim
+                ? panelContentBeforeAnim.scrollHeight
+                : 0,
+              panelContentClientHeight: panelContentBeforeAnim
+                ? panelContentBeforeAnim.clientHeight
+                : 0,
+              panelHeight: this.inspectorPanel.offsetHeight,
+              overviewContentScrollHeight: overviewContentBeforeAnim
+                ? overviewContentBeforeAnim.scrollHeight
+                : 0,
+            },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "A,B,C,D,E",
+          }),
+        }
+      ).catch(() => {});
+      // #endregion
+
+      // Use requestAnimationFrame to trigger the transition
+      requestAnimationFrame(() => {
+        // #region agent log
+        fetch(
+          "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              location: "content.js:751",
+              message: "finishHeightUpdate - starting animation",
+              data: {
+                currentHeight,
+                finalHeight,
+                heightBeforeAnim: this.inspectorPanel.offsetHeight,
+              },
+              timestamp: Date.now(),
+              sessionId: "debug-session",
+              runId: "run1",
+              hypothesisId: "A,B",
+            }),
+          }
+        ).catch(() => {});
+        // #endregion
+        this.inspectorPanel.style.setProperty(
+          "height",
+          `${finalHeight}px`,
+          "important"
+        );
+        // Clear flag after transition completes (0.45s to match panel height animation)
+        setTimeout(() => {
+          // #region agent log - After animation complete with border/box-sizing check
+          const panelContent = this.shadowRoot.querySelector("#panel-content");
+          const actualContentHeight = panelContent
+            ? panelContent.scrollHeight
+            : 0;
+          const actualNeedsScrolling = panelContent
+            ? panelContent.scrollHeight > panelContent.clientHeight
+            : false;
+          const panelComputedStyleAfter = window.getComputedStyle(
+            this.inspectorPanel
+          );
+          const panelBoxSizingAfter = panelComputedStyleAfter.boxSizing;
+          const panelBorderTopAfter =
+            parseInt(panelComputedStyleAfter.borderTopWidth) || 0;
+          const panelBorderBottomAfter =
+            parseInt(panelComputedStyleAfter.borderBottomWidth) || 0;
+          const panelBorderTotalAfter =
+            panelBorderTopAfter + panelBorderBottomAfter;
+          const actualHeight = this.inspectorPanel.offsetHeight;
+          const actualClientHeight = this.inspectorPanel.clientHeight;
+          const heightDiffAfter = actualHeight - actualClientHeight;
+          const heightMismatch = actualHeight - finalHeight;
+          const panelContentHeightAfter = panelContent
+            ? panelContent.offsetHeight
+            : 0;
+          const panelContentScrollHeightAfter = panelContent
+            ? panelContent.scrollHeight
+            : 0;
+          const panelContentClientHeightAfter = panelContent
+            ? panelContent.clientHeight
+            : 0;
+          const needsScrollingAfterAnim = panelContent
+            ? panelContent.scrollHeight > panelContent.clientHeight
+            : false;
+
+          // #region agent log
+          const overviewContentAfter =
+            this.shadowRoot.querySelector("#overview-content");
+          const colorsViewAfter =
+            this.shadowRoot.querySelector("#overview-colors-view") ||
+            this.shadowRoot.querySelector("#colors-view");
+          const fontsViewAfter =
+            this.shadowRoot.querySelector("#overview-fonts-view") ||
+            this.shadowRoot.querySelector("#fonts-view");
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:1669",
+                message: "Post-animation - final state",
+                data: {
+                  totalHeight,
+                  measuredContentHeight,
+                  panelHeight: this.inspectorPanel.offsetHeight,
+                  panelContentScrollHeight: panelContent
+                    ? panelContent.scrollHeight
+                    : 0,
+                  panelContentClientHeight: panelContent
+                    ? panelContent.clientHeight
+                    : 0,
+                  overviewContentScrollHeight: overviewContentAfter
+                    ? overviewContentAfter.scrollHeight
+                    : 0,
+                  colorsViewScrollHeight: colorsViewAfter
+                    ? colorsViewAfter.scrollHeight
+                    : 0,
+                  fontsViewScrollHeight: fontsViewAfter
+                    ? fontsViewAfter.scrollHeight
+                    : 0,
+                  colorsViewOpacity: colorsViewAfter
+                    ? window.getComputedStyle(colorsViewAfter).opacity
+                    : "",
+                  fontsViewOpacity: fontsViewAfter
+                    ? window.getComputedStyle(fontsViewAfter).opacity
+                    : "",
+                  contentCutoff: panelContent
+                    ? panelContent.scrollHeight > panelContent.clientHeight
+                    : false,
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "A,B,C,D,E",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
+
+          // After animation completes, set panelContent properties so it sizes correctly to content
+          // Panel is now at final height, so panelContent will size correctly based on final height
+          if (panelContent) {
+            const headerElement = this.shadowRoot
+              ? this.shadowRoot.querySelector("div:first-child")
+              : null;
+            const headerHeight = headerElement
+              ? headerElement.offsetHeight
+              : 48;
+
+            if (totalHeight <= maxHeight) {
+              // #region agent log
+              fetch(
+                "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    location: "content.js:1580",
+                    message: "Post-animation: totalHeight <= maxHeight - entry",
+                    data: {
+                      totalHeight,
+                      maxHeight,
+                      measuredContentHeight,
+                      panelHeightBefore: this.inspectorPanel.offsetHeight,
+                      panelContentScrollHeightBefore: panelContent
+                        ? panelContent.scrollHeight
+                        : 0,
+                      panelContentClientHeightBefore: panelContent
+                        ? panelContent.clientHeight
+                        : 0,
+                    },
+                    timestamp: Date.now(),
+                    sessionId: "debug-session",
+                    runId: "run1",
+                    hypothesisId: "A,B,C,D,E",
+                  }),
+                }
+              ).catch(() => {});
+              // #endregion
+
+              // Always use flex: 1 to constrain panel-content by panel's max-height (80vh)
+              // This ensures panel-content can scroll when content exceeds available space
+              panelContent.style.removeProperty("height");
+              panelContent.style.removeProperty("max-height");
+              panelContent.style.setProperty("flex", "1", "important");
+              panelContent.style.setProperty("min-height", "0", "important");
+
+              // Always keep overflow-y: auto to allow scrolling when content exceeds panel height
+              // The panel has max-height: 80vh, so panel-content should scroll when needed
+              panelContent.style.setProperty("overflow-y", "auto", "important");
+
+              // #region agent log - Track flex and overflow after setting
+              const computedFlex = window.getComputedStyle(panelContent).flex;
+              const computedOverflowY =
+                window.getComputedStyle(panelContent).overflowY;
+              fetch(
+                "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    location: "content.js:1838",
+                    message:
+                      "finishHeightUpdate: After setting flex:1 and overflow-y:auto",
+                    data: {
+                      scrollHeight: panelContent.scrollHeight,
+                      clientHeight: panelContent.clientHeight,
+                      isScrollable:
+                        panelContent.scrollHeight > panelContent.clientHeight,
+                      computedFlex,
+                      computedOverflowY,
+                      panelHeight: this.inspectorPanel.offsetHeight,
+                      maxHeight: window.getComputedStyle(this.inspectorPanel)
+                        .maxHeight,
+                    },
+                    timestamp: Date.now(),
+                    sessionId: "debug-session",
+                    runId: "run1",
+                    hypothesisId: "H",
+                  }),
+                }
+              ).catch(() => {});
+              // #endregion
+
+              // #region agent log
+              fetch(
+                "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    location: "content.js:1820",
+                    message: "Post-fix: Set overflow-y to auto",
+                    data: {
+                      scrollHeight: panelContent.scrollHeight,
+                      clientHeight: panelContent.clientHeight,
+                      panelHeight: this.inspectorPanel.offsetHeight,
+                      maxHeight: window.getComputedStyle(this.inspectorPanel)
+                        .maxHeight,
+                      overflowY:
+                        window.getComputedStyle(panelContent).overflowY,
+                    },
+                    timestamp: Date.now(),
+                    sessionId: "debug-session",
+                    runId: "post-fix",
+                    hypothesisId: "FIX",
+                  }),
+                }
+              ).catch(() => {});
+              // #endregion
+
+              // CRITICAL FIX: After setting flex: 1, check if content height has changed
+              // and adjust panel height if content exceeds the available space
+              // This handles cases where content height changes after measurement (font rendering, layout shifts, etc.)
+              setTimeout(() => {
+                if (panelContent) {
+                  // #region agent log - Check flex and overflow after setTimeout
+                  const computedFlex =
+                    window.getComputedStyle(panelContent).flex;
+                  const computedOverflowY =
+                    window.getComputedStyle(panelContent).overflowY;
+                  fetch(
+                    "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        location: "content.js:1908",
+                        message:
+                          "Post-animation setTimeout: Check flex and overflow state",
+                        data: {
+                          scrollHeight: panelContent.scrollHeight,
+                          clientHeight: panelContent.clientHeight,
+                          isScrollable:
+                            panelContent.scrollHeight >
+                            panelContent.clientHeight,
+                          computedFlex,
+                          computedOverflowY,
+                          panelHeight: this.inspectorPanel.offsetHeight,
+                        },
+                        timestamp: Date.now(),
+                        sessionId: "debug-session",
+                        runId: "run1",
+                        hypothesisId: "I",
+                      }),
+                    }
+                  ).catch(() => {});
+                  // #endregion
+
+                  const currentContentHeight = panelContent.scrollHeight;
+                  const currentPanelHeight = this.inspectorPanel.offsetHeight;
+                  const headerElement = this.shadowRoot
+                    ? this.shadowRoot.querySelector("div:first-child")
+                    : null;
+                  const headerHeight = headerElement
+                    ? headerElement.offsetHeight
+                    : 48;
+                  const availableContentHeight =
+                    currentPanelHeight - headerHeight;
+
+                  // If content height exceeds available space, adjust panel height
+                  if (currentContentHeight > availableContentHeight) {
+                    const newTotalHeight = Math.min(
+                      currentContentHeight + headerHeight,
+                      maxHeight
+                    );
+
+                    // Only adjust if the new height is different and doesn't exceed maxHeight
+                    if (
+                      Math.abs(newTotalHeight - currentPanelHeight) > 1 &&
+                      newTotalHeight <= maxHeight
+                    ) {
+                      this.inspectorPanel.style.setProperty(
+                        "height",
+                        `${newTotalHeight}px`,
+                        "important"
+                      );
+
+                      // #region agent log
+                      fetch(
+                        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                        {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            location: "content.js:1820",
+                            message:
+                              "Post-animation: adjusted panel height due to content growth",
+                            data: {
+                              originalHeight: currentPanelHeight,
+                              newHeight: newTotalHeight,
+                              contentHeight: currentContentHeight,
+                              availableContentHeight,
+                              measuredContentHeight,
+                            },
+                            timestamp: Date.now(),
+                            sessionId: "debug-session",
+                            runId: "run1",
+                            hypothesisId: "A,C",
+                          }),
+                        }
+                      ).catch(() => {});
+                      // #endregion
+                    }
+                  }
+                }
+
+                // #region agent log
+                const overviewContentAfterFlexDelay =
+                  this.shadowRoot.querySelector("#overview-content");
+                const colorsViewAfterFlexDelay =
+                  this.shadowRoot.querySelector("#overview-colors-view") ||
+                  this.shadowRoot.querySelector("#colors-view");
+                const fontsViewAfterFlexDelay =
+                  this.shadowRoot.querySelector("#overview-fonts-view") ||
+                  this.shadowRoot.querySelector("#fonts-view");
+                fetch(
+                  "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      location: "content.js:1820",
+                      message:
+                        "Post-animation: after flex 0 0 auto + delay (check for layout shifts)",
+                      data: {
+                        totalHeight,
+                        finalHeight,
+                        panelHeight: this.inspectorPanel.offsetHeight,
+                        panelContentScrollHeight: panelContent
+                          ? panelContent.scrollHeight
+                          : 0,
+                        panelContentClientHeight: panelContent
+                          ? panelContent.clientHeight
+                          : 0,
+                        overviewContentScrollHeight:
+                          overviewContentAfterFlexDelay
+                            ? overviewContentAfterFlexDelay.scrollHeight
+                            : 0,
+                        colorsViewScrollHeight: colorsViewAfterFlexDelay
+                          ? colorsViewAfterFlexDelay.scrollHeight
+                          : 0,
+                        fontsViewScrollHeight: fontsViewAfterFlexDelay
+                          ? fontsViewAfterFlexDelay.scrollHeight
+                          : 0,
+                        contentCutoff: panelContent
+                          ? panelContent.scrollHeight >
+                            panelContent.clientHeight
+                          : false,
+                        panelContentFlex: panelContent
+                          ? window.getComputedStyle(panelContent).flex
+                          : "",
+                        panelContentOverflowY: panelContent
+                          ? window.getComputedStyle(panelContent).overflowY
+                          : "",
+                        isScrollableAfterDelay: panelContent
+                          ? panelContent.scrollHeight >
+                            panelContent.clientHeight
+                          : false,
+                      },
+                      timestamp: Date.now(),
+                      sessionId: "debug-session",
+                      runId: "run1",
+                      hypothesisId: "A,C,D",
+                    }),
+                  }
+                ).catch(() => {});
+                // #endregion
+
+                // CRITICAL: Ensure flex: 1 and overflow-y: auto are still set after all async operations
+                // This prevents any code from accidentally resetting them
+                if (panelContent) {
+                  panelContent.style.setProperty("flex", "1", "important");
+                  panelContent.style.setProperty(
+                    "overflow-y",
+                    "auto",
+                    "important"
+                  );
+                  panelContent.style.setProperty(
+                    "min-height",
+                    "0",
+                    "important"
+                  );
+
+                  // #region agent log - Final safeguard check
+                  const finalFlex = window.getComputedStyle(panelContent).flex;
+                  const finalOverflowY =
+                    window.getComputedStyle(panelContent).overflowY;
+                  fetch(
+                    "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        location: "content.js:2052",
+                        message:
+                          "Post-animation setTimeout: Final safeguard - ensure flex:1 and overflow-y:auto",
+                        data: {
+                          scrollHeight: panelContent.scrollHeight,
+                          clientHeight: panelContent.clientHeight,
+                          isScrollable:
+                            panelContent.scrollHeight >
+                            panelContent.clientHeight,
+                          finalFlex,
+                          finalOverflowY,
+                        },
+                        timestamp: Date.now(),
+                        sessionId: "debug-session",
+                        runId: "run1",
+                        hypothesisId: "I",
+                      }),
+                    }
+                  ).catch(() => {});
+                  // #endregion
+                }
+              }, 100);
+
+              // #region agent log
+              fetch(
+                "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    location: "content.js:1595",
+                    message: "Post-animation: after setting flex 0 0 auto",
+                    data: {
+                      totalHeight,
+                      finalHeight,
+                      panelHeightAfterFlex: this.inspectorPanel.offsetHeight,
+                      panelContentScrollHeightAfterFlex: panelContent
+                        ? panelContent.scrollHeight
+                        : 0,
+                      panelContentClientHeightAfterFlex: panelContent
+                        ? panelContent.clientHeight
+                        : 0,
+                      panelContentOffsetHeightAfterFlex: panelContent
+                        ? panelContent.offsetHeight
+                        : 0,
+                      needsScrolling: panelContent
+                        ? panelContent.scrollHeight > panelContent.clientHeight
+                        : false,
+                    },
+                    timestamp: Date.now(),
+                    sessionId: "debug-session",
+                    runId: "run1",
+                    hypothesisId: "A,B,C,D,E",
+                  }),
+                }
+              ).catch(() => {});
+              // #endregion
+            } else {
+              // Content exceeds maxHeight - check if it fits in available maxHeight space
+              const maxAvailableContentHeight = maxHeight - headerHeight;
+              const contentFitsInMaxHeight =
+                measuredContentHeight !== null &&
+                measuredContentHeight <= maxAvailableContentHeight;
+
+              if (contentFitsInMaxHeight) {
+                // Always use flex: 1 to constrain panel-content by panel's max-height (80vh)
+                // This ensures panel-content can scroll when content exceeds available space
+                // flex: 0 0 auto makes content expand, causing scrollHeight === clientHeight
+                panelContent.style.removeProperty("height");
+                panelContent.style.removeProperty("max-height");
+                panelContent.style.setProperty("flex", "1", "important");
+                panelContent.style.setProperty("min-height", "0", "important");
+
+                // Force reflow to ensure flex:1 is applied
+                panelContent.offsetHeight;
+                this.inspectorPanel.offsetHeight;
+
+                // Always keep overflow-y: auto to allow scrolling when content exceeds panel height
+                // The panel has max-height: 80vh, so panel-content should scroll when needed
+                panelContent.style.setProperty(
+                  "overflow-y",
+                  "auto",
+                  "important"
+                );
+
+                // #region agent log - Track flex and overflow after setting (immediate path)
+                const computedFlex = window.getComputedStyle(panelContent).flex;
+                const computedOverflowY =
+                  window.getComputedStyle(panelContent).overflowY;
+                fetch(
+                  "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      location: "content.js:2062",
+                      message:
+                        "finishHeightUpdate (immediate): After setting flex:1 and overflow-y:auto",
+                      data: {
+                        scrollHeight: panelContent.scrollHeight,
+                        clientHeight: panelContent.clientHeight,
+                        isScrollable:
+                          panelContent.scrollHeight > panelContent.clientHeight,
+                        computedFlex,
+                        computedOverflowY,
+                        panelHeight: this.inspectorPanel.offsetHeight,
+                        maxHeight: window.getComputedStyle(this.inspectorPanel)
+                          .maxHeight,
+                      },
+                      timestamp: Date.now(),
+                      sessionId: "debug-session",
+                      runId: "run1",
+                      hypothesisId: "H",
+                    }),
+                  }
+                ).catch(() => {});
+                // #endregion
+
+                // #region agent log
+                fetch(
+                  "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      location: "content.js:2025",
+                      message:
+                        "Post-fix: Set overflow-y to auto (immediate path)",
+                      data: {
+                        scrollHeight: panelContent.scrollHeight,
+                        clientHeight: panelContent.clientHeight,
+                        panelHeight: this.inspectorPanel.offsetHeight,
+                        maxHeight: window.getComputedStyle(this.inspectorPanel)
+                          .maxHeight,
+                        overflowY:
+                          window.getComputedStyle(panelContent).overflowY,
+                      },
+                      timestamp: Date.now(),
+                      sessionId: "debug-session",
+                      runId: "post-fix",
+                      hypothesisId: "FIX",
+                    }),
+                  }
+                ).catch(() => {});
+                // #endregion
+              } else {
+                // Content doesn't fit - use scrolling
+                panelContent.style.removeProperty("height");
+                panelContent.style.removeProperty("max-height");
+                panelContent.style.setProperty("flex", "1", "important");
+                panelContent.style.setProperty(
+                  "overflow-y",
+                  "auto",
+                  "important"
+                );
+              }
+            }
+          }
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:758",
+                message: "finishHeightUpdate - animation complete",
+                data: {
+                  finalHeight,
+                  actualHeight,
+                  actualContentHeight,
+                  actualNeedsScrolling,
+                  panelContentClientHeight: panelContent
+                    ? panelContent.clientHeight
+                    : 0,
+                  panelBoxSizingAfter,
+                  panelBorderTopAfter,
+                  panelBorderBottomAfter,
+                  panelBorderTotalAfter,
+                  actualClientHeight,
+                  heightDiffAfter,
+                  heightMismatch,
+                  panelContentHeightAfter,
+                  panelContentScrollHeightAfter,
+                  panelContentClientHeightAfter,
+                  needsScrollingAfterAnim,
+                  measuredContentHeight,
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "A,B,C,D,E",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
+          this.isUpdatingHeight = false;
+        }, 450);
+      });
     }
-    if (this.boundHandleScroll) {
-      window.removeEventListener("scroll", this.boundHandleScroll, true);
-      window.removeEventListener("resize", this.boundHandleScroll, true);
-      this.boundHandleScroll = null;
+
+    deactivateInspector() {
+      // Switch panel to overview mode
+      this.switchPanelToOverviewMode();
+
+      // Clear all timeouts
+      if (this.updateTimeout) {
+        clearTimeout(this.updateTimeout);
+        this.updateTimeout = null;
+      }
+      if (this.scrollEndTimeout) {
+        clearTimeout(this.scrollEndTimeout);
+        this.scrollEndTimeout = null;
+      }
+      if (this.toastTimeout) {
+        clearTimeout(this.toastTimeout);
+        this.toastTimeout = null;
+      }
+
+      // Cancel animation frames
+      if (this.scrollAnimationFrame) {
+        cancelAnimationFrame(this.scrollAnimationFrame);
+        this.scrollAnimationFrame = null;
+      }
+
+      // Disconnect mutation observer if it exists
+      if (this.domMutationObserver) {
+        this.domMutationObserver.disconnect();
+        this.domMutationObserver = null;
+      }
+
+      // Restore original cursor
+      if (this.originalCursor !== undefined) {
+        document.body.style.cursor = this.originalCursor || "";
+      } else {
+        document.body.style.cursor = "";
+      }
+
+      if (this.boundHandleMouseOver) {
+        document.removeEventListener(
+          "mouseover",
+          this.boundHandleMouseOver,
+          true
+        );
+        this.boundHandleMouseOver = null;
+      }
+      if (this.boundHandleMouseOut) {
+        document.removeEventListener(
+          "mouseout",
+          this.boundHandleMouseOut,
+          true
+        );
+        this.boundHandleMouseOut = null;
+      }
+      if (this.boundHandleClick) {
+        document.removeEventListener("click", this.boundHandleClick, true);
+        this.boundHandleClick = null;
+      }
+      if (this.boundHandleMouseDown) {
+        document.removeEventListener(
+          "mousedown",
+          this.boundHandleMouseDown,
+          true
+        );
+        this.boundHandleMouseDown = null;
+      }
+      if (this.boundHandleScroll) {
+        window.removeEventListener("scroll", this.boundHandleScroll, true);
+        window.removeEventListener("resize", this.boundHandleScroll, true);
+        this.boundHandleScroll = null;
+      }
+
+      // Remove inspector active class from body
+      document.body.classList.remove("css-inspector-active");
+
+      // Remove cursor override styles
+      if (this.inspectorStyleElement && this.inspectorStyleElement.parentNode) {
+        this.inspectorStyleElement.parentNode.removeChild(
+          this.inspectorStyleElement
+        );
+        this.inspectorStyleElement = null;
+      }
+
+      // Remove ALL highlight classes
+      document.querySelectorAll(".css-inspector-highlight").forEach((el) => {
+        el.classList.remove("css-inspector-highlight");
+      });
+      document.querySelectorAll(".css-inspector-selected").forEach((el) => {
+        el.classList.remove("css-inspector-selected");
+      });
+
+      // Clear caches
+      if (this.styleCache) {
+        this.styleCache.clear();
+      }
+      this.colorExtractionCache = null;
+      this.typographyExtractionCache = null;
+
+      this.selectedElement = null;
+      this.hoveredElement = null;
+      this.isActive = false;
+
+      // Remove overlays
+      this.removeOverlay("hover");
+      this.removeOverlay("selected");
     }
 
-    // Remove inspector active class from body
-    document.body.classList.remove("css-inspector-active");
+    createOverlay(type, element) {
+      const rect = element.getBoundingClientRect();
+      const outlineWidth = type === "selected" ? 3 : 2;
+      const outlineOffset = 2;
+      const totalExtension = outlineWidth + outlineOffset;
 
-    // Remove cursor override styles
-    if (this.inspectorStyleElement && this.inspectorStyleElement.parentNode) {
-      this.inspectorStyleElement.parentNode.removeChild(
-        this.inspectorStyleElement
-      );
-      this.inspectorStyleElement = null;
-    }
-
-    // Remove ALL highlight classes
-    document.querySelectorAll(".css-inspector-highlight").forEach((el) => {
-      el.classList.remove("css-inspector-highlight");
-    });
-    document.querySelectorAll(".css-inspector-selected").forEach((el) => {
-      el.classList.remove("css-inspector-selected");
-    });
-
-    // Clear caches
-    if (this.styleCache) {
-      this.styleCache.clear();
-    }
-    this.colorExtractionCache = null;
-    this.typographyExtractionCache = null;
-
-    this.selectedElement = null;
-    this.hoveredElement = null;
-    this.isActive = false;
-
-    // Remove overlays
-    this.removeOverlay("hover");
-    this.removeOverlay("selected");
-  }
-
-  createOverlay(type, element) {
-    const rect = element.getBoundingClientRect();
-    const outlineWidth = type === "selected" ? 3 : 2;
-    const outlineOffset = 2;
-    const totalExtension = outlineWidth + outlineOffset;
-
-    const overlay = document.createElement("div");
-    overlay.className = `css-inspector-overlay css-inspector-overlay-${type}`;
-    const borderColor = type === "selected" ? "#10B981" : "#10B981";
-    const backgroundColor =
-      type === "selected" ? "transparent" : "rgba(16, 185, 129, 0.1)";
-    overlay.style.cssText = `
+      const overlay = document.createElement("div");
+      overlay.className = `css-inspector-overlay css-inspector-overlay-${type}`;
+      const borderColor = type === "selected" ? "#10B981" : "#10B981";
+      const backgroundColor =
+        type === "selected" ? "transparent" : "rgba(16, 185, 129, 0.1)";
+      overlay.style.cssText = `
       position: fixed !important;
       left: ${rect.left - totalExtension}px !important;
       top: ${rect.top - totalExtension}px !important;
       width: ${rect.width + totalExtension * 2}px !important;
       height: ${rect.height + totalExtension * 2}px !important;
       border: ${outlineWidth}px ${
-      type === "selected" ? "solid" : "dashed"
-    } ${borderColor} !important;
+        type === "selected" ? "solid" : "dashed"
+      } ${borderColor} !important;
       background: ${backgroundColor} !important;
       pointer-events: none !important;
       z-index: 2147483646 !important;
       box-sizing: border-box !important;
     `;
 
-    document.body.appendChild(overlay);
-    return overlay;
-  }
-
-  updateOverlay(type, element) {
-    if (!element) {
-      this.removeOverlay(type);
-      return;
+      document.body.appendChild(overlay);
+      return overlay;
     }
 
-    const overlay =
-      type === "selected" ? this.selectedOverlay : this.hoverOverlay;
-    if (overlay && overlay.parentNode) {
-      const rect = element.getBoundingClientRect();
-      const outlineWidth = type === "selected" ? 3 : 2;
-      const outlineOffset = 2;
-      const totalExtension = outlineWidth + outlineOffset;
+    updateOverlay(type, element) {
+      if (!element) {
+        this.removeOverlay(type);
+        return;
+      }
 
-      overlay.style.left = `${rect.left - totalExtension}px`;
-      overlay.style.top = `${rect.top - totalExtension}px`;
-      overlay.style.width = `${rect.width + totalExtension * 2}px`;
-      overlay.style.height = `${rect.height + totalExtension * 2}px`;
-    } else {
-      const newOverlay = this.createOverlay(type, element);
-      if (type === "selected") {
-        this.selectedOverlay = newOverlay;
+      const overlay =
+        type === "selected" ? this.selectedOverlay : this.hoverOverlay;
+      if (overlay && overlay.parentNode) {
+        const rect = element.getBoundingClientRect();
+        const outlineWidth = type === "selected" ? 3 : 2;
+        const outlineOffset = 2;
+        const totalExtension = outlineWidth + outlineOffset;
+
+        overlay.style.left = `${rect.left - totalExtension}px`;
+        overlay.style.top = `${rect.top - totalExtension}px`;
+        overlay.style.width = `${rect.width + totalExtension * 2}px`;
+        overlay.style.height = `${rect.height + totalExtension * 2}px`;
       } else {
-        this.hoverOverlay = newOverlay;
+        const newOverlay = this.createOverlay(type, element);
+        if (type === "selected") {
+          this.selectedOverlay = newOverlay;
+        } else {
+          this.hoverOverlay = newOverlay;
+        }
       }
     }
-  }
 
-  removeOverlay(type) {
-    const overlay =
-      type === "selected" ? this.selectedOverlay : this.hoverOverlay;
-    if (overlay && overlay.parentNode) {
-      overlay.parentNode.removeChild(overlay);
+    removeOverlay(type) {
+      const overlay =
+        type === "selected" ? this.selectedOverlay : this.hoverOverlay;
+      if (overlay && overlay.parentNode) {
+        overlay.parentNode.removeChild(overlay);
+      }
+      // Also remove any orphaned overlays with the same class (in case they weren't properly cleaned up)
+      document
+        .querySelectorAll(`.css-inspector-overlay-${type}`)
+        .forEach((el) => {
+          if (el.parentNode) {
+            el.parentNode.removeChild(el);
+          }
+        });
+      if (type === "selected") {
+        this.selectedOverlay = null;
+      } else {
+        this.hoverOverlay = null;
+      }
     }
-    // Also remove any orphaned overlays with the same class (in case they weren't properly cleaned up)
-    document
-      .querySelectorAll(`.css-inspector-overlay-${type}`)
-      .forEach((el) => {
-        if (el.parentNode) {
-          el.parentNode.removeChild(el);
-        }
-      });
-    if (type === "selected") {
-      this.selectedOverlay = null;
-    } else {
-      this.hoverOverlay = null;
-    }
-  }
 
-  injectInspectorStyles() {
-    // Add class to body to indicate inspector is active
-    document.body.classList.add("css-inspector-active");
+    injectInspectorStyles() {
+      // Add class to body to indicate inspector is active
+      document.body.classList.add("css-inspector-active");
 
-    // Inject style element to override cursor for interactive elements
-    if (!this.inspectorStyleElement) {
-      this.inspectorStyleElement = document.createElement("style");
-      this.inspectorStyleElement.id = "css-inspector-cursor-override";
-      const cursorUrl = this.getInspectorCursor();
-      this.inspectorStyleElement.textContent = `
+      // Inject style element to override cursor for interactive elements
+      if (!this.inspectorStyleElement) {
+        this.inspectorStyleElement = document.createElement("style");
+        this.inspectorStyleElement.id = "css-inspector-cursor-override";
+        const cursorUrl = this.getInspectorCursor();
+        this.inspectorStyleElement.textContent = `
         body.css-inspector-active * {
           cursor: ${cursorUrl} !important;
         }
@@ -909,11 +2526,11 @@ class CSSInspector {
           cursor: default !important;
         }
       `;
-      document.head.appendChild(this.inspectorStyleElement);
-    } else {
-      // Update existing style element
-      const cursorUrl = this.getInspectorCursor();
-      this.inspectorStyleElement.textContent = `
+        document.head.appendChild(this.inspectorStyleElement);
+      } else {
+        // Update existing style element
+        const cursorUrl = this.getInspectorCursor();
+        this.inspectorStyleElement.textContent = `
         body.css-inspector-active * {
           cursor: ${cursorUrl} !important;
         }
@@ -922,13 +2539,13 @@ class CSSInspector {
           cursor: default !important;
         }
       `;
+      }
     }
-  }
 
-  getShadowDOMCSS() {
-    // Return CSS for shadow DOM - this isolates panel styles from page CSS
-    // Note: #css-inspector-panel selector won't work in shadow DOM, use :host instead
-    return `
+    getShadowDOMCSS() {
+      // Return CSS for shadow DOM - this isolates panel styles from page CSS
+      // Note: #css-inspector-panel selector won't work in shadow DOM, use :host instead
+      return `
       :host {
         position: fixed;
         top: 20px;
@@ -951,38 +2568,14 @@ class CSSInspector {
         /* Explicitly hide scrollbar on host */
         scrollbar-width: none;
         -ms-overflow-style: none;
+        /* CRITICAL FIX: Use border-box so border is included in height calculation */
+        box-sizing: border-box;
       }
 
       :host::-webkit-scrollbar {
         display: none;
         width: 0;
         height: 0;
-      }
-
-      :host::before {
-        content: '';
-        position: absolute;
-        top: -2px;
-        left: -2px;
-        right: -2px;
-        bottom: -2px;
-        border-radius: 10px;
-        background: linear-gradient(45deg, rgba(114, 65, 255, 0.1), rgba(251, 58, 162, 0.1), rgba(114, 65, 255, 0.1));
-        background-size: 200% 200%;
-        z-index: -1;
-        animation: glowRotate 8s ease-in-out infinite;
-        opacity: 0.6;
-      }
-
-      @keyframes glowRotate {
-        0%, 100% {
-          background-position: 0% 50%;
-          opacity: 0.4;
-        }
-        50% {
-          background-position: 100% 50%;
-          opacity: 0.6;
-        }
       }
 
       @keyframes subtleGlow {
@@ -1046,6 +2639,7 @@ class CSSInspector {
         overflow-y: auto;
         overflow-x: hidden;
         flex: 1;
+        min-height: 0; /* Allow flex item to shrink below content size */
         /* Hide scrollbar by default, show on hover */
         scrollbar-width: thin;
         scrollbar-color: transparent transparent;
@@ -1083,42 +2677,131 @@ class CSSInspector {
         box-sizing: border-box;
       }
     `;
-  }
-
-  createPanel() {
-    console.log("[CSS Inspector] createPanel called");
-    // Ensure document.body exists
-    if (!document.body) {
-      console.warn(
-        "[CSS Inspector] document.body not available yet, waiting..."
-      );
-      // Wait for body to be available
-      const checkBody = setInterval(() => {
-        if (document.body) {
-          clearInterval(checkBody);
-          console.log(
-            "[CSS Inspector] document.body now available, creating panel..."
-          );
-          this.createPanel();
-        }
-      }, 50);
-      return;
     }
 
-    // Check if panel already exists
-    const existingPanel = document.getElementById("css-inspector-panel");
-    if (existingPanel) {
-      console.log("[CSS Inspector] Panel already exists, reusing it");
-      this.inspectorPanel = existingPanel;
-      // Get shadow root if it exists
-      this.shadowRoot = existingPanel.shadowRoot;
-      if (!this.shadowRoot) {
-        // Panel exists but no shadow root - recreate it
-        console.warn("[CSS Inspector] Panel exists but no shadow root, recreating...");
-        existingPanel.remove();
-        // Continue to create new panel below
-      } else {
-      // Ensure theme is up to date when reusing existing panel
+    createPanel() {
+      console.log("[CSS Inspector] createPanel called");
+      // #region agent log
+      fetch(
+        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "content.js:1195",
+            message: "createPanel entry",
+            data: {
+              isActive: this.isActive,
+              theme: this.theme,
+              hasPanel: !!this.inspectorPanel,
+            },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "E",
+          }),
+        }
+      ).catch(() => {});
+      // #endregion
+      // Ensure document.body exists
+      if (!document.body) {
+        console.warn(
+          "[CSS Inspector] document.body not available yet, waiting..."
+        );
+        // Wait for body to be available
+        const checkBody = setInterval(() => {
+          if (document.body) {
+            clearInterval(checkBody);
+            console.log(
+              "[CSS Inspector] document.body now available, creating panel..."
+            );
+            this.createPanel();
+          }
+        }, 50);
+        return;
+      }
+
+      // Check if panel already exists
+      const existingPanel = document.getElementById("css-inspector-panel");
+      if (existingPanel) {
+        console.log("[CSS Inspector] Panel already exists, reusing it");
+        this.inspectorPanel = existingPanel;
+        // Get shadow root if it exists
+        this.shadowRoot = existingPanel.shadowRoot;
+        if (!this.shadowRoot) {
+          // Panel exists but no shadow root - recreate it
+          console.warn(
+            "[CSS Inspector] Panel exists but no shadow root, recreating..."
+          );
+          existingPanel.remove();
+          // Continue to create new panel below
+        } else {
+          // Ensure theme is up to date when reusing existing panel
+          const colors = this.getThemeColors();
+          this.inspectorPanel.style.setProperty(
+            "background",
+            colors.panelBg,
+            "important"
+          );
+          this.inspectorPanel.style.setProperty(
+            "border-color",
+            colors.border,
+            "important"
+          );
+          this.inspectorPanel.style.setProperty(
+            "color",
+            colors.textPrimary,
+            "important"
+          );
+          // Re-render panel content with current theme if inspector is active
+          if (this.isActive) {
+            this.switchPanelToInspectorMode();
+            // If there's a selected element, update it with the current theme
+            if (this.selectedElement) {
+              setTimeout(() => {
+                this.updateInspectorPanel(this.selectedElement, true, true);
+              }, 0);
+            }
+          } else {
+            this.switchPanelToOverviewMode();
+          }
+          return;
+        }
+      }
+
+      console.log("[CSS Inspector] Creating panel element...");
+
+      // Create panel injected into the page (like CSS Peeper)
+      const panel = document.createElement("div");
+      panel.id = "css-inspector-panel";
+
+      // Create Shadow DOM for complete CSS isolation from page styles
+      const shadowRoot = panel.attachShadow({ mode: "open" });
+      this.shadowRoot = shadowRoot; // Store reference for later use
+
+      // Inject CSS into shadow root
+      const style = document.createElement("style");
+      style.textContent = this.getShadowDOMCSS();
+      shadowRoot.appendChild(style);
+
+      // Set panel host styles (positioning, z-index - these must be on the host element)
+      panel.style.setProperty("position", "fixed", "important");
+      panel.style.setProperty("top", "20px", "important");
+      panel.style.setProperty("right", "20px", "important");
+      panel.style.setProperty("width", "380px", "important");
+      panel.style.setProperty("max-height", "80vh", "important");
+      panel.style.setProperty("z-index", "2147483647", "important");
+      panel.style.setProperty("pointer-events", "auto", "important");
+
+      // Position will be set via transform in initDragHandle
+
+      document.body.appendChild(panel);
+      this.inspectorPanel = panel;
+      console.log(
+        "[CSS Inspector] Panel element created with Shadow DOM and appended to body"
+      );
+
+      // Set initial theme colors (background, border, text) to match current theme
       const colors = this.getThemeColors();
       this.inspectorPanel.style.setProperty(
         "background",
@@ -1135,289 +2818,655 @@ class CSSInspector {
         colors.textPrimary,
         "important"
       );
-      // Re-render panel content with current theme if inspector is active
-      if (this.isActive) {
-        this.switchPanelToInspectorMode();
-        // If there's a selected element, update it with the current theme
-        if (this.selectedElement) {
-          setTimeout(() => {
-            this.updateInspectorPanel(this.selectedElement, true, true);
-          }, 0);
-        }
-      } else {
-        this.switchPanelToOverviewMode();
+
+      // Inject Inter font
+      if (!document.getElementById("inter-font-inspector")) {
+        const fontLink = document.createElement("link");
+        fontLink.id = "inter-font-inspector";
+        fontLink.rel = "stylesheet";
+        fontLink.href =
+          "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap";
+        document.head.appendChild(fontLink);
       }
-      return;
-      }
-    }
 
-    console.log("[CSS Inspector] Creating panel element...");
+      // Initialize drag functionality
+      this.initDragHandle();
 
-    // Create panel injected into the page (like CSS Peeper)
-    const panel = document.createElement("div");
-    panel.id = "css-inspector-panel";
+      // Prevent clicks inside panel from propagating to page
+      panel.addEventListener("click", (e) => {
+        e.stopPropagation();
+      });
 
-    // Create Shadow DOM for complete CSS isolation from page styles
-    const shadowRoot = panel.attachShadow({ mode: 'open' });
-    this.shadowRoot = shadowRoot; // Store reference for later use
+      // Prevent wheel events inside panel from scrolling the page
+      panel.addEventListener(
+        "wheel",
+        (e) => {
+          // #region agent log
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:2600",
+                message: "Wheel event received on panel",
+                data: {
+                  clientX: e.clientX,
+                  clientY: e.clientY,
+                  deltaY: e.deltaY,
+                  defaultPrevented: e.defaultPrevented,
+                  target: e.target?.tagName || "unknown",
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "A",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
 
-    // Inject CSS into shadow root
-    const style = document.createElement("style");
-    style.textContent = this.getShadowDOMCSS();
-    shadowRoot.appendChild(style);
+          const panelRect = panel.getBoundingClientRect();
+          const isMouseOverPanel =
+            e.clientX >= panelRect.left &&
+            e.clientX <= panelRect.right &&
+            e.clientY >= panelRect.top &&
+            e.clientY <= panelRect.bottom;
 
-    // Set panel host styles (positioning, z-index - these must be on the host element)
-    panel.style.setProperty("position", "fixed", "important");
-    panel.style.setProperty("top", "20px", "important");
-    panel.style.setProperty("right", "20px", "important");
-    panel.style.setProperty("width", "380px", "important");
-    panel.style.setProperty("max-height", "80vh", "important");
-    panel.style.setProperty("z-index", "2147483647", "important");
-    panel.style.setProperty("pointer-events", "auto", "important");
+          // #region agent log
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:2610",
+                message: "Mouse position check",
+                data: {
+                  isMouseOverPanel,
+                  panelRect: {
+                    left: panelRect.left,
+                    right: panelRect.right,
+                    top: panelRect.top,
+                    bottom: panelRect.bottom,
+                  },
+                  mousePos: { x: e.clientX, y: e.clientY },
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "B",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
 
-    // Position will be set via transform in initDragHandle
+          if (isMouseOverPanel) {
+            const panelContent = shadowRoot.querySelector("#panel-content");
 
-    document.body.appendChild(panel);
-    this.inspectorPanel = panel;
-    console.log("[CSS Inspector] Panel element created with Shadow DOM and appended to body");
+            // #region agent log
+            fetch(
+              "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  location: "content.js:2611",
+                  message: "Panel content check",
+                  data: {
+                    panelContentFound: !!panelContent,
+                    scrollHeight: panelContent?.scrollHeight || 0,
+                    clientHeight: panelContent?.clientHeight || 0,
+                  },
+                  timestamp: Date.now(),
+                  sessionId: "debug-session",
+                  runId: "run1",
+                  hypothesisId: "C",
+                }),
+              }
+            ).catch(() => {});
+            // #endregion
 
-    // Inject Inter font
-    if (!document.getElementById("inter-font-inspector")) {
-      const fontLink = document.createElement("link");
-      fontLink.id = "inter-font-inspector";
-      fontLink.rel = "stylesheet";
-      fontLink.href =
-        "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap";
-      document.head.appendChild(fontLink);
-    }
+            if (panelContent) {
+              // Check if the panel content is scrollable
+              const isScrollable =
+                panelContent.scrollHeight > panelContent.clientHeight;
 
-    // Initialize drag functionality
-    this.initDragHandle();
+              if (isScrollable) {
+                const isAtTop = panelContent.scrollTop === 0;
+                const isAtBottom =
+                  panelContent.scrollTop + panelContent.clientHeight >=
+                  panelContent.scrollHeight - 1;
 
-    // Prevent clicks inside panel from propagating to page
-    panel.addEventListener("click", (e) => {
-      e.stopPropagation();
-    });
+                // #region agent log
+                fetch(
+                  "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      location: "content.js:2617",
+                      message: "Scroll state check",
+                      data: {
+                        isScrollable,
+                        isAtTop,
+                        isAtBottom,
+                        scrollTop: panelContent.scrollTop,
+                        scrollHeight: panelContent.scrollHeight,
+                        clientHeight: panelContent.clientHeight,
+                        deltaY: e.deltaY,
+                      },
+                      timestamp: Date.now(),
+                      sessionId: "debug-session",
+                      runId: "run1",
+                      hypothesisId: "D",
+                    }),
+                  }
+                ).catch(() => {});
+                // #endregion
 
-    // Close button handler (using event delegation - works for dynamically added content)
-    // Note: Events from shadow DOM bubble up to the host element
-    shadowRoot.addEventListener(
-      "click",
-      (e) => {
-        // Check if clicked element or its parent is the close button
-        const closeBtn =
-          e.target.closest("#close-inspector-panel") ||
-          e.target.closest(".close-btn-panel") ||
-          (e.target.id === "close-inspector-panel" ? e.target : null);
+                // Always prevent page scroll when cursor is over panel, even at boundaries
+                // This ensures the page never scrolls when interacting with the panel
+                e.preventDefault();
+                e.stopPropagation();
 
-        if (closeBtn) {
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-          // Close panel completely - remove it and disable inspector
-          if (this.inspectorPanel) {
-            this.inspectorPanel.remove();
-            this.inspectorPanel = null;
+                // Only scroll if not at boundary in scroll direction
+                // (isAtTop and isAtBottom are already declared above)
+                if (
+                  !((e.deltaY < 0 && isAtTop) || (e.deltaY > 0 && isAtBottom))
+                ) {
+                  // Inside scrollable area, manually scroll panel-content
+                  const scrollAmount = e.deltaY;
+                  const scrollTopBefore = panelContent.scrollTop;
+                  panelContent.scrollTop += scrollAmount;
+
+                  // #region agent log
+                  fetch(
+                    "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        location: "content.js:2630",
+                        message: "Prevented default and scrolled panel-content",
+                        data: {
+                          defaultPrevented: e.defaultPrevented,
+                          deltaY: e.deltaY,
+                          scrollAmount,
+                          scrollTopBefore,
+                          scrollTopAfter: panelContent.scrollTop,
+                        },
+                        timestamp: Date.now(),
+                        sessionId: "debug-session",
+                        runId: "run1",
+                        hypothesisId: "E",
+                      }),
+                    }
+                  ).catch(() => {});
+                  // #endregion
+                } else {
+                  // At boundary - prevent page scroll but don't scroll panel
+                  // #region agent log
+                  fetch(
+                    "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        location: "content.js:2626",
+                        message: "At boundary - prevented page scroll",
+                        data: { deltaY: e.deltaY, isAtTop, isAtBottom },
+                        timestamp: Date.now(),
+                        sessionId: "debug-session",
+                        runId: "run1",
+                        hypothesisId: "D",
+                      }),
+                    }
+                  ).catch(() => {});
+                  // #endregion
+                }
+              } else {
+                // Panel content is not scrollable - still prevent page scroll when cursor is over panel
+                e.preventDefault();
+                e.stopPropagation();
+
+                // #region agent log
+                fetch(
+                  "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      location: "content.js:2634",
+                      message: "Panel not scrollable - prevented page scroll",
+                      data: {
+                        scrollHeight: panelContent.scrollHeight,
+                        clientHeight: panelContent.clientHeight,
+                      },
+                      timestamp: Date.now(),
+                      sessionId: "debug-session",
+                      runId: "run1",
+                      hypothesisId: "C",
+                    }),
+                  }
+                ).catch(() => {});
+                // #endregion
+              }
+            }
           }
-          // Disable inspector without recreating panel
-          this.isActive = false;
-          if (this.boundHandleMouseOver) {
-            document.removeEventListener(
-              "mouseover",
-              this.boundHandleMouseOver,
-              true
-            );
+        },
+        { passive: false, capture: true }
+      );
+
+      // Also add document-level listener to check if events are captured there first
+      document.addEventListener(
+        "wheel",
+        (e) => {
+          const panelRect = panel.getBoundingClientRect();
+          const isMouseOverPanel =
+            e.clientX >= panelRect.left &&
+            e.clientX <= panelRect.right &&
+            e.clientY >= panelRect.top &&
+            e.clientY <= panelRect.bottom;
+
+          // #region agent log
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:2645",
+                message: "Document-level wheel event",
+                data: {
+                  isMouseOverPanel,
+                  clientX: e.clientX,
+                  clientY: e.clientY,
+                  defaultPrevented: e.defaultPrevented,
+                  target: e.target?.tagName || "unknown",
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "F",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
+        },
+        { passive: false, capture: true }
+      );
+
+      // Close button handler (using event delegation - works for dynamically added content)
+      // Note: Events from shadow DOM bubble up to the host element
+      shadowRoot.addEventListener(
+        "click",
+        (e) => {
+          // Check if clicked element or its parent is the close button
+          const closeBtn =
+            e.target.closest("#close-inspector-panel") ||
+            e.target.closest(".close-btn-panel") ||
+            (e.target.id === "close-inspector-panel" ? e.target : null);
+
+          if (closeBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            // Close panel completely - remove it and disable inspector
+            if (this.inspectorPanel) {
+              this.inspectorPanel.remove();
+              this.inspectorPanel = null;
+            }
+            // Disable inspector without recreating panel
+            this.isActive = false;
+            if (this.boundHandleMouseOver) {
+              document.removeEventListener(
+                "mouseover",
+                this.boundHandleMouseOver,
+                true
+              );
+            }
+            if (this.boundHandleMouseOut) {
+              document.removeEventListener(
+                "mouseout",
+                this.boundHandleMouseOut,
+                true
+              );
+            }
+            if (this.boundHandleClick) {
+              document.removeEventListener(
+                "click",
+                this.boundHandleClick,
+                true
+              );
+            }
+            if (this.boundHandleMouseDown) {
+              document.removeEventListener(
+                "mousedown",
+                this.boundHandleMouseDown,
+                true
+              );
+            }
+            // Remove ALL highlight classes
+            document
+              .querySelectorAll(".css-inspector-highlight")
+              .forEach((el) => {
+                el.classList.remove("css-inspector-highlight");
+              });
+            document
+              .querySelectorAll(".css-inspector-selected")
+              .forEach((el) => {
+                el.classList.remove("css-inspector-selected");
+              });
+            // Remove overlays
+            this.removeOverlay("hover");
+            this.removeOverlay("selected");
+            this.selectedElement = null;
+            this.hoveredElement = null;
           }
-          if (this.boundHandleMouseOut) {
-            document.removeEventListener(
-              "mouseout",
-              this.boundHandleMouseOut,
-              true
-            );
-          }
-          if (this.boundHandleClick) {
-            document.removeEventListener("click", this.boundHandleClick, true);
-          }
-          if (this.boundHandleMouseDown) {
-            document.removeEventListener(
-              "mousedown",
-              this.boundHandleMouseDown,
-              true
-            );
-          }
-          // Remove ALL highlight classes
-          document
-            .querySelectorAll(".css-inspector-highlight")
-            .forEach((el) => {
-              el.classList.remove("css-inspector-highlight");
-            });
-          document.querySelectorAll(".css-inspector-selected").forEach((el) => {
-            el.classList.remove("css-inspector-selected");
-          });
-          // Remove overlays
-          this.removeOverlay("hover");
-          this.removeOverlay("selected");
-          this.selectedElement = null;
-          this.hoveredElement = null;
+        },
+        true
+      ); // Use capture phase
+
+      // Initialize panel with overview mode content
+      // #region agent log
+      fetch(
+        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "content.js:1393",
+            message: "createPanel before switchPanelToOverviewMode",
+            data: {
+              panelHeight: this.inspectorPanel.offsetHeight,
+              panelHeightStyle: this.inspectorPanel.style.height,
+            },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "E",
+          }),
         }
-      },
-      true
-    ); // Use capture phase
-
-    // Initialize panel with overview mode content
-    this.switchPanelToOverviewMode();
-  }
-
-  initDragHandle() {
-    if (!this.inspectorPanel) return;
-
-    // Clean up existing drag handlers if they exist
-    if (this._dragCleanup) {
-      this._dragCleanup();
+      ).catch(() => {});
+      // #endregion
+      this.switchPanelToOverviewMode();
+      // #region agent log
+      fetch(
+        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "content.js:1394",
+            message: "createPanel after switchPanelToOverviewMode",
+            data: {
+              panelHeight: this.inspectorPanel.offsetHeight,
+              panelHeightStyle: this.inspectorPanel.style.height,
+            },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "E",
+          }),
+        }
+      ).catch(() => {});
+      // #endregion
     }
 
-    let isDragging = false;
-    let currentX = 0;
-    let currentY = 0;
-    let initialX = 0;
-    let initialY = 0;
+    initDragHandle() {
+      if (!this.inspectorPanel) return;
 
-    // Load saved position and set initial transform
-    const savedPosition = this.getPanelPosition();
-    if (savedPosition) {
-      // Calculate initial transform based on saved position
-      const panelRect = this.inspectorPanel.getBoundingClientRect();
-      const defaultTop = 20;
-      const defaultRight = window.innerWidth - panelRect.width - 20;
+      // Clean up existing drag handlers if they exist
+      if (this._dragCleanup) {
+        this._dragCleanup();
+      }
 
-      currentX =
-        savedPosition.left - (window.innerWidth - panelRect.width - 20);
-      currentY = savedPosition.top - defaultTop;
+      let isDragging = false;
+      let currentX = 0;
+      let currentY = 0;
+      let initialX = 0;
+      let initialY = 0;
 
-      this.inspectorPanel.style.transform = `translate(${currentX}px, ${currentY}px)`;
-    }
+      // Load saved position and set initial transform
+      const savedPosition = this.getPanelPosition();
+      if (savedPosition) {
+        // Calculate initial transform based on saved position
+        const panelRect = this.inspectorPanel.getBoundingClientRect();
+        const defaultTop = 20;
+        const defaultRight = window.innerWidth - panelRect.width - 20;
 
-    const dragStart = (e) => {
-      const dragHandle = e.target.closest("#panel-drag-handle");
-      if (!dragHandle) return;
-
-      e.preventDefault();
-      e.stopPropagation();
-
-      initialX = e.clientX - currentX;
-      initialY = e.clientY - currentY;
-      isDragging = true;
-
-      // Add dragging class for visual feedback
-      this.inspectorPanel.style.cursor = "move";
-    };
-
-    const drag = (e) => {
-      if (isDragging) {
-        e.preventDefault();
-        currentX = e.clientX - initialX;
-        currentY = e.clientY - initialY;
-
-        // Constrain to viewport
-        const maxX = window.innerWidth - this.inspectorPanel.offsetWidth;
-        const maxY = window.innerHeight - this.inspectorPanel.offsetHeight;
-
-        currentX = Math.max(-maxX + 20, Math.min(maxX - 20, currentX));
-        currentY = Math.max(-20, Math.min(maxY - 20, currentY));
+        currentX =
+          savedPosition.left - (window.innerWidth - panelRect.width - 20);
+        currentY = savedPosition.top - defaultTop;
 
         this.inspectorPanel.style.transform = `translate(${currentX}px, ${currentY}px)`;
       }
-    };
 
-    const dragEnd = () => {
-      if (isDragging) {
-        isDragging = false;
-        this.inspectorPanel.style.cursor = "";
+      const dragStart = (e) => {
+        const dragHandle = e.target.closest("#panel-drag-handle");
+        if (!dragHandle) return;
 
-        // Save position to localStorage
-        this.savePanelPosition();
-      }
-    };
+        e.preventDefault();
+        e.stopPropagation();
 
-    // Use event delegation for drag handle - need to query shadow root
-    const dragHandle = this.shadowRoot ? this.shadowRoot.querySelector("#panel-drag-handle") : null;
-    if (dragHandle) {
-      dragHandle.addEventListener("mousedown", dragStart);
-    }
+        initialX = e.clientX - currentX;
+        initialY = e.clientY - currentY;
+        isDragging = true;
 
-    document.addEventListener("mousemove", drag);
-    document.addEventListener("mouseup", dragEnd);
-
-    // Store cleanup function
-    this._dragCleanup = () => {
-      const handle = this.inspectorPanel?.querySelector("#panel-drag-handle");
-      if (handle) {
-        handle.removeEventListener("mousedown", dragStart);
-      }
-      document.removeEventListener("mousemove", drag);
-      document.removeEventListener("mouseup", dragEnd);
-    };
-  }
-
-  getPanelPosition() {
-    try {
-      const saved = localStorage.getItem("css-inspector-panel-position");
-      if (saved) {
-        return JSON.parse(saved);
-      }
-    } catch (e) {
-      console.warn("[CSS Inspector] Failed to load panel position:", e);
-    }
-    return null;
-  }
-
-  savePanelPosition() {
-    if (!this.inspectorPanel) return;
-
-    try {
-      const rect = this.inspectorPanel.getBoundingClientRect();
-      const position = {
-        top: rect.top,
-        left: rect.left,
+        // Add dragging class for visual feedback
+        this.inspectorPanel.style.cursor = "move";
       };
-      localStorage.setItem(
-        "css-inspector-panel-position",
-        JSON.stringify(position)
-      );
-    } catch (e) {
-      console.warn("[CSS Inspector] Failed to save panel position:", e);
+
+      const drag = (e) => {
+        if (isDragging) {
+          e.preventDefault();
+          currentX = e.clientX - initialX;
+          currentY = e.clientY - initialY;
+
+          // Constrain to viewport
+          const maxX = window.innerWidth - this.inspectorPanel.offsetWidth;
+          const maxY = window.innerHeight - this.inspectorPanel.offsetHeight;
+
+          currentX = Math.max(-maxX + 20, Math.min(maxX - 20, currentX));
+          currentY = Math.max(-20, Math.min(maxY - 20, currentY));
+
+          this.inspectorPanel.style.transform = `translate(${currentX}px, ${currentY}px)`;
+        }
+      };
+
+      const dragEnd = () => {
+        if (isDragging) {
+          isDragging = false;
+          this.inspectorPanel.style.cursor = "";
+
+          // Save position to localStorage
+          this.savePanelPosition();
+        }
+      };
+
+      // Use event delegation for drag handle - need to query shadow root
+      const dragHandle = this.shadowRoot
+        ? this.shadowRoot.querySelector("#panel-drag-handle")
+        : null;
+      if (dragHandle) {
+        dragHandle.addEventListener("mousedown", dragStart);
+      }
+
+      document.addEventListener("mousemove", drag);
+      document.addEventListener("mouseup", dragEnd);
+
+      // Store cleanup function
+      this._dragCleanup = () => {
+        const handle = this.inspectorPanel?.querySelector("#panel-drag-handle");
+        if (handle) {
+          handle.removeEventListener("mousedown", dragStart);
+        }
+        document.removeEventListener("mousemove", drag);
+        document.removeEventListener("mouseup", dragEnd);
+      };
     }
-  }
 
-  switchPanelToOverviewMode(activeTab = "colors") {
-    if (!this.inspectorPanel) return;
-
-    // Clear selected element when switching to overview
-    this.selectedElement = null;
-    this.hoveredElement = null;
-
-    // Get website name and URL
-    const websiteName = document.title || "Untitled Page";
-    const websiteUrl = window.location.href;
-
-    // Get theme colors
-    const colors = this.getThemeColors();
-    const hoverBg = this.theme === "light" ? "#E8E8E8" : "#222222";
-    const hoverBorder = this.theme === "light" ? "#D5D5D5" : "#3A3A3A";
-    const numberColor = this.theme === "light" ? "#333333" : "#B8B8B8";
-
-    // Use inline styles with theme colors - target shadow root
-    if (!this.shadowRoot) {
-      console.error("[CSS Inspector] Shadow root not found");
-      return;
+    getPanelPosition() {
+      try {
+        const saved = localStorage.getItem("css-inspector-panel-position");
+        if (saved) {
+          return JSON.parse(saved);
+        }
+      } catch (e) {
+        console.warn("[CSS Inspector] Failed to load panel position:", e);
+      }
+      return null;
     }
-    this.shadowRoot.innerHTML = `
+
+    savePanelPosition() {
+      if (!this.inspectorPanel) return;
+
+      try {
+        const rect = this.inspectorPanel.getBoundingClientRect();
+        const position = {
+          top: rect.top,
+          left: rect.left,
+        };
+        localStorage.setItem(
+          "css-inspector-panel-position",
+          JSON.stringify(position)
+        );
+      } catch (e) {
+        console.warn("[CSS Inspector] Failed to save panel position:", e);
+      }
+    }
+
+    switchPanelToOverviewMode(activeTab = "colors") {
+      if (!this.inspectorPanel) return;
+
+      // Prevent duplicate calls
+      if (this.isSwitchingMode) {
+        // #region agent log
+        fetch(
+          "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              location: "content.js:1526",
+              message: "switchPanelToOverviewMode blocked - already switching",
+              data: { activeTab },
+              timestamp: Date.now(),
+              sessionId: "debug-session",
+              runId: "run1",
+              hypothesisId: "D",
+            }),
+          }
+        ).catch(() => {});
+        // #endregion
+        return;
+      }
+      this.isSwitchingMode = true;
+
+      // #region agent log
+      fetch(
+        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "content.js:1517",
+            message: "switchPanelToOverviewMode entry",
+            data: {
+              activeTab,
+              currentHeight: this.inspectorPanel.offsetHeight,
+              currentHeightStyle: this.inspectorPanel.style.height,
+            },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "A,C",
+          }),
+        }
+      ).catch(() => {});
+      // #endregion
+
+      // Clear selected element when switching to overview
+      this.selectedElement = null;
+      this.hoveredElement = null;
+
+      // Get website name and URL
+      const websiteName = document.title || "Untitled Page";
+      const websiteUrl = window.location.href;
+
+      // Get theme colors
+      const colors = this.getThemeColors();
+      const hoverBg = this.theme === "light" ? "#E8E8E8" : "#222222";
+      const hoverBorder = this.theme === "light" ? "#D5D5D5" : "#3A3A3A";
+      const numberColor = this.theme === "light" ? "#333333" : "#B8B8B8";
+
+      // Use inline styles with theme colors - target shadow root
+      if (!this.shadowRoot) {
+        console.error("[CSS Inspector] Shadow root not found");
+        return;
+      }
+      // Preserve current height and opacity to prevent flickering during innerHTML replacement
+      const heightBeforeInnerHTML =
+        this.inspectorPanel.offsetHeight || this.inspectorPanel.scrollHeight;
+      const preservedHeight =
+        heightBeforeInnerHTML > 0 ? heightBeforeInnerHTML : null;
+      const panelContent = this.shadowRoot.querySelector("#panel-content");
+      const originalOpacity = panelContent
+        ? window.getComputedStyle(panelContent).opacity
+        : "1";
+
+      // #region agent log
+      fetch(
+        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "content.js:1544",
+            message: "switchPanelToOverviewMode before innerHTML",
+            data: {
+              heightBeforeInnerHTML,
+              preservedHeight,
+              activeTab,
+              currentTransition: this.inspectorPanel.style.transition,
+              originalOpacity,
+            },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "A,C",
+          }),
+        }
+      ).catch(() => {});
+      // #endregion
+
+      // Temporarily disable transitions and set opacity to 0 to prevent flash during DOM replacement
+      const originalTransition = this.inspectorPanel.style.transition;
+      this.inspectorPanel.style.setProperty("transition", "none", "important");
+
+      // Lock height explicitly before innerHTML replacement
+      if (preservedHeight && preservedHeight > 0) {
+        this.inspectorPanel.style.setProperty(
+          "height",
+          `${preservedHeight}px`,
+          "important"
+        );
+      }
+
+      // Set opacity to 0 before innerHTML replacement to prevent flash
+      if (panelContent) {
+        panelContent.style.setProperty("opacity", "0", "important");
+        panelContent.style.setProperty("transition", "none", "important");
+      }
+
+      this.shadowRoot.innerHTML = `
       <style>${this.getShadowDOMCSS()}</style>
       <div style="display: flex; flex-direction: column; border-bottom: 1px solid ${
         colors.border
       }; background: ${
-      colors.headerBg
-    }; border-radius: 8px 8px 0 0; flex-shrink: 0;">
+        colors.headerBg
+      }; border-radius: 8px 8px 0 0; flex-shrink: 0;">
         <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; gap: 12px; position: relative;">
           <div id="panel-drag-handle" style="cursor: move; display: flex; align-items: center; padding: 4px; border-radius: 4px; transition: background 0.2s; user-select: none; flex-shrink: 0;" onmouseover="this.style.background='${
             colors.bgHover
@@ -1432,8 +3481,8 @@ class CSSInspector {
               <button id="panel-segment-overview" style="padding: 6px 16px; border: none; background: ${
                 colors.segmentActive
               }; color: ${
-      colors.textPrimary
-    }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 9999px; cursor: pointer; transition: all 0.2s; user-select: none; white-space: nowrap; outline: none;">Overview</button>
+        colors.textPrimary
+      }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 9999px; cursor: pointer; transition: all 0.2s; user-select: none; white-space: nowrap; outline: none;">Overview</button>
               <button id="panel-segment-inspector" style="padding: 6px 16px; border: none; background: transparent; color: ${
                 colors.textSecondary
               }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 9999px; cursor: pointer; transition: all 0.2s; user-select: none; white-space: nowrap; outline: none;">Inspector</button>
@@ -1442,14 +3491,14 @@ class CSSInspector {
             <button id="theme-switcher" style="background: transparent; border: none; cursor: pointer; color: ${
               colors.textSecondary
             }; padding: 4px; border-radius: 4px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;" onmouseover="this.style.background='${
-      colors.bgHover
-    }'; this.style.color='${
-      colors.textPrimary
-    }'" onmouseout="this.style.background='transparent'; this.style.color='${
-      colors.textSecondary
-    }'" title="${
-      this.theme === "dark" ? "Switch to light theme" : "Switch to dark theme"
-    }">
+        colors.bgHover
+      }'; this.style.color='${
+        colors.textPrimary
+      }'" onmouseout="this.style.background='transparent'; this.style.color='${
+        colors.textSecondary
+      }'" title="${
+        this.theme === "dark" ? "Switch to light theme" : "Switch to dark theme"
+      }">
               ${(() => {
                 const sunClipId = `sun-clip-${Date.now()}-${Math.random()
                   .toString(36)
@@ -1463,12 +3512,12 @@ class CSSInspector {
             <button id="close-inspector-panel" style="background: transparent; border: none; cursor: pointer; color: ${
               colors.textSecondary
             }; padding: 4px; border-radius: 4px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;" onmouseover="this.style.background='${
-      colors.bgHover
-    }'; this.style.color='${
-      colors.textPrimary
-    }'" onmouseout="this.style.background='transparent'; this.style.color='${
-      colors.textSecondary
-    }'" title="Close Panel">
+        colors.bgHover
+      }'; this.style.color='${
+        colors.textPrimary
+      }'" onmouseout="this.style.background='transparent'; this.style.color='${
+        colors.textSecondary
+      }'" title="Close Panel">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" style="width: 16px; height: 16px;">
                 <path fill="currentColor" d="M16.95 8.464a1 1 0 0 0-1.414-1.414L12 10.586 8.464 7.05A1 1 0 1 0 7.05 8.464L10.586 12 7.05 15.536a1 1 0 1 0 1.414 1.414L12 13.414l3.536 3.536a1 1 0 1 0 1.414-1.414L13.414 12z"/>
               </svg>
@@ -1480,13 +3529,13 @@ class CSSInspector {
           <div style="font-size: 13px; font-weight: 600; color: ${
             colors.textPrimary
           }; font-family: 'Inter', sans-serif;">${websiteName
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")}</div>
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")}</div>
           <div style="font-size: 11px; color: ${
             colors.textSecondary
           }; font-family: 'Inter', sans-serif; word-break: break-all;">${websiteUrl
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")}</div>
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")}</div>
         </div>
       </div>
       <div style="padding: 16px; flex: 1; background: ${
@@ -1519,231 +3568,1355 @@ class CSSInspector {
       </div>
     `;
 
-    // Load stats
-    this.loadPanelStats();
+      // Immediately restore preserved height to prevent flickering during DOM replacement
+      if (preservedHeight && preservedHeight > 0) {
+        this.inspectorPanel.style.setProperty(
+          "height",
+          `${preservedHeight}px`,
+          "important"
+        );
+      }
 
-    // Ensure element ID is cleared and hidden in overview mode
-    // Use setTimeout to ensure DOM is ready after innerHTML is set
-    setTimeout(() => {
+      // #region agent log
+      fetch(
+        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "content.js:1649",
+            message: "switchPanelToOverviewMode after innerHTML",
+            data: {
+              heightBeforeInnerHTML,
+              heightAfterInnerHTML: this.inspectorPanel.offsetHeight,
+              heightStyle: this.inspectorPanel.style.height,
+              preservedHeight,
+            },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "A,C",
+          }),
+        }
+      ).catch(() => {});
+      // #endregion
+
+      // Load stats
+      this.loadPanelStats();
+
+      // After DOM settles, recalculate height dynamically based on new content
+      // Use double RAF to ensure content is fully rendered
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          // Restore transition before calling updatePanelHeight
+          this.inspectorPanel.style.setProperty(
+            "transition",
+            originalTransition || "",
+            "important"
+          );
+
+          // Restore opacity after content is ready
+          const newPanelContent =
+            this.shadowRoot.querySelector("#panel-content");
+          if (newPanelContent) {
+            newPanelContent.style.setProperty(
+              "opacity",
+              originalOpacity,
+              "important"
+            );
+            newPanelContent.style.setProperty(
+              "transition",
+              "opacity 0.15s ease-out",
+              "important"
+            );
+          }
+
+          // Recalculate height based on new content (preserved height is just for transition start)
+          this.updatePanelHeight(false, true);
+
+          // Clear switching flag after operation completes
+          this.isSwitchingMode = false;
+        });
+      });
+
+      // Ensure element ID is cleared and hidden in overview mode
+      // Use setTimeout to ensure DOM is ready after innerHTML is set
+      setTimeout(() => {
+        if (!this.shadowRoot) return;
+        const lockedInfo = this.shadowRoot.querySelector(
+          "#locked-element-info"
+        );
+        if (lockedInfo) {
+          lockedInfo.style.setProperty("display", "none", "important");
+          lockedInfo.innerHTML = "";
+        }
+        const websiteInfo = this.shadowRoot.querySelector("#website-info");
+        if (websiteInfo) {
+          websiteInfo.style.setProperty("display", "flex", "important");
+        }
+      }, 0);
+
+      // Set up segmented control state
       if (!this.shadowRoot) return;
-      const lockedInfo = this.shadowRoot.querySelector(
-        "#locked-element-info"
+      const overviewBtn = this.shadowRoot.querySelector(
+        "#panel-segment-overview"
       );
-      if (lockedInfo) {
-        lockedInfo.style.setProperty("display", "none", "important");
-        lockedInfo.innerHTML = "";
-      }
-      const websiteInfo = this.shadowRoot.querySelector("#website-info");
-      if (websiteInfo) {
-        websiteInfo.style.setProperty("display", "flex", "important");
-      }
-    }, 0);
+      const inspectorBtn = this.shadowRoot.querySelector(
+        "#panel-segment-inspector"
+      );
 
-    // Set up segmented control state
-    if (!this.shadowRoot) return;
-    const overviewBtn = this.shadowRoot.querySelector("#panel-segment-overview");
-    const inspectorBtn = this.shadowRoot.querySelector("#panel-segment-inspector");
-
-    if (overviewBtn && inspectorBtn) {
-      const colors = this.getThemeColors();
-      // Set initial state - Overview is active
-      overviewBtn.style.background = colors.segmentActive;
-      overviewBtn.style.color = colors.textPrimary;
-      inspectorBtn.style.background = "transparent";
-      inspectorBtn.style.color = colors.textSecondary;
-
-      // Add click handlers
-      overviewBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
+      if (overviewBtn && inspectorBtn) {
         const colors = this.getThemeColors();
-        inspectorBtn.style.background = "transparent";
-        inspectorBtn.style.color = colors.textSecondary;
+        // Set initial state - Overview is active
         overviewBtn.style.background = colors.segmentActive;
         overviewBtn.style.color = colors.textPrimary;
-        this.setInspectorState(false);
-      });
+        inspectorBtn.style.background = "transparent";
+        inspectorBtn.style.color = colors.textSecondary;
 
-      inspectorBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const colors = this.getThemeColors();
-        overviewBtn.style.background = "transparent";
-        overviewBtn.style.color = colors.textSecondary;
-        inspectorBtn.style.background = colors.segmentActive;
-        inspectorBtn.style.color = colors.textPrimary;
-        this.setInspectorState(true);
-      });
-    }
+        // Add click handlers
+        overviewBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const colors = this.getThemeColors();
 
-    // Set up segmented control for Colors/Fonts
-    if (!this.shadowRoot) return;
-    const colorsSegment = this.shadowRoot.querySelector("#overview-segment-colors");
-    const fontsSegment = this.shadowRoot.querySelector("#overview-segment-fonts");
-    const colorsView = this.shadowRoot.querySelector("#overview-colors-view");
-    const fontsView = this.shadowRoot.querySelector("#overview-fonts-view");
-    const segmentIndicator = this.shadowRoot.querySelector(
-      "#overview-segment-indicator"
-    );
-    const segmentContainer = this.shadowRoot.querySelector(
-      "#overview-segment-container"
-    );
+          // Prevent rapid clicks
+          if (overviewBtn.disabled) return;
+          overviewBtn.disabled = true;
+          inspectorBtn.disabled = true;
 
-    if (
-      colorsSegment &&
-      fontsSegment &&
-      colorsView &&
-      fontsView &&
-      segmentIndicator &&
-      segmentContainer
-    ) {
-      const colors = this.getThemeColors();
+          // #region agent log
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:1607",
+                message: "Overview click - entry",
+                data: { currentHeight: this.inspectorPanel.offsetHeight },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "A",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
 
-      // Set initial state based on activeTab parameter
-      // Disable transition temporarily to prevent animation on theme switch
-      segmentIndicator.style.transition = "none";
+          // Get current height BEFORE any changes
+          const currentHeight = this.inspectorPanel.offsetHeight;
 
-      if (activeTab === "fonts") {
-        colorsSegment.style.color = colors.textSecondary;
-        fontsSegment.style.color = colors.textPrimary;
-        const containerWidth = segmentContainer.offsetWidth;
-        const padding = 2;
-        const gap = 2;
-        const availableWidth = containerWidth - padding * 2;
-        const buttonWidth = availableWidth / 2;
-        segmentIndicator.style.transform = `translateX(${buttonWidth + gap}px)`;
-        colorsView.style.display = "none";
-        fontsView.style.display = "block";
-        setTimeout(() => {
-          this.renderFontsView();
-        }, 0);
-      } else {
-        // Colors is active (default)
-        colorsSegment.style.color = colors.textPrimary;
-        fontsSegment.style.color = colors.textSecondary;
-        segmentIndicator.style.transform = "translateX(0)";
-        colorsView.style.display = "block";
-        fontsView.style.display = "none";
-        setTimeout(() => {
-          this.renderColorsView();
-        }, 0);
+          // Update button styles immediately
+          inspectorBtn.style.background = "transparent";
+          inspectorBtn.style.color = colors.textSecondary;
+          overviewBtn.style.background = colors.segmentActive;
+          overviewBtn.style.color = colors.textPrimary;
+
+          // Add brief fade before switching modes
+          const panelContent = this.shadowRoot.querySelector("#panel-content");
+          if (panelContent) {
+            panelContent.style.transition = "opacity 0.15s ease-out";
+            panelContent.style.opacity = "0";
+          }
+
+          // Switch after brief fade, then restore opacity and update height
+          setTimeout(() => {
+            // #region agent log
+            fetch(
+              "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  location: "content.js:1655",
+                  message: "Overview click - before setInspectorState",
+                  data: {
+                    currentHeight,
+                    panelHeight: this.inspectorPanel.offsetHeight,
+                    panelHeightStyle: this.inspectorPanel.style.height,
+                  },
+                  timestamp: Date.now(),
+                  sessionId: "debug-session",
+                  runId: "run1",
+                  hypothesisId: "A",
+                }),
+              }
+            ).catch(() => {});
+            // #endregion
+            this.setInspectorState(false);
+
+            // #region agent log
+            fetch(
+              "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  location: "content.js:1657",
+                  message: "Overview click - after setInspectorState",
+                  data: {
+                    panelHeight: this.inspectorPanel.offsetHeight,
+                    panelHeightStyle: this.inspectorPanel.style.height,
+                  },
+                  timestamp: Date.now(),
+                  sessionId: "debug-session",
+                  runId: "run1",
+                  hypothesisId: "A",
+                }),
+              }
+            ).catch(() => {});
+            // #endregion
+
+            // CRITICAL: Set new content to opacity 0 SYNCHRONOUSLY immediately after DOM replacement
+            // This must happen before any RAF or async operations to prevent flash
+            const newPanelContent =
+              this.shadowRoot.querySelector("#panel-content");
+            if (newPanelContent) {
+              console.log(
+                "[DEBUG] Setting opacity 0 synchronously after DOM replace",
+                { opacity: window.getComputedStyle(newPanelContent).opacity }
+              );
+              // Set opacity 0 immediately (no transition) to prevent flash
+              newPanelContent.style.transition = "opacity 0s";
+              newPanelContent.style.opacity = "0";
+            } else {
+              console.error(
+                "[DEBUG] panel-content not found after setInspectorState"
+              );
+            }
+
+            // Wait for DOM to settle, then calculate and animate
+            requestAnimationFrame(() => {
+              if (newPanelContent) {
+                // Force layout calculation
+                newPanelContent.offsetHeight;
+
+                requestAnimationFrame(() => {
+                  const contentHeight = newPanelContent.scrollHeight;
+                  const headerElement =
+                    this.shadowRoot.querySelector("div:first-child");
+                  const headerHeight = headerElement
+                    ? headerElement.offsetHeight
+                    : 0;
+                  const calculatedHeight = contentHeight + headerHeight;
+                  const maxHeight = window.innerHeight * 0.8;
+                  const newHeight = Math.min(calculatedHeight, maxHeight);
+
+                  // #region agent log
+                  fetch(
+                    "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        location: "content.js:1676",
+                        message: "Height calculated",
+                        data: {
+                          currentHeight,
+                          newHeight,
+                          calculatedHeight,
+                          panelHeightBeforeSet:
+                            this.inspectorPanel.offsetHeight,
+                        },
+                        timestamp: Date.now(),
+                        sessionId: "debug-session",
+                        runId: "run1",
+                        hypothesisId: "A",
+                      }),
+                    }
+                  ).catch(() => {});
+                  // #endregion
+
+                  // Set current height (starting point)
+                  this.inspectorPanel.style.setProperty(
+                    "height",
+                    `${currentHeight}px`,
+                    "important"
+                  );
+
+                  // #region agent log
+                  fetch(
+                    "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        location: "content.js:1689",
+                        message: "Height set to currentHeight before animation",
+                        data: {
+                          currentHeight,
+                          panelHeightAfterSet: this.inspectorPanel.offsetHeight,
+                        },
+                        timestamp: Date.now(),
+                        sessionId: "debug-session",
+                        runId: "run1",
+                        hypothesisId: "A",
+                      }),
+                    }
+                  ).catch(() => {});
+                  // #endregion
+
+                  // Enable transitions
+                  this.inspectorPanel.style.setProperty(
+                    "transition",
+                    "height 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                    "important"
+                  );
+                  newPanelContent.style.transition = "opacity 0.15s ease-out";
+
+                  // Force reflow
+                  this.inspectorPanel.offsetHeight;
+
+                  // Animate height and fade in simultaneously
+                  requestAnimationFrame(() => {
+                    this.inspectorPanel.style.setProperty(
+                      "height",
+                      `${newHeight}px`,
+                      "important"
+                    );
+                    newPanelContent.style.opacity = "1";
+
+                    // #region agent log
+                    fetch(
+                      "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                      {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          location: "content.js:1704",
+                          message: "Animation started",
+                          data: {
+                            height: newHeight,
+                            opacity: 1,
+                            panelHeightAfterAnimStart:
+                              this.inspectorPanel.offsetHeight,
+                          },
+                          timestamp: Date.now(),
+                          sessionId: "debug-session",
+                          runId: "run1",
+                          hypothesisId: "A",
+                        }),
+                      }
+                    ).catch(() => {});
+                    // #endregion
+
+                    // Re-enable buttons after transition
+                    setTimeout(() => {
+                      overviewBtn.disabled = false;
+                      inspectorBtn.disabled = false;
+                    }, 200);
+                  });
+                });
+              }
+            });
+          }, 150);
+        });
+
+        inspectorBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const colors = this.getThemeColors();
+
+          // Prevent rapid clicks
+          if (inspectorBtn.disabled) return;
+          overviewBtn.disabled = true;
+          inspectorBtn.disabled = true;
+
+          // #region agent log
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:1684",
+                message: "Inspector click - entry",
+                data: { currentHeight: this.inspectorPanel.offsetHeight },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "A",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
+
+          // Get current height BEFORE any changes
+          const currentHeight = this.inspectorPanel.offsetHeight;
+
+          // Update button styles immediately
+          overviewBtn.style.background = "transparent";
+          overviewBtn.style.color = colors.textSecondary;
+          inspectorBtn.style.background = colors.segmentActive;
+          inspectorBtn.style.color = colors.textPrimary;
+
+          // Add brief fade before switching modes
+          const panelContent = this.shadowRoot.querySelector("#panel-content");
+          if (panelContent) {
+            panelContent.style.transition = "opacity 0.15s ease-out";
+            panelContent.style.opacity = "0";
+          }
+
+          // Switch after brief fade, then restore opacity and update height
+          setTimeout(() => {
+            // #region agent log
+            fetch(
+              "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  location: "content.js:1820",
+                  message: "Inspector click - before setInspectorState",
+                  data: {
+                    currentHeight,
+                    panelHeight: this.inspectorPanel.offsetHeight,
+                    panelHeightStyle: this.inspectorPanel.style.height,
+                  },
+                  timestamp: Date.now(),
+                  sessionId: "debug-session",
+                  runId: "run1",
+                  hypothesisId: "A",
+                }),
+              }
+            ).catch(() => {});
+            // #endregion
+            this.setInspectorState(true);
+
+            // #region agent log
+            fetch(
+              "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  location: "content.js:1822",
+                  message: "Inspector click - after setInspectorState",
+                  data: {
+                    panelHeight: this.inspectorPanel.offsetHeight,
+                    panelHeightStyle: this.inspectorPanel.style.height,
+                  },
+                  timestamp: Date.now(),
+                  sessionId: "debug-session",
+                  runId: "run1",
+                  hypothesisId: "A",
+                }),
+              }
+            ).catch(() => {});
+            // #endregion
+
+            // CRITICAL: Set new content to opacity 0 SYNCHRONOUSLY immediately after DOM replacement
+            // This must happen before any RAF or async operations to prevent flash
+            const newPanelContent =
+              this.shadowRoot.querySelector("#panel-content");
+            if (newPanelContent) {
+              console.log(
+                "[DEBUG] Setting opacity 0 synchronously after DOM replace",
+                { opacity: window.getComputedStyle(newPanelContent).opacity }
+              );
+              // Set opacity 0 immediately (no transition) to prevent flash
+              newPanelContent.style.transition = "opacity 0s";
+              newPanelContent.style.opacity = "0";
+            } else {
+              console.error(
+                "[DEBUG] panel-content not found after setInspectorState"
+              );
+            }
+
+            // Wait for DOM to settle, then calculate and animate
+            requestAnimationFrame(() => {
+              if (newPanelContent) {
+                // Force layout calculation
+                newPanelContent.offsetHeight;
+
+                requestAnimationFrame(() => {
+                  const contentHeight = newPanelContent.scrollHeight;
+                  const headerElement =
+                    this.shadowRoot.querySelector("div:first-child");
+                  const headerHeight = headerElement
+                    ? headerElement.offsetHeight
+                    : 0;
+                  const calculatedHeight = contentHeight + headerHeight;
+                  const maxHeight = window.innerHeight * 0.8;
+                  const newHeight = Math.min(calculatedHeight, maxHeight);
+
+                  // #region agent log
+                  fetch(
+                    "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        location: "content.js:1842",
+                        message: "Height calculated",
+                        data: {
+                          currentHeight,
+                          newHeight,
+                          calculatedHeight,
+                          panelHeightBeforeSet:
+                            this.inspectorPanel.offsetHeight,
+                        },
+                        timestamp: Date.now(),
+                        sessionId: "debug-session",
+                        runId: "run1",
+                        hypothesisId: "A",
+                      }),
+                    }
+                  ).catch(() => {});
+                  // #endregion
+
+                  // Set current height (starting point)
+                  this.inspectorPanel.style.setProperty(
+                    "height",
+                    `${currentHeight}px`,
+                    "important"
+                  );
+
+                  // #region agent log
+                  fetch(
+                    "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        location: "content.js:1854",
+                        message: "Height set to currentHeight before animation",
+                        data: {
+                          currentHeight,
+                          panelHeightAfterSet: this.inspectorPanel.offsetHeight,
+                        },
+                        timestamp: Date.now(),
+                        sessionId: "debug-session",
+                        runId: "run1",
+                        hypothesisId: "A",
+                      }),
+                    }
+                  ).catch(() => {});
+                  // #endregion
+
+                  // Enable transitions
+                  this.inspectorPanel.style.setProperty(
+                    "transition",
+                    "height 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                    "important"
+                  );
+                  newPanelContent.style.transition = "opacity 0.15s ease-out";
+
+                  // Force reflow
+                  this.inspectorPanel.offsetHeight;
+
+                  // Animate height and fade in simultaneously
+                  requestAnimationFrame(() => {
+                    this.inspectorPanel.style.setProperty(
+                      "height",
+                      `${newHeight}px`,
+                      "important"
+                    );
+                    newPanelContent.style.opacity = "1";
+
+                    // #region agent log
+                    fetch(
+                      "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                      {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          location: "content.js:1869",
+                          message: "Animation started",
+                          data: {
+                            height: newHeight,
+                            opacity: 1,
+                            panelHeightAfterAnimStart:
+                              this.inspectorPanel.offsetHeight,
+                          },
+                          timestamp: Date.now(),
+                          sessionId: "debug-session",
+                          runId: "run1",
+                          hypothesisId: "A",
+                        }),
+                      }
+                    ).catch(() => {});
+                    // #endregion
+
+                    // Re-enable buttons after transition
+                    setTimeout(() => {
+                      overviewBtn.disabled = false;
+                      inspectorBtn.disabled = false;
+                    }, 200);
+                  });
+                });
+              }
+            });
+          }, 150);
+        });
       }
 
-      // Apply squircle clip-path to container and indicator
-      setTimeout(() => {
-        const containerRect = segmentContainer.getBoundingClientRect();
-        const indicatorRect = segmentIndicator.getBoundingClientRect();
+      // Set up segmented control for Colors/Fonts
+      if (!this.shadowRoot) return;
+      const colorsSegment = this.shadowRoot.querySelector(
+        "#overview-segment-colors"
+      );
+      const fontsSegment = this.shadowRoot.querySelector(
+        "#overview-segment-fonts"
+      );
+      const colorsView = this.shadowRoot.querySelector("#overview-colors-view");
+      const fontsView = this.shadowRoot.querySelector("#overview-fonts-view");
+      const segmentIndicator = this.shadowRoot.querySelector(
+        "#overview-segment-indicator"
+      );
+      const segmentContainer = this.shadowRoot.querySelector(
+        "#overview-segment-container"
+      );
 
-        if (containerRect.width > 0 && containerRect.height > 0) {
-          const containerPath = this.createSquircleClipPath(
-            containerRect.width,
-            containerRect.height,
-            14
-          );
-          segmentContainer.style.clipPath = `path('${containerPath}')`;
+      if (
+        colorsSegment &&
+        fontsSegment &&
+        colorsView &&
+        fontsView &&
+        segmentIndicator &&
+        segmentContainer
+      ) {
+        const colors = this.getThemeColors();
+
+        // Set initial state based on activeTab parameter
+        // Disable transition temporarily to prevent animation on theme switch
+        segmentIndicator.style.transition = "none";
+
+        if (activeTab === "fonts") {
+          colorsSegment.style.color = colors.textSecondary;
+          fontsSegment.style.color = colors.textPrimary;
+          const containerWidth = segmentContainer.offsetWidth;
+          const padding = 2;
+          const gap = 2;
+          const availableWidth = containerWidth - padding * 2;
+          const buttonWidth = availableWidth / 2;
+          segmentIndicator.style.transform = `translateX(${
+            buttonWidth + gap
+          }px)`;
+          colorsView.style.display = "none";
+          fontsView.style.display = "block";
+          setTimeout(() => {
+            this.renderFontsView();
+          }, 0);
+        } else {
+          // Colors is active (default)
+          colorsSegment.style.color = colors.textPrimary;
+          fontsSegment.style.color = colors.textSecondary;
+          segmentIndicator.style.transform = "translateX(0)";
+          colorsView.style.display = "block";
+          fontsView.style.display = "none";
+          setTimeout(() => {
+            this.renderColorsView();
+          }, 0);
         }
 
-        if (indicatorRect.width > 0 && indicatorRect.height > 0) {
-          const indicatorPath = this.createSquircleClipPath(
-            indicatorRect.width,
-            indicatorRect.height,
-            12
-          );
-          segmentIndicator.style.clipPath = `path('${indicatorPath}')`;
-        }
+        // Apply squircle clip-path to container and indicator
+        setTimeout(() => {
+          const containerRect = segmentContainer.getBoundingClientRect();
+          const indicatorRect = segmentIndicator.getBoundingClientRect();
 
-        segmentIndicator.style.transition =
-          "transform 0.45s cubic-bezier(0.88, 0, 0.12, 1)";
-      }, 50);
+          if (containerRect.width > 0 && containerRect.height > 0) {
+            const containerPath = this.createSquircleClipPath(
+              containerRect.width,
+              containerRect.height,
+              14
+            );
+            segmentContainer.style.clipPath = `path('${containerPath}')`;
+          }
 
-      // Colors segment click
-      colorsSegment.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const colors = this.getThemeColors();
-        fontsSegment.style.color = colors.textSecondary;
-        colorsSegment.style.color = colors.textPrimary;
-        segmentIndicator.style.transform = "translateX(0)";
-        colorsView.style.display = "block";
-        fontsView.style.display = "none";
-        this.renderColorsView();
-        // Height will be updated by renderColorsView
-      });
+          if (indicatorRect.width > 0 && indicatorRect.height > 0) {
+            const indicatorPath = this.createSquircleClipPath(
+              indicatorRect.width,
+              indicatorRect.height,
+              12
+            );
+            segmentIndicator.style.clipPath = `path('${indicatorPath}')`;
+          }
 
-      // Fonts segment click
-      fontsSegment.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const colors = this.getThemeColors();
-        colorsSegment.style.color = colors.textSecondary;
-        fontsSegment.style.color = colors.textPrimary;
-        // Move indicator to second position: button width + gap (2px)
-        const containerWidth = segmentContainer.offsetWidth;
-        const padding = 2; // Container padding
-        const gap = 2; // Gap between buttons
-        const availableWidth = containerWidth - padding * 2;
-        const buttonWidth = availableWidth / 2;
-        segmentIndicator.style.transform = `translateX(${buttonWidth + gap}px)`;
-        colorsView.style.display = "none";
-        fontsView.style.display = "block";
-        this.renderFontsView();
-        // Height will be updated by renderFontsView
-      });
+          segmentIndicator.style.transition =
+            "transform 0.45s cubic-bezier(0.88, 0, 0.12, 1)";
+        }, 50);
 
-      // Re-render active view after theme change (check which view is visible)
-      setTimeout(() => {
-        if (colorsView.style.display !== "none") {
+        // Colors segment click
+        colorsSegment.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const colors = this.getThemeColors();
+
+          // Prevent rapid clicks
+          if (colorsSegment.disabled) return;
+          colorsSegment.disabled = true;
+          fontsSegment.disabled = true;
+
+          // #region agent log
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:1843",
+                message: "Colors click - entry",
+                data: {
+                  currentHeight: this.inspectorPanel.offsetHeight,
+                  fontsDisplay: fontsView.style.display,
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "B",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
+
+          // Get current height BEFORE any changes
+          const currentHeight = this.inspectorPanel.offsetHeight;
+
+          // Update button colors immediately
+          fontsSegment.style.color = colors.textSecondary;
+          colorsSegment.style.color = colors.textPrimary;
+
+          // Move indicator (keep original timing)
+          segmentIndicator.style.transition =
+            "transform 0.45s cubic-bezier(0.88, 0, 0.12, 1)";
+          segmentIndicator.style.transform = "translateX(0)";
+
+          // STEP 1: Hide old view
+          fontsView.style.display = "none";
+
+          // #region agent log
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:2038",
+                message: "Colors click - old view hidden",
+                data: {
+                  fontsDisplay: fontsView.style.display,
+                  colorsDisplay: colorsView.style.display,
+                  currentHeight,
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "B",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
+
+          // STEP 2: Show new view but keep it invisible
+          colorsView.style.display = "block";
+          colorsView.style.transition = "opacity 0.2s ease-out";
+          colorsView.style.opacity = "0";
+
+          // STEP 3: Render content
           this.renderColorsView();
-        } else if (fontsView.style.display !== "none") {
+
+          // #region agent log
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:2049",
+                message: "Colors click - content rendered",
+                data: {
+                  colorsViewScrollHeight: colorsView.scrollHeight,
+                  colorsViewOffsetHeight: colorsView.offsetHeight,
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "B",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
+
+          // STEP 4: Wait for layout to fully settle, then use updatePanelHeight for consistent measurement
+          // This ensures we use the EXACT same measurement logic as initial load
+          // Use triple RAF to ensure grid layout is fully calculated
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                // Force reflow to ensure layout is complete
+                colorsView.offsetHeight;
+                const gridContainer = colorsView.querySelector(
+                  'div[style*="display: grid"]'
+                );
+                if (gridContainer) {
+                  gridContainer.offsetHeight;
+                  gridContainer.scrollHeight;
+                }
+
+                // #region agent log
+                fetch(
+                  "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      location: "content.js:2067",
+                      message: "Colors click - before measurement",
+                      data: {
+                        currentHeight,
+                        panelHeight: this.inspectorPanel.offsetHeight,
+                        colorsViewScrollHeight: colorsView.scrollHeight,
+                      },
+                      timestamp: Date.now(),
+                      sessionId: "debug-session",
+                      runId: "run1",
+                      hypothesisId: "B",
+                    }),
+                  }
+                ).catch(() => {});
+                // #endregion
+
+                // STEP 1: Measure content height FIRST (before animating)
+                // This ensures we know the target height before starting animation
+                // Pass currentHeight so it can restore panel to correct height after measurement
+                const measurement = this.measureContentHeight(currentHeight);
+                if (!measurement) {
+                  colorsSegment.disabled = false;
+                  fontsSegment.disabled = false;
+                  return;
+                }
+
+                const { totalHeight, measuredContentHeight } = measurement;
+
+                // #region agent log
+                fetch(
+                  "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      location: "content.js:2067",
+                      message:
+                        "Colors click - after measurement, before animation",
+                      data: {
+                        currentHeight,
+                        totalHeight,
+                        measuredContentHeight,
+                        panelHeight: this.inspectorPanel.offsetHeight,
+                      },
+                      timestamp: Date.now(),
+                      sessionId: "debug-session",
+                      runId: "run1",
+                      hypothesisId: "B",
+                    }),
+                  }
+                ).catch(() => {});
+                // #endregion
+
+                // STEP 2: Now animate to the calculated height
+                // Set isUpdatingHeight flag to prevent concurrent updates
+                this.isUpdatingHeight = true;
+                this.finishHeightUpdate(
+                  currentHeight,
+                  totalHeight,
+                  false,
+                  measuredContentHeight
+                );
+
+                // STEP 3: Fade in content after animation starts
+                requestAnimationFrame(() => {
+                  colorsView.style.opacity = "1";
+
+                  // #region agent log
+                  fetch(
+                    "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        location: "content.js:2085",
+                        message: "Colors click - fade in started",
+                        data: {
+                          currentHeight,
+                          panelHeight: this.inspectorPanel.offsetHeight,
+                        },
+                        timestamp: Date.now(),
+                        sessionId: "debug-session",
+                        runId: "run1",
+                        hypothesisId: "B",
+                      }),
+                    }
+                  ).catch(() => {});
+                  // #endregion
+
+                  console.log("[DEBUG Colors] Transition started", {
+                    currentHeight,
+                    panelHeight: this.inspectorPanel.offsetHeight,
+                  });
+
+                  // Re-enable buttons after fade completes
+                  setTimeout(() => {
+                    colorsView.style.transition = "";
+                    colorsSegment.disabled = false;
+                    fontsSegment.disabled = false;
+
+                    // #region agent log
+                    const panelContentAfterFade =
+                      this.shadowRoot.querySelector("#panel-content");
+                    const overviewContentAfterFade =
+                      this.shadowRoot.querySelector("#overview-content");
+                    fetch(
+                      "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                      {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          location: "content.js:3825",
+                          message:
+                            "Colors fade-in complete - check content height",
+                          data: {
+                            panelHeight: this.inspectorPanel.offsetHeight,
+                            panelContentScrollHeight: panelContentAfterFade
+                              ? panelContentAfterFade.scrollHeight
+                              : 0,
+                            panelContentClientHeight: panelContentAfterFade
+                              ? panelContentAfterFade.clientHeight
+                              : 0,
+                            overviewContentScrollHeight:
+                              overviewContentAfterFade
+                                ? overviewContentAfterFade.scrollHeight
+                                : 0,
+                            colorsViewScrollHeight: colorsView
+                              ? colorsView.scrollHeight
+                              : 0,
+                            colorsViewOpacity: colorsView
+                              ? window.getComputedStyle(colorsView).opacity
+                              : "",
+                            contentCutoff: panelContentAfterFade
+                              ? panelContentAfterFade.scrollHeight >
+                                panelContentAfterFade.clientHeight
+                              : false,
+                          },
+                          timestamp: Date.now(),
+                          sessionId: "debug-session",
+                          runId: "run1",
+                          hypothesisId: "A,C",
+                        }),
+                      }
+                    ).catch(() => {});
+                    // #endregion
+                  }, 200);
+                });
+              });
+            });
+          });
+        });
+
+        // Fonts segment click
+        fontsSegment.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const colors = this.getThemeColors();
+
+          // Prevent rapid clicks
+          if (fontsSegment.disabled) return;
+          colorsSegment.disabled = true;
+          fontsSegment.disabled = true;
+
+          // #region agent log
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:1988",
+                message: "Fonts click - entry",
+                data: {
+                  currentHeight: this.inspectorPanel.offsetHeight,
+                  colorsDisplay: colorsView.style.display,
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "B",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
+
+          // Get current height BEFORE any changes
+          const currentHeight = this.inspectorPanel.offsetHeight;
+
+          // Update button colors immediately
+          colorsSegment.style.color = colors.textSecondary;
+          fontsSegment.style.color = colors.textPrimary;
+
+          // Move indicator to second position (keep original timing)
+          const containerWidth = segmentContainer.offsetWidth;
+          const padding = 2; // Container padding
+          const gap = 2; // Gap between buttons
+          const availableWidth = containerWidth - padding * 2;
+          const buttonWidth = availableWidth / 2;
+          segmentIndicator.style.transition =
+            "transform 0.45s cubic-bezier(0.88, 0, 0.12, 1)";
+          segmentIndicator.style.transform = `translateX(${
+            buttonWidth + gap
+          }px)`;
+
+          // STEP 1: Hide old view
+          colorsView.style.display = "none";
+
+          // #region agent log
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:2146",
+                message: "Fonts click - old view hidden",
+                data: {
+                  colorsDisplay: colorsView.style.display,
+                  fontsDisplay: fontsView.style.display,
+                  currentHeight,
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "B",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
+
+          // STEP 2: Show new view but keep it invisible
+          fontsView.style.display = "block";
+          fontsView.style.transition = "opacity 0.2s ease-out";
+          fontsView.style.opacity = "0";
+
+          // STEP 3: Render content
           this.renderFontsView();
+
+          // #region agent log
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:2158",
+                message: "Fonts click - content rendered",
+                data: {
+                  fontsViewScrollHeight: fontsView.scrollHeight,
+                  fontsViewOffsetHeight: fontsView.offsetHeight,
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "B",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
+
+          // STEP 4: Wait for layout to fully settle, then use updatePanelHeight for consistent measurement
+          // This ensures we use the EXACT same measurement logic as initial load
+          // Use triple RAF to ensure layout is fully calculated
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                // Force reflow to ensure layout is complete
+                fontsView.offsetHeight;
+                fontsView.scrollHeight;
+
+                // #region agent log
+                fetch(
+                  "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      location: "content.js:2167",
+                      message: "Fonts click - before measurement",
+                      data: {
+                        currentHeight,
+                        panelHeight: this.inspectorPanel.offsetHeight,
+                        fontsViewScrollHeight: fontsView.scrollHeight,
+                      },
+                      timestamp: Date.now(),
+                      sessionId: "debug-session",
+                      runId: "run1",
+                      hypothesisId: "B",
+                    }),
+                  }
+                ).catch(() => {});
+                // #endregion
+
+                // STEP 1: Measure content height FIRST (before animating)
+                // This ensures we know the target height before starting animation
+                // Pass currentHeight so it can restore panel to correct height after measurement
+                const measurement = this.measureContentHeight(currentHeight);
+                if (!measurement) {
+                  colorsSegment.disabled = false;
+                  fontsSegment.disabled = false;
+                  return;
+                }
+
+                const { totalHeight, measuredContentHeight } = measurement;
+
+                // #region agent log
+                fetch(
+                  "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      location: "content.js:2167",
+                      message:
+                        "Fonts click - after measurement, before animation",
+                      data: {
+                        currentHeight,
+                        totalHeight,
+                        measuredContentHeight,
+                        panelHeight: this.inspectorPanel.offsetHeight,
+                      },
+                      timestamp: Date.now(),
+                      sessionId: "debug-session",
+                      runId: "run1",
+                      hypothesisId: "B",
+                    }),
+                  }
+                ).catch(() => {});
+                // #endregion
+
+                // STEP 2: Now animate to the calculated height
+                // Set isUpdatingHeight flag to prevent concurrent updates
+                this.isUpdatingHeight = true;
+                this.finishHeightUpdate(
+                  currentHeight,
+                  totalHeight,
+                  false,
+                  measuredContentHeight
+                );
+
+                // STEP 3: Fade in content after animation starts
+                requestAnimationFrame(() => {
+                  fontsView.style.opacity = "1";
+
+                  // #region agent log
+                  fetch(
+                    "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        location: "content.js:2185",
+                        message: "Fonts click - fade in started",
+                        data: {
+                          currentHeight,
+                          panelHeight: this.inspectorPanel.offsetHeight,
+                        },
+                        timestamp: Date.now(),
+                        sessionId: "debug-session",
+                        runId: "run1",
+                        hypothesisId: "B",
+                      }),
+                    }
+                  ).catch(() => {});
+                  // #endregion
+
+                  console.log("[DEBUG Fonts] Transition started", {
+                    currentHeight,
+                    panelHeight: this.inspectorPanel.offsetHeight,
+                  });
+
+                  // Re-enable buttons after fade completes
+                  setTimeout(() => {
+                    fontsView.style.transition = "";
+                    colorsSegment.disabled = false;
+                    fontsSegment.disabled = false;
+
+                    // #region agent log
+                    const panelContentAfterFade =
+                      this.shadowRoot.querySelector("#panel-content");
+                    const overviewContentAfterFade =
+                      this.shadowRoot.querySelector("#overview-content");
+                    fetch(
+                      "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                      {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          location: "content.js:4055",
+                          message:
+                            "Fonts fade-in complete - check content height",
+                          data: {
+                            panelHeight: this.inspectorPanel.offsetHeight,
+                            panelContentScrollHeight: panelContentAfterFade
+                              ? panelContentAfterFade.scrollHeight
+                              : 0,
+                            panelContentClientHeight: panelContentAfterFade
+                              ? panelContentAfterFade.clientHeight
+                              : 0,
+                            overviewContentScrollHeight:
+                              overviewContentAfterFade
+                                ? overviewContentAfterFade.scrollHeight
+                                : 0,
+                            fontsViewScrollHeight: fontsView
+                              ? fontsView.scrollHeight
+                              : 0,
+                            fontsViewOpacity: fontsView
+                              ? window.getComputedStyle(fontsView).opacity
+                              : "",
+                            contentCutoff: panelContentAfterFade
+                              ? panelContentAfterFade.scrollHeight >
+                                panelContentAfterFade.clientHeight
+                              : false,
+                          },
+                          timestamp: Date.now(),
+                          sessionId: "debug-session",
+                          runId: "run1",
+                          hypothesisId: "A,C",
+                        }),
+                      }
+                    ).catch(() => {});
+                    // #endregion
+                  }, 200);
+                });
+              });
+            });
+          });
+        });
+      }
+
+      // Set up theme switcher button - query from shadow root
+      if (!this.shadowRoot) return;
+      const themeSwitcher = this.shadowRoot.querySelector("#theme-switcher");
+      if (themeSwitcher) {
+        // Remove any existing listeners by cloning and replacing
+        const newThemeSwitcher = themeSwitcher.cloneNode(true);
+        themeSwitcher.parentNode.replaceChild(newThemeSwitcher, themeSwitcher);
+
+        newThemeSwitcher.addEventListener("click", (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          console.log("[CSS Inspector] Theme switcher clicked");
+          // #region agent log
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:2215",
+                message: "Theme switcher click",
+                data: {
+                  currentTheme: this.theme,
+                  panelHeight: this.inspectorPanel
+                    ? this.inspectorPanel.offsetHeight
+                    : null,
+                  isActive: this.isActive,
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "C",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
+          this.toggleTheme();
+        });
+      } else {
+        console.warn("[CSS Inspector] Theme switcher button not found");
+      }
+
+      // Reinitialize drag handle after content update
+      this.initDragHandle();
+
+      // If there's a locked element, restore its header
+      if (this.selectedElement) {
+        this.updateLockedElementHeader(this.selectedElement, true);
+      }
+    }
+
+    switchPanelToInspectorMode() {
+      if (!this.inspectorPanel) return;
+
+      // Prevent duplicate calls
+      if (this.isSwitchingMode) {
+        return;
+      }
+      this.isSwitchingMode = true;
+
+      // #region agent log
+      fetch(
+        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "content.js:2186",
+            message: "switchPanelToInspectorMode entry",
+            data: {
+              currentHeight: this.inspectorPanel.offsetHeight,
+              currentHeightStyle: this.inspectorPanel.style.height,
+            },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "A,C",
+          }),
         }
-      }, 100);
-    }
+      ).catch(() => {});
+      // #endregion
 
-    // Set up theme switcher button - query from shadow root
-    if (!this.shadowRoot) return;
-    const themeSwitcher = this.shadowRoot.querySelector("#theme-switcher");
-    if (themeSwitcher) {
-      // Remove any existing listeners by cloning and replacing
-      const newThemeSwitcher = themeSwitcher.cloneNode(true);
-      themeSwitcher.parentNode.replaceChild(newThemeSwitcher, themeSwitcher);
+      // Get website name and URL
+      const websiteName = document.title || "Untitled Page";
+      const websiteUrl = window.location.href;
 
-      newThemeSwitcher.addEventListener("click", (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        console.log("[CSS Inspector] Theme switcher clicked");
-        this.toggleTheme();
-      });
-    } else {
-      console.warn("[CSS Inspector] Theme switcher button not found");
-    }
+      // Get theme colors
+      const colors = this.getThemeColors();
 
-    // Reinitialize drag handle after content update
-    this.initDragHandle();
+      if (!this.shadowRoot) {
+        this.isSwitchingMode = false;
+        console.error("[CSS Inspector] Shadow root not found");
+        return;
+      }
+      // Preserve current height and opacity to prevent flickering during innerHTML replacement
+      const heightBeforeInnerHTML =
+        this.inspectorPanel.offsetHeight || this.inspectorPanel.scrollHeight;
+      const preservedHeight =
+        heightBeforeInnerHTML > 0 ? heightBeforeInnerHTML : null;
+      const panelContent = this.shadowRoot.querySelector("#panel-content");
+      const originalOpacity = panelContent
+        ? window.getComputedStyle(panelContent).opacity
+        : "1";
 
-    // If there's a locked element, restore its header
-    if (this.selectedElement) {
-      this.updateLockedElementHeader(this.selectedElement, true);
-    }
-  }
+      // Temporarily disable transitions to prevent flickering during DOM replacement
+      const originalTransition = this.inspectorPanel.style.transition;
+      this.inspectorPanel.style.setProperty("transition", "none", "important");
 
-  switchPanelToInspectorMode() {
-    if (!this.inspectorPanel) return;
+      // Lock height explicitly before innerHTML replacement
+      if (preservedHeight && preservedHeight > 0) {
+        this.inspectorPanel.style.setProperty(
+          "height",
+          `${preservedHeight}px`,
+          "important"
+        );
+      }
 
-    // Get website name and URL
-    const websiteName = document.title || "Untitled Page";
-    const websiteUrl = window.location.href;
+      // Set opacity to 0 before innerHTML replacement to prevent flash
+      if (panelContent) {
+        panelContent.style.setProperty("opacity", "0", "important");
+        panelContent.style.setProperty("transition", "none", "important");
+      }
 
-    // Get theme colors
-    const colors = this.getThemeColors();
-
-    if (!this.shadowRoot) {
-      console.error("[CSS Inspector] Shadow root not found");
-      return;
-    }
-    this.shadowRoot.innerHTML = `
+      this.shadowRoot.innerHTML = `
       <style>${this.getShadowDOMCSS()}</style>
       <div style="display: flex; flex-direction: column; border-bottom: 1px solid ${
         colors.border
       }; background: ${
-      colors.headerBg
-    }; border-radius: 8px 8px 0 0; flex-shrink: 0;">
+        colors.headerBg
+      }; border-radius: 8px 8px 0 0; flex-shrink: 0;">
         <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; gap: 12px; position: relative;">
           <div id="panel-drag-handle" style="cursor: move; display: flex; align-items: center; padding: 4px; border-radius: 4px; transition: background 0.2s; user-select: none; flex-shrink: 0;" onmouseover="this.style.background='${
             colors.bgHover
@@ -1761,21 +4934,21 @@ class CSSInspector {
               <button id="panel-segment-inspector" style="padding: 6px 16px; border: none; background: ${
                 colors.segmentActive
               }; color: ${
-      colors.textPrimary
-    }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 9999px; cursor: pointer; transition: all 0.2s; user-select: none; white-space: nowrap;" onclick="(function(inst){const colors=inst.getThemeColors();const overviewBtn=document.getElementById('panel-segment-overview');const inspectorBtn=document.getElementById('panel-segment-inspector');overviewBtn.style.background='transparent';overviewBtn.style.color=colors.textSecondary;inspectorBtn.style.background=colors.segmentActive;inspectorBtn.style.color=colors.textPrimary;inst.setInspectorState(true);})(window.inspectorInstance || window.inspector);">Inspector</button>
+        colors.textPrimary
+      }; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; border-radius: 9999px; cursor: pointer; transition: all 0.2s; user-select: none; white-space: nowrap;" onclick="(function(inst){const colors=inst.getThemeColors();const overviewBtn=document.getElementById('panel-segment-overview');const inspectorBtn=document.getElementById('panel-segment-inspector');overviewBtn.style.background='transparent';overviewBtn.style.color=colors.textSecondary;inspectorBtn.style.background=colors.segmentActive;inspectorBtn.style.color=colors.textPrimary;inst.setInspectorState(true);})(window.inspectorInstance || window.inspector);">Inspector</button>
       </div>
           <div style="display: flex; align-items: center; gap: 8px;">
             <button id="theme-switcher" style="background: transparent; border: none; cursor: pointer; color: ${
               colors.textSecondary
             }; padding: 4px; border-radius: 4px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;" onmouseover="this.style.background='${
-      colors.bgHover
-    }'; this.style.color='${
-      colors.textPrimary
-    }'" onmouseout="this.style.background='transparent'; this.style.color='${
-      colors.textSecondary
-    }'" title="${
-      this.theme === "dark" ? "Switch to light theme" : "Switch to dark theme"
-    }">
+        colors.bgHover
+      }'; this.style.color='${
+        colors.textPrimary
+      }'" onmouseout="this.style.background='transparent'; this.style.color='${
+        colors.textSecondary
+      }'" title="${
+        this.theme === "dark" ? "Switch to light theme" : "Switch to dark theme"
+      }">
               ${(() => {
                 const sunClipId = `sun-clip-${Date.now()}-${Math.random()
                   .toString(36)
@@ -1789,12 +4962,12 @@ class CSSInspector {
             <button id="close-inspector-panel" style="background: transparent; border: none; cursor: pointer; color: ${
               colors.textSecondary
             }; padding: 4px; border-radius: 4px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;" onmouseover="this.style.background='${
-      colors.bgHover
-    }'; this.style.color='${
-      colors.textPrimary
-    }'" onmouseout="this.style.background='transparent'; this.style.color='${
-      colors.textSecondary
-    }'" title="Close Panel">
+        colors.bgHover
+      }'; this.style.color='${
+        colors.textPrimary
+      }'" onmouseout="this.style.background='transparent'; this.style.color='${
+        colors.textSecondary
+      }'" title="Close Panel">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" style="width: 16px; height: 16px;">
                 <path fill="currentColor" d="M16.95 8.464a1 1 0 0 0-1.414-1.414L12 10.586 8.464 7.05A1 1 0 1 0 7.05 8.464L10.586 12 7.05 15.536a1 1 0 1 0 1.414 1.414L12 13.414l3.536 3.536a1 1 0 1 0 1.414-1.414L13.414 12z"/>
               </svg>
@@ -1806,13 +4979,13 @@ class CSSInspector {
           <div style="font-size: 13px; font-weight: 600; color: ${
             colors.textPrimary
           }; font-family: 'Inter', sans-serif;">${websiteName
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")}</div>
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")}</div>
           <div style="font-size: 11px; color: ${
             colors.textSecondary
           }; font-family: 'Inter', sans-serif; word-break: break-all;">${websiteUrl
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")}</div>
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")}</div>
         </div>
       </div>
       <div style="padding: 16px; flex: 1; background: ${
@@ -1833,128 +5006,280 @@ class CSSInspector {
       </div>
     `;
 
-    // Set up segmented control state
-    if (!this.shadowRoot) return;
-    const overviewBtn = this.shadowRoot.querySelector("#panel-segment-overview");
-    const inspectorBtn = this.shadowRoot.querySelector("#panel-segment-inspector");
+      // Immediately restore preserved height to prevent flickering during DOM replacement
+      if (preservedHeight && preservedHeight > 0) {
+        this.inspectorPanel.style.setProperty(
+          "height",
+          `${preservedHeight}px`,
+          "important"
+        );
+      }
 
-    if (overviewBtn && inspectorBtn) {
-      const colors = this.getThemeColors();
-      // Set initial state - Inspector is active
-      inspectorBtn.style.background = colors.segmentActive;
-      inspectorBtn.style.color = colors.textPrimary;
-      overviewBtn.style.background = "transparent";
-      overviewBtn.style.color = colors.textSecondary;
+      // #region agent log
+      fetch(
+        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "content.js:2326",
+            message: "switchPanelToInspectorMode after innerHTML",
+            data: {
+              heightBeforeInnerHTML,
+              heightAfterInnerHTML: this.inspectorPanel.offsetHeight,
+              heightStyle: this.inspectorPanel.style.height,
+              preservedHeight,
+            },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "A,C",
+          }),
+        }
+      ).catch(() => {});
+      // #endregion
 
-      // Add click handlers
-      overviewBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const colors = this.getThemeColors();
-        inspectorBtn.style.background = "transparent";
-        inspectorBtn.style.color = colors.textSecondary;
-        overviewBtn.style.background = colors.segmentActive;
-        overviewBtn.style.color = colors.textPrimary;
-        this.setInspectorState(false);
+      // After DOM settles, recalculate height dynamically based on new content
+      // Use double RAF to ensure content is fully rendered
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          // Restore transition before calling updatePanelHeight
+          this.inspectorPanel.style.setProperty(
+            "transition",
+            originalTransition || "",
+            "important"
+          );
+
+          // Restore opacity after content is ready
+          const newPanelContent =
+            this.shadowRoot.querySelector("#panel-content");
+          if (newPanelContent) {
+            newPanelContent.style.setProperty(
+              "opacity",
+              originalOpacity,
+              "important"
+            );
+            newPanelContent.style.setProperty(
+              "transition",
+              "opacity 0.15s ease-out",
+              "important"
+            );
+          }
+
+          // Recalculate height based on new content (preserved height is just for transition start)
+          this.updatePanelHeight(false, true);
+
+          // Clear switching flag after operation completes
+          this.isSwitchingMode = false;
+        });
       });
 
-      inspectorBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
+      // Set up segmented control state
+      if (!this.shadowRoot) return;
+      const overviewBtn = this.shadowRoot.querySelector(
+        "#panel-segment-overview"
+      );
+      const inspectorBtn = this.shadowRoot.querySelector(
+        "#panel-segment-inspector"
+      );
+
+      if (overviewBtn && inspectorBtn) {
         const colors = this.getThemeColors();
-        overviewBtn.style.background = "transparent";
-        overviewBtn.style.color = colors.textSecondary;
+        // Set initial state - Inspector is active
         inspectorBtn.style.background = colors.segmentActive;
         inspectorBtn.style.color = colors.textPrimary;
-        this.setInspectorState(true);
-      });
-    }
+        overviewBtn.style.background = "transparent";
+        overviewBtn.style.color = colors.textSecondary;
 
-    // Set up theme switcher button - query from shadow root
-    if (!this.shadowRoot) return;
-    const themeSwitcher = this.shadowRoot.querySelector("#theme-switcher");
-    if (themeSwitcher) {
-      // Remove any existing listeners by cloning and replacing
-      const newThemeSwitcher = themeSwitcher.cloneNode(true);
-      themeSwitcher.parentNode.replaceChild(newThemeSwitcher, themeSwitcher);
+        // Add click handlers
+        overviewBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const colors = this.getThemeColors();
+          inspectorBtn.style.background = "transparent";
+          inspectorBtn.style.color = colors.textSecondary;
+          overviewBtn.style.background = colors.segmentActive;
+          overviewBtn.style.color = colors.textPrimary;
+          this.setInspectorState(false);
+        });
 
-      newThemeSwitcher.addEventListener("click", (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        console.log("[CSS Inspector] Theme switcher clicked");
-        this.toggleTheme();
-      });
-    } else {
-      console.warn("[CSS Inspector] Theme switcher button not found");
-    }
+        inspectorBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const colors = this.getThemeColors();
+          overviewBtn.style.background = "transparent";
+          overviewBtn.style.color = colors.textSecondary;
+          inspectorBtn.style.background = colors.segmentActive;
+          inspectorBtn.style.color = colors.textPrimary;
+          this.setInspectorState(true);
+        });
+      }
 
-    // Reinitialize drag handle after content update
-    this.initDragHandle();
+      // Set up theme switcher button - query from shadow root
+      if (!this.shadowRoot) return;
+      const themeSwitcher = this.shadowRoot.querySelector("#theme-switcher");
+      if (themeSwitcher) {
+        // Remove any existing listeners by cloning and replacing
+        const newThemeSwitcher = themeSwitcher.cloneNode(true);
+        themeSwitcher.parentNode.replaceChild(newThemeSwitcher, themeSwitcher);
 
-    // If there's a locked element, restore its header
-    if (this.selectedElement) {
-      this.updateLockedElementHeader(this.selectedElement, true);
-    }
+        newThemeSwitcher.addEventListener("click", (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          console.log("[CSS Inspector] Theme switcher clicked");
+          // #region agent log
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:2215",
+                message: "Theme switcher click",
+                data: {
+                  currentTheme: this.theme,
+                  panelHeight: this.inspectorPanel
+                    ? this.inspectorPanel.offsetHeight
+                    : null,
+                  isActive: this.isActive,
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "C",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
+          this.toggleTheme();
+        });
+      } else {
+        console.warn("[CSS Inspector] Theme switcher button not found");
+      }
 
-    // Update panel height after content is rendered (will be called again by renderColorsView/renderFontsView)
-    setTimeout(() => {
-      this.updatePanelHeight();
-    }, 100);
-  }
+      // Reinitialize drag handle after content update
+      this.initDragHandle();
 
-  loadPanelStats() {
-    const colors = this.extractColors();
-    const typography = this.extractTypography();
+      // If there's a locked element, restore its header
+      if (this.selectedElement) {
+        this.updateLockedElementHeader(this.selectedElement, true);
+      }
 
-    if (!this.shadowRoot) return;
-    const colorCountEl = this.shadowRoot.querySelector("#panel-color-count");
-    const fontCountEl = this.shadowRoot.querySelector("#panel-font-count");
-
-    if (colorCountEl) colorCountEl.textContent = colors.length || "0";
-    if (fontCountEl) fontCountEl.textContent = typography.length || "0";
-
-    // Render initial colors view if in overview mode
-    if (this.inspectorPanel && !this.isInspectorMode) {
+      // Update panel height after content is rendered (will be called again by renderColorsView/renderFontsView)
       setTimeout(() => {
-        this.renderColorsView();
-      }, 0);
+        this.updatePanelHeight();
+      }, 100);
     }
-  }
 
-  renderColorsView() {
-    const colors = this.extractColors();
-    if (!this.shadowRoot) return;
-    const colorsView = this.shadowRoot.querySelector("#overview-colors-view");
-    if (!colorsView) return;
+    loadPanelStats() {
+      const colors = this.extractColors();
+      const typography = this.extractTypography();
 
-    const themeColors = this.getThemeColors();
-    const hoverBg = themeColors.bgHover;
-    const hoverBorder = themeColors.border;
+      if (!this.shadowRoot) return;
+      const colorCountEl = this.shadowRoot.querySelector("#panel-color-count");
+      const fontCountEl = this.shadowRoot.querySelector("#panel-font-count");
 
-    if (colors.length === 0) {
-      colorsView.innerHTML = `
+      if (colorCountEl) colorCountEl.textContent = colors.length || "0";
+      if (fontCountEl) fontCountEl.textContent = typography.length || "0";
+
+      // Render initial colors view if in overview mode
+      if (this.inspectorPanel && !this.isInspectorMode) {
+        setTimeout(() => {
+          this.renderColorsView();
+        }, 0);
+      }
+    }
+
+    renderColorsView() {
+      // Prevent duplicate calls
+      if (this.isRenderingColors) {
+        // #region agent log
+        fetch(
+          "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              location: "content.js:2481",
+              message: "renderColorsView blocked - already rendering",
+              data: {},
+              timestamp: Date.now(),
+              sessionId: "debug-session",
+              runId: "run1",
+              hypothesisId: "B",
+            }),
+          }
+        ).catch(() => {});
+        // #endregion
+        return;
+      }
+      this.isRenderingColors = true;
+
+      // #region agent log
+      fetch(
+        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "content.js:2471",
+            message: "renderColorsView entry",
+            data: {
+              panelHeight: this.inspectorPanel
+                ? this.inspectorPanel.offsetHeight
+                : null,
+              colorsViewDisplay: this.shadowRoot?.querySelector(
+                "#overview-colors-view"
+              )?.style.display,
+            },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "B,E",
+          }),
+        }
+      ).catch(() => {});
+      // #endregion
+      const colors = this.extractColors();
+      if (!this.shadowRoot) {
+        this.isRenderingColors = false;
+        return;
+      }
+      const colorsView = this.shadowRoot.querySelector("#overview-colors-view");
+      if (!colorsView) {
+        this.isRenderingColors = false;
+        return;
+      }
+
+      const themeColors = this.getThemeColors();
+      const hoverBg = themeColors.bgHover;
+      const hoverBorder = themeColors.border;
+
+      if (colors.length === 0) {
+        colorsView.innerHTML = `
         <div style="text-align: center; padding: 40px 20px; color: ${themeColors.textSecondary}; font-family: 'Inter', sans-serif;">
           <p style="font-size: 14px;">No colors found</p>
         </div>
       `;
-      return;
-    }
+        this.isRenderingColors = false;
+        return;
+      }
 
-    // Create color grid
-    const colorGrid = colors
-      .map((color) => {
-        return `
+      // Create color grid
+      const colorGrid = colors
+        .map((color) => {
+          return `
           <div style="background: ${
             themeColors.bgSecondary
           }; border: 1px solid ${
-          themeColors.border
-        }; border-radius: 12px; overflow: hidden; cursor: pointer; transition: all 0.2s;" 
+            themeColors.border
+          }; border-radius: 12px; overflow: hidden; cursor: pointer; transition: all 0.2s;" 
                class="color-card-squircle"
                onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}'" 
                onmouseout="this.style.background='${
                  themeColors.bgSecondary
                }'; this.style.borderColor='${themeColors.border}'"
                data-copy-value="${color.hex}" data-copy-message="${
-          color.hex
-        } copied">
+            color.hex
+          } copied">
             <div style="width: 100%; height: 80px; background: ${
               color.hex
             }; border-bottom: 1px solid ${themeColors.border};"></div>
@@ -1962,8 +5287,8 @@ class CSSInspector {
               <div style="font-size: 14px; font-weight: 600; color: ${
                 themeColors.textPrimary
               }; font-family: 'Courier New', monospace; margin-bottom: 4px;">${
-          color.hex
-        }</div>
+            color.hex
+          }</div>
               ${
                 color.categories && color.categories.length > 0
                   ? `
@@ -1982,444 +5307,564 @@ class CSSInspector {
             </div>
           </div>
         `;
-      })
-      .join("");
+        })
+        .join("");
 
-    colorsView.innerHTML = `
+      colorsView.innerHTML = `
       <div style="margin-bottom: 12px;">
         <div style="font-size: 13px; font-weight: 600; color: ${
           themeColors.textPrimary
         }; font-family: 'Inter', sans-serif;">${colors.length} ${
-      colors.length === 1 ? "color" : "colors"
-    }</div>
+        colors.length === 1 ? "color" : "colors"
+      }</div>
       </div>
       <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px;">
         ${colorGrid}
       </div>
     `;
 
-    // Update panel height after content is rendered - use double RAF to ensure layout is complete
-    requestAnimationFrame(() => {
+      // #region agent log
+      fetch(
+        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "content.js:2528",
+            message: "renderColorsView after innerHTML",
+            data: {
+              panelHeight: this.inspectorPanel
+                ? this.inspectorPanel.offsetHeight
+                : null,
+              colorsViewScrollHeight: colorsView.scrollHeight,
+              colorsViewOffsetHeight: colorsView.offsetHeight,
+              colorsViewDisplay: colorsView.style.display,
+              colorsViewOpacity: colorsView.style.opacity,
+            },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "B,E",
+          }),
+        }
+      ).catch(() => {});
+      // #endregion
+
+      // Update panel height after content is rendered - use double RAF to ensure layout is complete
+      // Skip updatePanelHeight if view is hidden (opacity: 0) - tab handlers will handle height manually
       requestAnimationFrame(() => {
-        this.updatePanelHeight();
-
-        // Apply squircle clip-path to color cards
-        const colorCards = colorsView.querySelectorAll(".color-card-squircle");
-        colorCards.forEach((card) => {
-          const rect = card.getBoundingClientRect();
-          if (rect.width > 0 && rect.height > 0) {
-            const path = this.createSquircleClipPath(rect.width, rect.height, 12);
-            card.style.clipPath = `path('${path}')`;
+        requestAnimationFrame(() => {
+          // Check if view is hidden (opacity: 0) - if so, skip updatePanelHeight
+          // Tab handlers will manually calculate and animate height during transitions
+          const isHidden =
+            colorsView.style.opacity === "0" ||
+            (this.shadowRoot &&
+              window.getComputedStyle(colorsView).opacity === "0");
+          if (!isHidden) {
+            this.updatePanelHeight(false, true);
           }
-        });
-      });
-    });
 
-    // Add event listeners for copy functionality
-    setTimeout(() => {
-      const copyElements = colorsView.querySelectorAll("[data-copy-value]");
-      copyElements.forEach((el) => {
-        el.addEventListener("click", async (e) => {
-          e.stopPropagation();
-          const value = el.getAttribute("data-copy-value");
-          try {
-            await navigator.clipboard.writeText(value);
-            if (this.showToast) {
-              this.showToast(`${value} copied`, el);
-            }
-          } catch (err) {
-            console.error("Failed to copy:", err);
-          }
-        });
-      });
-    }, 0);
-  }
-
-  // Parse Google Fonts link tags to extract actual font names being loaded
-  parseGoogleFontsFromLinks() {
-    const fonts = new Set();
-    try {
-      const links = document.querySelectorAll(
-        'link[href*="fonts.googleapis.com"]'
-      );
-      links.forEach((link) => {
-        try {
-          const url = new URL(link.href);
-          // Handle both css and css2 API formats
-          const families = url.searchParams.getAll("family");
-          families.forEach((family) => {
-            // Extract font name (before : or &)
-            // Examples: "EB+Garamond:wght@400;600" or "Roboto:wght@400;700"
-            const fontName = family
-              .split(":")[0]
-              .split("&")[0]
-              .replace(/\+/g, " ")
-              .trim();
-            if (fontName) {
-              fonts.add(fontName);
+          // Apply squircle clip-path to color cards
+          const colorCards = colorsView.querySelectorAll(
+            ".color-card-squircle"
+          );
+          colorCards.forEach((card) => {
+            const rect = card.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+              const path = this.createSquircleClipPath(
+                rect.width,
+                rect.height,
+                12
+              );
+              card.style.clipPath = `path('${path}')`;
             }
           });
-        } catch (e) {
-          // Invalid URL, skip
-        }
+
+          // Clear rendering flag after render completes
+          this.isRenderingColors = false;
+        });
       });
-    } catch (e) {
-      // Error parsing links
+
+      // Add event listeners for copy functionality
+      setTimeout(() => {
+        const copyElements = colorsView.querySelectorAll("[data-copy-value]");
+        copyElements.forEach((el) => {
+          el.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const value = el.getAttribute("data-copy-value");
+            try {
+              await navigator.clipboard.writeText(value);
+              if (this.showToast) {
+                this.showToast(`${value} copied`, el);
+              }
+            } catch (err) {
+              console.error("Failed to copy:", err);
+            }
+          });
+        });
+      }, 0);
     }
-    return fonts;
-  }
 
-  // Normalize font name for comparison (hyphens/underscores to spaces, lowercase)
-  normalizeFontNameForComparison(fontName) {
-    return fontName
-      .replace(/['"]/g, "")
-      .trim()
-      .toLowerCase()
-      .replace(/[-_]/g, " ");
-  }
-
-  isFontDefined(fontFamily) {
-    const cleanFontName = fontFamily.replace(/['"]/g, "").trim();
-    
-    try {
-      const styleSheets = Array.from(document.styleSheets);
-      for (const sheet of styleSheets) {
-        try {
-          const rules = Array.from(sheet.cssRules || []);
-          for (const rule of rules) {
-            if (rule.type === CSSRule.FONT_FACE_RULE || rule instanceof CSSFontFaceRule) {
-              const ruleFontFamily = rule.style.fontFamily
-                .replace(/['"]/g, "")
+    // Parse Google Fonts link tags to extract actual font names being loaded
+    parseGoogleFontsFromLinks() {
+      const fonts = new Set();
+      try {
+        const links = document.querySelectorAll(
+          'link[href*="fonts.googleapis.com"]'
+        );
+        links.forEach((link) => {
+          try {
+            const url = new URL(link.href);
+            // Handle both css and css2 API formats
+            const families = url.searchParams.getAll("family");
+            families.forEach((family) => {
+              // Extract font name (before : or &)
+              // Examples: "EB+Garamond:wght@400;600" or "Roboto:wght@400;700"
+              const fontName = family
+                .split(":")[0]
+                .split("&")[0]
+                .replace(/\+/g, " ")
                 .trim();
-              if (this.normalizeFontNameForComparison(ruleFontFamily) === 
-                  this.normalizeFontNameForComparison(cleanFontName)) {
-                return true;
+              if (fontName) {
+                fonts.add(fontName);
+              }
+            });
+          } catch (e) {
+            // Invalid URL, skip
+          }
+        });
+      } catch (e) {
+        // Error parsing links
+      }
+      return fonts;
+    }
+
+    // Normalize font name for comparison (hyphens/underscores to spaces, lowercase)
+    normalizeFontNameForComparison(fontName) {
+      return fontName
+        .replace(/['"]/g, "")
+        .trim()
+        .toLowerCase()
+        .replace(/[-_]/g, " ");
+    }
+
+    isFontDefined(fontFamily) {
+      const cleanFontName = fontFamily.replace(/['"]/g, "").trim();
+
+      try {
+        const styleSheets = Array.from(document.styleSheets);
+        for (const sheet of styleSheets) {
+          try {
+            const rules = Array.from(sheet.cssRules || []);
+            for (const rule of rules) {
+              if (
+                rule.type === CSSRule.FONT_FACE_RULE ||
+                rule instanceof CSSFontFaceRule
+              ) {
+                const ruleFontFamily = rule.style.fontFamily
+                  .replace(/['"]/g, "")
+                  .trim();
+                if (
+                  this.normalizeFontNameForComparison(ruleFontFamily) ===
+                  this.normalizeFontNameForComparison(cleanFontName)
+                ) {
+                  return true;
+                }
               }
             }
+          } catch (e) {
+            // Cross-origin stylesheet, skip
+            continue;
           }
-        } catch (e) {
-          // Cross-origin stylesheet, skip
-          continue;
         }
+      } catch (e) {
+        // Error accessing stylesheets
       }
-    } catch (e) {
-      // Error accessing stylesheets
+      return false;
     }
-    return false;
-  }
 
-  // Detect which font is actually being rendered by measuring text width
-  getActualRenderedFont(element, fontFamilyStack) {
-    if (!element || !element.textContent || !element.textContent.trim()) {
+    // Detect which font is actually being rendered by measuring text width
+    getActualRenderedFont(element, fontFamilyStack) {
+      if (!element || !element.textContent || !element.textContent.trim()) {
+        return null;
+      }
+
+      try {
+        // Use a good test string that has varying character widths
+        const testText =
+          element.textContent.trim().substring(0, 30) || "mmmmmmmmmmlli";
+        if (testText.length < 5) return null; // Need enough text for accurate measurement
+
+        const styles = this.getCachedComputedStyle(element);
+        const fontSize = styles.fontSize || "16px";
+        const fontWeight = styles.fontWeight || "400";
+        const fontStyle = styles.fontStyle || "normal";
+
+        // Create a canvas to measure text width
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return null;
+
+        // Get the actual rendered width from the element by cloning its styles
+        const tempSpan = document.createElement("span");
+        tempSpan.style.position = "absolute";
+        tempSpan.style.visibility = "hidden";
+        tempSpan.style.whiteSpace = "nowrap";
+        tempSpan.style.fontSize = fontSize;
+        tempSpan.style.fontWeight = fontWeight;
+        tempSpan.style.fontStyle = fontStyle;
+        tempSpan.style.fontFamily = styles.fontFamily; // Use the full font stack
+        tempSpan.textContent = testText;
+        document.body.appendChild(tempSpan);
+        const actualWidth = tempSpan.offsetWidth;
+        document.body.removeChild(tempSpan);
+
+        if (actualWidth === 0) return null;
+
+        // Test each font in the stack to see which one matches the actual width
+        // We'll test in reverse order (fallback fonts first) to find the actual rendered one
+        for (let i = 0; i < fontFamilyStack.length; i++) {
+          const candidate = fontFamilyStack[i].replace(/['"]/g, "").trim();
+
+          if (!candidate) continue;
+
+          // Skip generic fonts for testing
+          const genericFonts = [
+            "serif",
+            "sans-serif",
+            "monospace",
+            "cursive",
+            "fantasy",
+            "initial",
+            "inherit",
+          ];
+          if (genericFonts.includes(candidate.toLowerCase())) {
+            continue;
+          }
+
+          // Set the font and measure
+          ctx.font = `${fontStyle} ${fontWeight} ${fontSize} "${candidate}"`;
+          const testWidth = ctx.measureText(testText).width;
+
+          // If widths match (within 2px tolerance for rounding), this is likely the rendered font
+          if (Math.abs(testWidth - actualWidth) <= 2) {
+            return candidate;
+          }
+        }
+      } catch (e) {
+        // Fallback if canvas method fails
+        console.debug("[CSS Inspector] Font detection failed:", e);
+      }
+
       return null;
     }
 
-    try {
-      // Use a good test string that has varying character widths
-      const testText = element.textContent.trim().substring(0, 30) || "mmmmmmmmmmlli";
-      if (testText.length < 5) return null; // Need enough text for accurate measurement
-      
-      const styles = this.getCachedComputedStyle(element);
-      const fontSize = styles.fontSize || "16px";
-      const fontWeight = styles.fontWeight || "400";
-      const fontStyle = styles.fontStyle || "normal";
-
-      // Create a canvas to measure text width
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return null;
-
-      // Get the actual rendered width from the element by cloning its styles
-      const tempSpan = document.createElement("span");
-      tempSpan.style.position = "absolute";
-      tempSpan.style.visibility = "hidden";
-      tempSpan.style.whiteSpace = "nowrap";
-      tempSpan.style.fontSize = fontSize;
-      tempSpan.style.fontWeight = fontWeight;
-      tempSpan.style.fontStyle = fontStyle;
-      tempSpan.style.fontFamily = styles.fontFamily; // Use the full font stack
-      tempSpan.textContent = testText;
-      document.body.appendChild(tempSpan);
-      const actualWidth = tempSpan.offsetWidth;
-      document.body.removeChild(tempSpan);
-
-      if (actualWidth === 0) return null;
-
-      // Test each font in the stack to see which one matches the actual width
-      // We'll test in reverse order (fallback fonts first) to find the actual rendered one
-      for (let i = 0; i < fontFamilyStack.length; i++) {
-        const candidate = fontFamilyStack[i]
-          .replace(/['"]/g, "")
-          .trim();
-        
-        if (!candidate) continue;
-
-        // Skip generic fonts for testing
-        const genericFonts = ["serif", "sans-serif", "monospace", "cursive", "fantasy", "initial", "inherit"];
-        if (genericFonts.includes(candidate.toLowerCase())) {
-          continue;
-        }
-
-        // Set the font and measure
-        ctx.font = `${fontStyle} ${fontWeight} ${fontSize} "${candidate}"`;
-        const testWidth = ctx.measureText(testText).width;
-
-        // If widths match (within 2px tolerance for rounding), this is likely the rendered font
-        if (Math.abs(testWidth - actualWidth) <= 2) {
-          return candidate;
-        }
-      }
-    } catch (e) {
-      // Fallback if canvas method fails
-      console.debug("[CSS Inspector] Font detection failed:", e);
-    }
-
-    return null;
-  }
-
-  isElementVisible(element, styles, rect) {
-    // Basic visibility checks
-    if (
-      styles.display === "none" ||
-      styles.visibility === "hidden" ||
-      styles.opacity === "0" ||
-      rect.width === 0 ||
-      rect.height === 0
-    ) {
-      return false;
-    }
-
-    // Check if element is positioned off-screen (common way to hide elements)
-    const isOffScreen =
-      rect.top + rect.height < 0 ||
-      rect.left + rect.width < 0 ||
-      rect.top > window.innerHeight ||
-      rect.left > window.innerWidth;
-
-    if (isOffScreen) {
-      return false;
-    }
-
-    // Check if element has transform that makes it invisible
-    const transform = styles.transform;
-    if (transform && transform !== "none") {
-      // Check for scale(0) or translate that moves it far off-screen
-      if (transform.includes("scale(0)") || transform.includes("scaleX(0)") || transform.includes("scaleY(0)")) {
-        return false;
-      }
-    }
-
-    // Check if element is inside a hidden container
-    let parent = element.parentElement;
-    let depth = 0;
-    while (parent && depth < 10) {
-      const parentStyles = window.getComputedStyle(parent);
-      const parentRect = parent.getBoundingClientRect();
-      
+    isElementVisible(element, styles, rect) {
+      // Basic visibility checks
       if (
-        parentStyles.display === "none" ||
-        parentStyles.visibility === "hidden" ||
-        parentStyles.opacity === "0" ||
-        parentRect.width === 0 ||
-        parentRect.height === 0
+        styles.display === "none" ||
+        styles.visibility === "hidden" ||
+        styles.opacity === "0" ||
+        rect.width === 0 ||
+        rect.height === 0
       ) {
         return false;
       }
-      
-      // Check if parent has overflow hidden and element is completely outside parent bounds
-      if (
-        (parentStyles.overflow === "hidden" || 
-         parentStyles.overflowX === "hidden" || 
-         parentStyles.overflowY === "hidden") &&
-        (rect.bottom < parentRect.top ||
-         rect.top > parentRect.bottom ||
-         rect.right < parentRect.left ||
-         rect.left > parentRect.right)
-      ) {
+
+      // Check if element is positioned off-screen (common way to hide elements)
+      const isOffScreen =
+        rect.top + rect.height < 0 ||
+        rect.left + rect.width < 0 ||
+        rect.top > window.innerHeight ||
+        rect.left > window.innerWidth;
+
+      if (isOffScreen) {
         return false;
       }
-      
-      parent = parent.parentElement;
-      depth++;
+
+      // Check if element has transform that makes it invisible
+      const transform = styles.transform;
+      if (transform && transform !== "none") {
+        // Check for scale(0) or translate that moves it far off-screen
+        if (
+          transform.includes("scale(0)") ||
+          transform.includes("scaleX(0)") ||
+          transform.includes("scaleY(0)")
+        ) {
+          return false;
+        }
+      }
+
+      // Check if element is inside a hidden container
+      let parent = element.parentElement;
+      let depth = 0;
+      while (parent && depth < 10) {
+        const parentStyles = window.getComputedStyle(parent);
+        const parentRect = parent.getBoundingClientRect();
+
+        if (
+          parentStyles.display === "none" ||
+          parentStyles.visibility === "hidden" ||
+          parentStyles.opacity === "0" ||
+          parentRect.width === 0 ||
+          parentRect.height === 0
+        ) {
+          return false;
+        }
+
+        // Check if parent has overflow hidden and element is completely outside parent bounds
+        if (
+          (parentStyles.overflow === "hidden" ||
+            parentStyles.overflowX === "hidden" ||
+            parentStyles.overflowY === "hidden") &&
+          (rect.bottom < parentRect.top ||
+            rect.top > parentRect.bottom ||
+            rect.right < parentRect.left ||
+            rect.left > parentRect.right)
+        ) {
+          return false;
+        }
+
+        parent = parent.parentElement;
+        depth++;
+      }
+
+      return true;
     }
 
-    return true;
-  }
+    getFontSourceUrl(fontFamily) {
+      const cleanFontName = fontFamily.replace(/['"]/g, "").trim();
+      const originalFontName = fontFamily.replace(/['"]/g, "").trim();
 
-  getFontSourceUrl(fontFamily) {
-    const cleanFontName = fontFamily.replace(/['"]/g, "").trim();
-    const originalFontName = fontFamily.replace(/['"]/g, "").trim();
+      // Parse Google Fonts from link tags (cache this for performance)
+      if (!this._googleFontsCache) {
+        this._googleFontsCache = this.parseGoogleFontsFromLinks();
+      }
+      const googleFontsSet = this._googleFontsCache;
 
-    // Parse Google Fonts from link tags (cache this for performance)
-    if (!this._googleFontsCache) {
-      this._googleFontsCache = this.parseGoogleFontsFromLinks();
-    }
-    const googleFontsSet = this._googleFontsCache;
+      // Check for Typekit/Adobe Fonts scripts
+      const hasTypekit =
+        document.querySelectorAll('script[src*="use.typekit.net"]').length > 0;
+      const hasAdobeFonts =
+        document.querySelectorAll('link[href*="fonts.adobe.com"]').length > 0;
 
-    // Check for Typekit/Adobe Fonts scripts
-    const hasTypekit =
-      document.querySelectorAll('script[src*="use.typekit.net"]').length > 0;
-    const hasAdobeFonts =
-      document.querySelectorAll('link[href*="fonts.adobe.com"]').length > 0;
+      // Check @font-face rules to find where font is loaded from
+      const styleSheets = Array.from(document.styleSheets);
+      let fontSource = null;
+      let detectedSourceType = null; // 'google' or 'adobe'
 
-    // Check @font-face rules to find where font is loaded from
-    const styleSheets = Array.from(document.styleSheets);
-    let fontSource = null;
-    let detectedSourceType = null; // 'google' or 'adobe'
+      try {
+        for (const sheet of styleSheets) {
+          try {
+            const rules = Array.from(sheet.cssRules || []);
+            for (const rule of rules) {
+              if (rule instanceof CSSFontFaceRule) {
+                const ruleFontFamily = rule.style.fontFamily
+                  .replace(/['"]/g, "")
+                  .trim();
+                // Normalize both names for comparison (handles hyphens vs spaces)
+                const ruleFontNormalized =
+                  this.normalizeFontNameForComparison(ruleFontFamily);
+                const cleanFontNormalized =
+                  this.normalizeFontNameForComparison(cleanFontName);
 
-    try {
-      for (const sheet of styleSheets) {
-        try {
-          const rules = Array.from(sheet.cssRules || []);
-          for (const rule of rules) {
-            if (rule instanceof CSSFontFaceRule) {
-              const ruleFontFamily = rule.style.fontFamily
-                .replace(/['"]/g, "")
-                .trim();
-              // Normalize both names for comparison (handles hyphens vs spaces)
-              const ruleFontNormalized =
-                this.normalizeFontNameForComparison(ruleFontFamily);
-              const cleanFontNormalized =
-                this.normalizeFontNameForComparison(cleanFontName);
+                if (
+                  ruleFontNormalized === cleanFontNormalized ||
+                  ruleFontNormalized.includes(cleanFontNormalized) ||
+                  cleanFontNormalized.includes(ruleFontNormalized)
+                ) {
+                  const src = rule.style.src;
+                  if (src) {
+                    // Handle multiple URLs in src (comma-separated fallbacks)
+                    const urlMatches = src.match(/url\(['"]?([^'"]+)['"]?\)/g);
+                    if (urlMatches) {
+                      for (const urlMatch of urlMatches) {
+                        const url = urlMatch.match(
+                          /url\(['"]?([^'"]+)['"]?\)/
+                        )[1];
 
-              if (
-                ruleFontNormalized === cleanFontNormalized ||
-                ruleFontNormalized.includes(cleanFontNormalized) ||
-                cleanFontNormalized.includes(ruleFontNormalized)
-              ) {
-                const src = rule.style.src;
-                if (src) {
-                  // Handle multiple URLs in src (comma-separated fallbacks)
-                  const urlMatches = src.match(/url\(['"]?([^'"]+)['"]?\)/g);
-                  if (urlMatches) {
-                    for (const urlMatch of urlMatches) {
-                      const url = urlMatch.match(
-                        /url\(['"]?([^'"]+)['"]?\)/
-                      )[1];
-
-                      // Determine source type from URL
-                      if (
-                        url.includes("fonts.gstatic.com") ||
-                        url.includes("fonts.googleapis.com")
-                      ) {
-                        detectedSourceType = "google";
-                        break;
-                      } else if (
-                        url.includes("use.typekit.net") ||
-                        url.includes("fonts.adobe.com") ||
-                        url.includes("adobe.com")
-                      ) {
-                        detectedSourceType = "adobe";
-                        break;
+                        // Determine source type from URL
+                        if (
+                          url.includes("fonts.gstatic.com") ||
+                          url.includes("fonts.googleapis.com")
+                        ) {
+                          detectedSourceType = "google";
+                          break;
+                        } else if (
+                          url.includes("use.typekit.net") ||
+                          url.includes("fonts.adobe.com") ||
+                          url.includes("adobe.com")
+                        ) {
+                          detectedSourceType = "adobe";
+                          break;
+                        }
                       }
+                      if (detectedSourceType) break;
                     }
-                    if (detectedSourceType) break;
                   }
                 }
               }
             }
+            if (detectedSourceType) break;
+          } catch (e) {
+            // Cross-origin stylesheet, skip
+            continue;
           }
-          if (detectedSourceType) break;
-        } catch (e) {
-          // Cross-origin stylesheet, skip
-          continue;
         }
+      } catch (e) {
+        // Error accessing stylesheets
       }
-    } catch (e) {
-      // Error accessing stylesheets
+
+      // Construct URL based on detected source type
+      if (detectedSourceType === "google") {
+        // Normalize font name for comparison (hyphens/spaces)
+        const fontNameNormalized =
+          this.normalizeFontNameForComparison(cleanFontName);
+
+        // Check if font matches any in Google Fonts set (with normalized comparison)
+        const isInGoogleFonts = Array.from(googleFontsSet).some((font) => {
+          const googleFontNormalized =
+            this.normalizeFontNameForComparison(font);
+          return googleFontNormalized === fontNameNormalized;
+        });
+
+        if (isInGoogleFonts) {
+          // Find the exact font name from the set (preserve casing from link tag)
+          const exactFontName =
+            Array.from(googleFontsSet).find((font) => {
+              const googleFontNormalized =
+                this.normalizeFontNameForComparison(font);
+              return googleFontNormalized === fontNameNormalized;
+            }) || originalFontName;
+
+          const cleanName = exactFontName.replace(/\s+/g, "+");
+          fontSource = `https://fonts.google.com/specimen/${cleanName}`;
+        }
+      } else if (detectedSourceType === "adobe") {
+        // Adobe Fonts - construct URL
+        // Remove common suffixes like "pro", "std", etc. for URL
+        let baseName = cleanFontName.toLowerCase();
+        baseName = baseName.replace(/\s+(pro|std|display|text)$/i, "");
+        const cleanName = baseName.replace(/\s+/g, "-");
+        fontSource = `https://fonts.adobe.com/fonts/${cleanName}`;
+      } else if (hasTypekit || hasAdobeFonts) {
+        // If Typekit/Adobe is present but @font-face detection didn't work,
+        // try to match font name and assume it's from Adobe
+        // This handles cases where @font-face rules aren't accessible (cross-origin, etc.)
+        detectedSourceType = "adobe";
+        let baseName = cleanFontName.toLowerCase();
+        baseName = baseName.replace(/\s+(pro|std|display|text)$/i, "");
+        const cleanName = baseName.replace(/\s+/g, "-");
+        fontSource = `https://fonts.adobe.com/fonts/${cleanName}`;
+      }
+
+      // Return object with url and source type, or null if no source found
+      return fontSource
+        ? { url: fontSource, source: detectedSourceType }
+        : null;
     }
 
-    // Construct URL based on detected source type
-    if (detectedSourceType === "google") {
-      // Normalize font name for comparison (hyphens/spaces)
-      const fontNameNormalized =
-        this.normalizeFontNameForComparison(cleanFontName);
-
-      // Check if font matches any in Google Fonts set (with normalized comparison)
-      const isInGoogleFonts = Array.from(googleFontsSet).some((font) => {
-        const googleFontNormalized = this.normalizeFontNameForComparison(font);
-        return googleFontNormalized === fontNameNormalized;
-      });
-
-      if (isInGoogleFonts) {
-        // Find the exact font name from the set (preserve casing from link tag)
-        const exactFontName =
-          Array.from(googleFontsSet).find((font) => {
-            const googleFontNormalized =
-              this.normalizeFontNameForComparison(font);
-            return googleFontNormalized === fontNameNormalized;
-          }) || originalFontName;
-
-        const cleanName = exactFontName.replace(/\s+/g, "+");
-        fontSource = `https://fonts.google.com/specimen/${cleanName}`;
+    renderFontsView() {
+      // Prevent duplicate calls
+      if (this.isRenderingFonts) {
+        // #region agent log
+        fetch(
+          "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              location: "content.js:2935",
+              message: "renderFontsView blocked - already rendering",
+              data: {},
+              timestamp: Date.now(),
+              sessionId: "debug-session",
+              runId: "run1",
+              hypothesisId: "B",
+            }),
+          }
+        ).catch(() => {});
+        // #endregion
+        return;
       }
-    } else if (detectedSourceType === "adobe") {
-      // Adobe Fonts - construct URL
-      // Remove common suffixes like "pro", "std", etc. for URL
-      let baseName = cleanFontName.toLowerCase();
-      baseName = baseName.replace(/\s+(pro|std|display|text)$/i, "");
-      const cleanName = baseName.replace(/\s+/g, "-");
-      fontSource = `https://fonts.adobe.com/fonts/${cleanName}`;
-    } else if (hasTypekit || hasAdobeFonts) {
-      // If Typekit/Adobe is present but @font-face detection didn't work,
-      // try to match font name and assume it's from Adobe
-      // This handles cases where @font-face rules aren't accessible (cross-origin, etc.)
-      detectedSourceType = "adobe";
-      let baseName = cleanFontName.toLowerCase();
-      baseName = baseName.replace(/\s+(pro|std|display|text)$/i, "");
-      const cleanName = baseName.replace(/\s+/g, "-");
-      fontSource = `https://fonts.adobe.com/fonts/${cleanName}`;
-    }
+      this.isRenderingFonts = true;
 
-    // Return object with url and source type, or null if no source found
-    return fontSource ? { url: fontSource, source: detectedSourceType } : null;
-  }
+      // #region agent log
+      fetch(
+        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "content.js:2925",
+            message: "renderFontsView entry",
+            data: {
+              panelHeight: this.inspectorPanel
+                ? this.inspectorPanel.offsetHeight
+                : null,
+              fontsViewDisplay: this.shadowRoot?.querySelector(
+                "#overview-fonts-view"
+              )?.style.display,
+            },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "B,E",
+          }),
+        }
+      ).catch(() => {});
+      // #endregion
+      const fonts = this.extractTypography();
+      if (!this.shadowRoot) {
+        this.isRenderingFonts = false;
+        return;
+      }
+      const fontsView = this.shadowRoot.querySelector("#overview-fonts-view");
+      if (!fontsView) {
+        this.isRenderingFonts = false;
+        return;
+      }
 
-  renderFontsView() {
-    const fonts = this.extractTypography();
-    if (!this.shadowRoot) return;
-    const fontsView = this.shadowRoot.querySelector("#overview-fonts-view");
-    if (!fontsView) return;
+      const themeColors = this.getThemeColors();
 
-    const themeColors = this.getThemeColors();
-
-    if (fonts.length === 0) {
-      fontsView.innerHTML = `
+      if (fonts.length === 0) {
+        fontsView.innerHTML = `
         <div style="text-align: center; padding: 40px 20px; color: ${themeColors.textSecondary}; font-family: 'Inter', sans-serif;">
           <p style="font-size: 14px;">No fonts found</p>
         </div>
       `;
-      return;
-    }
+        this.isRenderingFonts = false;
+        return;
+      }
 
-    // Create font list
-    const fontList = fonts
-      .map((font, index) => {
-        // Determine usage label (Primary, Secondary, Tertiary)
-        let label =
-          index === 0
-            ? "Primary"
-            : index === 1
-            ? "Secondary"
-            : index === 2
-            ? "Tertiary"
-            : "";
+      // Create font list
+      const fontList = fonts
+        .map((font, index) => {
+          // Determine usage label (Primary, Secondary, Tertiary)
+          let label =
+            index === 0
+              ? "Primary"
+              : index === 1
+              ? "Secondary"
+              : index === 2
+              ? "Tertiary"
+              : "";
 
-        // Check if font is a display font (maxFontSize > 60px)
-        const isDisplayFont = font.maxFontSize > 60;
-        if (isDisplayFont) {
-          // Add Display label (can be combined with Primary/Secondary/Tertiary)
-          label = label ? `${label} • Display` : "Display";
-        }
+          // Check if font is a display font (maxFontSize > 60px)
+          const isDisplayFont = font.maxFontSize > 60;
+          if (isDisplayFont) {
+            // Add Display label (can be combined with Primary/Secondary/Tertiary)
+            label = label ? `${label} • Display` : "Display";
+          }
 
-        const fontSourceUrl = this.getFontSourceUrl(font.fontFamily);
+          const fontSourceUrl = this.getFontSourceUrl(font.fontFamily);
 
-        return `
+          return `
           <div style="background: ${
             themeColors.bgSecondary
           }; border: 1px solid ${
-          themeColors.border
-        }; border-radius: 12px; padding: 16px; margin-bottom: 12px;"
+            themeColors.border
+          }; border-radius: 12px; padding: 16px; margin-bottom: 12px;"
                class="font-card-squircle">
             <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
               ${
@@ -2430,8 +5875,8 @@ class CSSInspector {
               <div style="font-family: ${
                 font.fontFamily
               }; font-size: 48px; line-height: 1; color: ${
-          themeColors.textPrimary
-        }; font-weight: 400; text-align: center;">
+            themeColors.textPrimary
+          }; font-weight: 400; text-align: center;">
                   Ag
                 </div>
                 <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; margin-top: 4px;">
@@ -2471,62 +5916,105 @@ class CSSInspector {
             </div>
           </div>
         `;
-      })
-      .join("");
+        })
+        .join("");
 
-    fontsView.innerHTML = `
+      fontsView.innerHTML = `
       <div style="margin-bottom: 12px;">
         <div style="font-size: 13px; font-weight: 600; color: ${
           themeColors.textPrimary
         }; font-family: 'Inter', sans-serif;">${fonts.length} ${
-      fonts.length === 1 ? "font" : "fonts"
-    }</div>
+        fonts.length === 1 ? "font" : "fonts"
+      }</div>
       </div>
       <div>
         ${fontList}
       </div>
     `;
 
-    // Update panel height after content is rendered - use double RAF to ensure layout is complete
-    requestAnimationFrame(() => {
+      // #region agent log
+      fetch(
+        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "content.js:3043",
+            message: "renderFontsView after innerHTML",
+            data: {
+              panelHeight: this.inspectorPanel
+                ? this.inspectorPanel.offsetHeight
+                : null,
+              fontsViewScrollHeight: fontsView.scrollHeight,
+              fontsViewOffsetHeight: fontsView.offsetHeight,
+              fontsViewDisplay: fontsView.style.display,
+              fontsViewOpacity: fontsView.style.opacity,
+            },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "B,E",
+          }),
+        }
+      ).catch(() => {});
+      // #endregion
+
+      // Update panel height after content is rendered - use double RAF to ensure layout is complete
+      // Skip updatePanelHeight if view is hidden (opacity: 0) - tab handlers will handle height manually
       requestAnimationFrame(() => {
-        this.updatePanelHeight();
-
-        // Apply squircle clip-path to font cards
-        const fontCards = fontsView.querySelectorAll(".font-card-squircle");
-        fontCards.forEach((card) => {
-          const rect = card.getBoundingClientRect();
-          if (rect.width > 0 && rect.height > 0) {
-            const path = this.createSquircleClipPath(rect.width, rect.height, 12);
-            card.style.clipPath = `path('${path}')`;
+        requestAnimationFrame(() => {
+          // Check if view is hidden (opacity: 0) - if so, skip updatePanelHeight
+          // Tab handlers will manually calculate and animate height during transitions
+          const isHidden =
+            fontsView.style.opacity === "0" ||
+            (this.shadowRoot &&
+              window.getComputedStyle(fontsView).opacity === "0");
+          if (!isHidden) {
+            this.updatePanelHeight(false, true);
           }
-        });
-      });
-    });
 
-    // Add event listeners for copy functionality
-    setTimeout(() => {
-      const copyElements = fontsView.querySelectorAll("[data-copy-value]");
-      copyElements.forEach((el) => {
-        el.addEventListener("click", async (e) => {
-          e.stopPropagation();
-          const value = el.getAttribute("data-copy-value");
-          const message = el.getAttribute("data-copy-message") || "Copied";
-          try {
-            await navigator.clipboard.writeText(value);
-            if (this.showToast) {
-              this.showToast(message, el);
+          // Apply squircle clip-path to font cards
+          const fontCards = fontsView.querySelectorAll(".font-card-squircle");
+          fontCards.forEach((card) => {
+            const rect = card.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+              const path = this.createSquircleClipPath(
+                rect.width,
+                rect.height,
+                12
+              );
+              card.style.clipPath = `path('${path}')`;
             }
-          } catch (err) {
-            console.error("Failed to copy:", err);
-          }
+          });
+
+          // Clear rendering flag after render completes
+          this.isRenderingFonts = false;
         });
       });
-    }, 0);
-  }
 
-  openColorsWindow(colors) {
-    const html = `
+      // Add event listeners for copy functionality
+      setTimeout(() => {
+        const copyElements = fontsView.querySelectorAll("[data-copy-value]");
+        copyElements.forEach((el) => {
+          el.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const value = el.getAttribute("data-copy-value");
+            const message = el.getAttribute("data-copy-message") || "Copied";
+            try {
+              await navigator.clipboard.writeText(value);
+              if (this.showToast) {
+                this.showToast(message, el);
+              }
+            } catch (err) {
+              console.error("Failed to copy:", err);
+            }
+          });
+        });
+      }, 0);
+    }
+
+    openColorsWindow(colors) {
+      const html = `
       <!DOCTYPE html>
       <html>
       <head>
@@ -2640,13 +6128,13 @@ class CSSInspector {
       </html>
     `;
 
-    const blob = new Blob([html], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    window.open(url, "_blank", "width=900,height=700");
-  }
+      const blob = new Blob([html], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "width=900,height=700");
+    }
 
-  openTypographyWindow(typography) {
-    const html = `
+    openTypographyWindow(typography) {
+      const html = `
       <!DOCTYPE html>
       <html>
       <head>
@@ -2713,8 +6201,8 @@ class CSSInspector {
         <div class="header">
           <h1>📝 Typography</h1>
           <p class="count">${typography.length} unique font ${
-      typography.length === 1 ? "family" : "families"
-    } found</p>
+        typography.length === 1 ? "family" : "families"
+      } found</p>
         </div>
         <div class="typography-list">
           ${typography
@@ -2773,874 +6261,882 @@ class CSSInspector {
       </html>
     `;
 
-    const blob = new Blob([html], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    window.open(url, "_blank", "width=900,height=700");
-  }
-
-  // Cached getComputedStyle for performance
-  getCachedComputedStyle(element) {
-    // Use element as cache key (DOM elements are unique)
-    const cacheKey = element;
-    let cached = this.styleCache.get(cacheKey);
-    if (!cached) {
-      cached = window.getComputedStyle(element);
-      this.styleCache.set(cacheKey, cached);
-    }
-    return cached;
-  }
-
-  updateInspectorPanel(element, isSelected = false, skipAnimation = false) {
-    if (!this.inspectorPanel) return;
-
-    // If an element is locked and we're trying to update with a different element (not from a click),
-    // skip the update to prevent flickering
-    if (
-      this.selectedElement &&
-      this.selectedElement !== element &&
-      !isSelected
-    ) {
-      return;
+      const blob = new Blob([html], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "width=900,height=700");
     }
 
-    const styles = this.getCachedComputedStyle(element);
-    const rect = element.getBoundingClientRect();
-    const elementInfo = this.extractElementInfo(element, styles, rect);
+    // Cached getComputedStyle for performance
+    getCachedComputedStyle(element) {
+      // Use element as cache key (DOM elements are unique)
+      const cacheKey = element;
+      let cached = this.styleCache.get(cacheKey);
+      if (!cached) {
+        cached = window.getComputedStyle(element);
+        this.styleCache.set(cacheKey, cached);
+      }
+      return cached;
+    }
 
-    // Determine element type and what to show
-    // Check if element has text content or is a text-related element
-    const hasTextContent =
-      element.innerText && element.innerText.trim().length > 0;
-    const isTextElement = [
-      "P",
-      "H1",
-      "H2",
-      "H3",
-      "H4",
-      "H5",
-      "H6",
-      "SPAN",
-      "A",
-      "BUTTON",
-      "LABEL",
-      "LI",
-      "TD",
-      "TH",
-      "DT",
-      "DD",
-      "STRONG",
-      "EM",
-      "B",
-      "I",
-      "CODE",
-      "PRE",
-      "BLOCKQUOTE",
-    ].includes(element.tagName.toUpperCase());
-    const hasText = hasTextContent || isTextElement;
+    updateInspectorPanel(element, isSelected = false, skipAnimation = false) {
+      if (!this.inspectorPanel) return;
 
-    if (!this.shadowRoot) return;
-    const infoDiv = this.shadowRoot.querySelector("#element-info");
-    if (infoDiv) {
-      if (skipAnimation) {
-        // Instant update without animation
-        infoDiv.style.transition = "none";
-        infoDiv.innerHTML = this.formatElementInfo(elementInfo, true, hasText);
-        this.normalizeInspectorSpacing(); // Normalize spacing to override page CSS
-        infoDiv.style.opacity = "1";
-        infoDiv.style.transform = "translateY(0)";
-        // Update panel height for instant updates
-        setTimeout(() => {
-          this.updatePanelHeight();
+      // If an element is locked and we're trying to update with a different element (not from a click),
+      // skip the update to prevent flickering
+      if (
+        this.selectedElement &&
+        this.selectedElement !== element &&
+        !isSelected
+      ) {
+        return;
+      }
 
-          // Apply squircle clip-paths to inspector elements
-          this.applyInspectorSquircles();
-        }, 0);
-      } else {
-        // Smooth fade out transition
-        infoDiv.style.transition =
-          "opacity 0.15s ease-out, transform 0.15s ease-out";
-        infoDiv.style.opacity = "0";
-        infoDiv.style.transform = "translateY(-6px)";
+      const styles = this.getCachedComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      const elementInfo = this.extractElementInfo(element, styles, rect);
 
-        // Update content after fade out starts
-        setTimeout(() => {
+      // Determine element type and what to show
+      // Check if element has text content or is a text-related element
+      const hasTextContent =
+        element.innerText && element.innerText.trim().length > 0;
+      const isTextElement = [
+        "P",
+        "H1",
+        "H2",
+        "H3",
+        "H4",
+        "H5",
+        "H6",
+        "SPAN",
+        "A",
+        "BUTTON",
+        "LABEL",
+        "LI",
+        "TD",
+        "TH",
+        "DT",
+        "DD",
+        "STRONG",
+        "EM",
+        "B",
+        "I",
+        "CODE",
+        "PRE",
+        "BLOCKQUOTE",
+      ].includes(element.tagName.toUpperCase());
+      const hasText = hasTextContent || isTextElement;
+
+      if (!this.shadowRoot) return;
+      const infoDiv = this.shadowRoot.querySelector("#element-info");
+      if (infoDiv) {
+        if (skipAnimation) {
+          // Instant update without animation
+          infoDiv.style.transition = "none";
           infoDiv.innerHTML = this.formatElementInfo(
             elementInfo,
             true,
             hasText
           );
           this.normalizeInspectorSpacing(); // Normalize spacing to override page CSS
-
-          // Smooth fade in transition
-          requestAnimationFrame(() => {
-            infoDiv.style.transition =
-              "opacity 0.2s ease-out, transform 0.2s ease-out";
-            infoDiv.style.opacity = "1";
-            infoDiv.style.transform = "translateY(0)";
-            // Update panel height after content is updated
+          infoDiv.style.opacity = "1";
+          infoDiv.style.transform = "translateY(0)";
+          // Update panel height for instant updates
+          setTimeout(() => {
             this.updatePanelHeight();
 
             // Apply squircle clip-paths to inspector elements
             this.applyInspectorSquircles();
-          });
-        }, 150);
+          }, 0);
+        } else {
+          // Smooth fade out transition
+          infoDiv.style.transition =
+            "opacity 0.15s ease-out, transform 0.15s ease-out";
+          infoDiv.style.opacity = "0";
+          infoDiv.style.transform = "translateY(-6px)";
+
+          // Update content after fade out starts
+          setTimeout(() => {
+            infoDiv.innerHTML = this.formatElementInfo(
+              elementInfo,
+              true,
+              hasText
+            );
+            this.normalizeInspectorSpacing(); // Normalize spacing to override page CSS
+
+            // Smooth fade in transition
+            requestAnimationFrame(() => {
+              infoDiv.style.transition =
+                "opacity 0.2s ease-out, transform 0.2s ease-out";
+              infoDiv.style.opacity = "1";
+              infoDiv.style.transform = "translateY(0)";
+              // Update panel height after content is updated
+              this.updatePanelHeight();
+
+              // Apply squircle clip-paths to inspector elements
+              this.applyInspectorSquircles();
+            });
+          }, 150);
+        }
       }
+
+      // Add copy button listeners
+      setTimeout(() => {
+        document.querySelectorAll("[data-color]").forEach((btn) => {
+          btn.addEventListener("click", (e) => {
+            const color = e.target.closest("[data-color]").dataset.color;
+            navigator.clipboard.writeText(color).then(() => {
+              const originalText = e.target.textContent;
+              e.target.textContent = "Copied";
+              setTimeout(() => {
+                e.target.textContent = originalText;
+              }, 1000);
+            });
+          });
+        });
+
+        // Add font preview copy listener
+        document.querySelectorAll(".font-preview-copyable").forEach((el) => {
+          el.addEventListener("click", (e) => {
+            const fontFamily = el.dataset.fontFamily;
+            if (fontFamily) {
+              navigator.clipboard
+                .writeText(fontFamily)
+                .then(() => {
+                  this.showToast("Font family copied", el);
+                })
+                .catch((err) => {
+                  console.warn(
+                    "[Designspector] Failed to copy font family:",
+                    err
+                  );
+                });
+            }
+          });
+        });
+
+        // Add copy listeners for all copyable elements
+        document.querySelectorAll("[data-copy-value]").forEach((el) => {
+          el.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const value = el.dataset.copyValue;
+            const message = el.dataset.copyMessage || "Copied";
+            if (value) {
+              navigator.clipboard
+                .writeText(value)
+                .then(() => {
+                  this.showToast(message, el);
+                })
+                .catch((err) => {
+                  console.error("[Designspector] Failed to copy:", err);
+                });
+            }
+          });
+        });
+      }, 0);
     }
 
-    // Add copy button listeners
-    setTimeout(() => {
-      document.querySelectorAll("[data-color]").forEach((btn) => {
-        btn.addEventListener("click", (e) => {
-          const color = e.target.closest("[data-color]").dataset.color;
-          navigator.clipboard.writeText(color).then(() => {
-            const originalText = e.target.textContent;
-            e.target.textContent = "Copied";
-            setTimeout(() => {
-              e.target.textContent = originalText;
-            }, 1000);
-          });
-        });
-      });
+    showEmptyState() {
+      if (!this.inspectorPanel) return;
+      if (!this.shadowRoot) return;
+      const infoDiv = this.shadowRoot.querySelector("#element-info");
+      if (infoDiv) {
+        // Smooth transition out
+        infoDiv.style.transition =
+          "opacity 0.2s ease-out, transform 0.2s ease-out";
+        infoDiv.style.opacity = "0";
+        infoDiv.style.transform = "translateY(-8px)";
 
-      // Add font preview copy listener
-      document.querySelectorAll(".font-preview-copyable").forEach((el) => {
-        el.addEventListener("click", (e) => {
-          const fontFamily = el.dataset.fontFamily;
-          if (fontFamily) {
-            navigator.clipboard
-              .writeText(fontFamily)
-              .then(() => {
-                this.showToast("Font family copied", el);
-              })
-              .catch((err) => {
-                console.warn(
-                  "[Designspector] Failed to copy font family:",
-                  err
-                );
-              });
-          }
-        });
-      });
-
-      // Add copy listeners for all copyable elements
-      document.querySelectorAll("[data-copy-value]").forEach((el) => {
-        el.addEventListener("click", (e) => {
-          e.stopPropagation();
-          const value = el.dataset.copyValue;
-          const message = el.dataset.copyMessage || "Copied";
-          if (value) {
-            navigator.clipboard
-              .writeText(value)
-              .then(() => {
-                this.showToast(message, el);
-              })
-              .catch((err) => {
-                console.error("[Designspector] Failed to copy:", err);
-              });
-          }
-        });
-      });
-    }, 0);
-  }
-
-  showEmptyState() {
-    if (!this.inspectorPanel) return;
-    if (!this.shadowRoot) return;
-    const infoDiv = this.shadowRoot.querySelector("#element-info");
-    if (infoDiv) {
-      // Smooth transition out
-      infoDiv.style.transition =
-        "opacity 0.2s ease-out, transform 0.2s ease-out";
-      infoDiv.style.opacity = "0";
-      infoDiv.style.transform = "translateY(-8px)";
-
-      setTimeout(() => {
-        infoDiv.innerHTML = `
+        setTimeout(() => {
+          infoDiv.innerHTML = `
           <div style="text-align: center; padding: 40px 20px; color: #8B8B8B;">
             <p style="margin: 8px 0; font-size: 14px; color: #E5E5E5; font-family: 'Inter', sans-serif;">Hover over any element to preview its styles</p>
             <p style="font-size: 12px; color: #8B8B8B; font-family: 'Inter', sans-serif;">Click an element to lock it for inspection</p>
           </div>
         `;
 
-        // Smooth transition in
-        requestAnimationFrame(() => {
-          infoDiv.style.opacity = "1";
-          infoDiv.style.transform = "translateY(0)";
-        });
-      }, 200);
+          // Smooth transition in
+          requestAnimationFrame(() => {
+            infoDiv.style.opacity = "1";
+            infoDiv.style.transform = "translateY(0)";
+          });
+        }, 200);
+      }
     }
-  }
 
-  sendElementUpdateToPopup(element, isSelected = false, skipAnimation = false) {
-    // Update the panel on the page directly (not popup)
-    if (this.inspectorPanel) {
+    sendElementUpdateToPopup(
+      element,
+      isSelected = false,
+      skipAnimation = false
+    ) {
+      // Update the panel on the page directly (not popup)
+      if (this.inspectorPanel) {
+        clearTimeout(this.updateTimeout);
+        this.updateTimeout = setTimeout(() => {
+          this.updateInspectorPanel(element, isSelected, skipAnimation);
+        }, 50);
+      }
+
+      // Also try to send to popup if it's open (for when popup is viewing inspector)
+      try {
+        const styles = this.getCachedComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        const elementInfo = this.extractElementInfo(element, styles, rect);
+
+        chrome.runtime.sendMessage(
+          {
+            action: "elementUpdate",
+            elementInfo: elementInfo,
+            isSelected: isSelected,
+          },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              // Popup might be closed, that's okay
+            }
+          }
+        );
+      } catch (error) {
+        // Silently handle errors
+      }
+    }
+
+    handleMouseOver(e) {
+      if (!this.isActive) return;
+
+      // Don't process events for the document or html/body tags
+      const element = e.target;
+      if (
+        !element ||
+        element === document ||
+        element === document.documentElement ||
+        element === document.body
+      ) {
+        return;
+      }
+
+      // Skip if hovering over inspector panel or highlights
+      if (element.closest("#css-inspector-panel")) {
+        return;
+      }
+      if (element.classList.contains("css-inspector-selected")) {
+        return; // Don't highlight already selected elements
+      }
+
+      // Remove previous hover highlight (but keep selected element locked)
+      if (
+        this.hoveredElement &&
+        this.hoveredElement !== this.selectedElement &&
+        this.hoveredElement !== element
+      ) {
+        this.removeOverlay("hover");
+      }
+
+      // Always allow highlighting on hover (even when element is locked)
+      // But only update panel if no element is locked
+      if (element !== this.selectedElement) {
+        this.hoveredElement = element;
+
+        // During scrolling, just update overlay position (lightweight)
+        if (this.isScrolling) {
+          requestAnimationFrame(() => {
+            this.updateOverlay("hover", element);
+          });
+        } else {
+          // Use debounced update for better performance
+          this.debouncedMouseOver(element);
+        }
+      }
+    }
+
+    handleMouseOut(e) {
+      if (!this.isActive) return;
+      const element = e.target;
+
+      // Don't clear selected element (it stays locked)
+      if (element === this.selectedElement) {
+        return;
+      }
+
+      // Remove highlight from hovered element (but keep selected element visible)
+      if (element !== this.selectedElement) {
+        this.removeOverlay("hover");
+      }
+
+      if (this.hoveredElement === element) {
+        this.hoveredElement = null;
+        // If we have a selected element, don't trigger any updates - just keep showing it (locked)
+        // This prevents flickering when hovering over other elements
+        if (!this.selectedElement && this.inspectorPanel) {
+          // Clear the header when hover stops (if no element is locked)
+          this.updateLockedElementHeader(null);
+          this.showEmptyState();
+        }
+      }
+    }
+
+    handleMouseDown(e) {
+      if (!this.isActive) return;
+
+      // Don't process events for the document or html/body tags
+      const element = e.target;
+      if (
+        !element ||
+        element === document ||
+        element === document.documentElement ||
+        element === document.body
+      ) {
+        return;
+      }
+
+      // Skip if clicking on inspector panel
+      if (element.closest("#css-inspector-panel")) {
+        return;
+      }
+
+      // Track mousedown position to detect drag vs click
+      this.lastMouseDownPos = {
+        x: e.clientX,
+        y: e.clientY,
+        time: Date.now(),
+      };
+    }
+
+    handleClick(e) {
+      if (!this.isActive) return;
+
+      // Don't process events for the document or html/body tags
+      const element = e.target;
+      if (
+        !element ||
+        element === document ||
+        element === document.documentElement ||
+        element === document.body
+      ) {
+        return;
+      }
+
+      // Skip if clicking on inspector panel
+      if (element.closest("#css-inspector-panel")) {
+        return;
+      }
+
+      // Detect if this was a drag gesture vs a click
+      // If mouse moved significantly (>5px) or took too long (>500ms), it's likely a drag
+      const isDrag =
+        this.lastMouseDownPos &&
+        (Math.abs(e.clientX - this.lastMouseDownPos.x) > 5 ||
+          Math.abs(e.clientY - this.lastMouseDownPos.y) > 5 ||
+          Date.now() - this.lastMouseDownPos.time > 500);
+
+      // Only prevent default for actual clicks, not drag gestures (which are used for scrolling)
+      if (!isDrag) {
+        // Prevent default behavior for clicks to avoid page interactions
+        // (navigation, form submission, text selection, etc.)
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      } else {
+        // For drags, just stop propagation but allow default behavior (scrolling)
+        e.stopPropagation();
+        // Clear the mousedown position since this was a drag
+        this.lastMouseDownPos = null;
+        return; // Don't process drags as clicks
+      }
+
+      // Check if this is the same element that's already being displayed (before we update selectedElement)
+      // If so, skip animation to avoid re-animating the same content
+      const wasAlreadySelected = this.selectedElement === element;
+      const isSameAsHovered = this.hoveredElement === element;
+      const skipAnimation = wasAlreadySelected || isSameAsHovered;
+
+      // Remove previous selection highlight
+      if (this.selectedElement && this.selectedElement !== element) {
+        this.removeOverlay("selected");
+      }
+
+      // Clear mousedown position since we processed this as a click
+      this.lastMouseDownPos = null;
+
+      // Lock (select) the clicked element
+      this.selectedElement = element;
+      if (this.hoveredElement === element) {
+        this.removeOverlay("hover");
+        this.hoveredElement = null;
+      }
+      this.updateOverlay("selected", element);
+
+      // Ensure the selected element is fully visible (accounting for outline offset and inspector panel)
+      const rect = element.getBoundingClientRect();
+      const outlineWidth = 3; // Selected has 3px outline
+      const outlineOffset = 2;
+      const viewportPadding = 10;
+      const inspectorPanelWidth = 380; // Panel width from CSS
+      const inspectorPanelRightMargin = 20; // Panel right margin from CSS
+      const effectiveViewportRight =
+        window.innerWidth - inspectorPanelWidth - inspectorPanelRightMargin;
+      const totalExtension = outlineWidth + outlineOffset;
+
+      const currentScrollX = window.scrollX || window.pageXOffset || 0;
+      const currentScrollY = window.scrollY || window.pageYOffset || 0;
+
+      // Calculate outline bounds in viewport coordinates
+      const outlineLeft = rect.left - totalExtension;
+      const outlineRight = rect.right + totalExtension;
+      const outlineTop = rect.top - totalExtension;
+      const outlineBottom = rect.bottom + totalExtension;
+
+      // Calculate absolute document coordinates of outline edges
+      const outlineDocLeft = rect.left + currentScrollX - totalExtension;
+      const outlineDocRight = rect.right + currentScrollX + totalExtension;
+      const outlineDocTop = rect.top + currentScrollY - totalExtension;
+      const outlineDocBottom = rect.bottom + currentScrollY + totalExtension;
+
+      // Calculate desired scroll positions
+      let newScrollX = currentScrollX;
+      let newScrollY = currentScrollY;
+
+      // Left edge: if outline extends beyond viewport left, scroll right
+      if (outlineLeft < viewportPadding) {
+        newScrollX = outlineDocLeft - viewportPadding;
+      }
+      // Right edge: if outline extends beyond effective viewport right, scroll left
+      else if (outlineRight > effectiveViewportRight - viewportPadding) {
+        newScrollX =
+          outlineDocRight - (effectiveViewportRight - viewportPadding);
+      }
+
+      // Top edge: if outline extends beyond viewport top, scroll down
+      if (outlineTop < viewportPadding) {
+        newScrollY = outlineDocTop - viewportPadding;
+      }
+      // Bottom edge: if outline extends beyond viewport bottom, scroll up
+      else if (outlineBottom > window.innerHeight - viewportPadding) {
+        newScrollY = outlineDocBottom - (window.innerHeight - viewportPadding);
+      }
+
+      // Ensure scroll positions are non-negative
+      newScrollX = Math.max(0, newScrollX);
+      newScrollY = Math.max(0, newScrollY);
+
+      // Apply scroll if position changed
+      if (newScrollX !== currentScrollX || newScrollY !== currentScrollY) {
+        window.scrollTo(newScrollX, newScrollY);
+        // Update overlay after scroll
+        requestAnimationFrame(() => {
+          this.updateOverlay("selected", element);
+        });
+      }
+
+      // Update panel header to show locked element identifier (with full opacity dot)
+      this.updateLockedElementHeader(element, true); // true = locked
+
+      // Send update to popup with locked state (skipAnimation was determined above)
       clearTimeout(this.updateTimeout);
       this.updateTimeout = setTimeout(() => {
-        this.updateInspectorPanel(element, isSelected, skipAnimation);
+        this.sendElementUpdateToPopup(element, true, skipAnimation);
       }, 50);
     }
 
-    // Also try to send to popup if it's open (for when popup is viewing inspector)
-    try {
-      const styles = this.getCachedComputedStyle(element);
-      const rect = element.getBoundingClientRect();
-      const elementInfo = this.extractElementInfo(element, styles, rect);
+    getElementIdentifier(element) {
+      const tag = element.tagName.toLowerCase();
+      const id = element.id ? `#${element.id}` : "";
+      const classList = Array.from(element.classList);
+      const classString = classList.length > 0 ? "." + classList.join(".") : "";
+      return `${tag}${id}${classString}`;
+    }
 
-      chrome.runtime.sendMessage(
-        {
-          action: "elementUpdate",
-          elementInfo: elementInfo,
-          isSelected: isSelected,
-        },
-        (response) => {
-          if (chrome.runtime.lastError) {
-            // Popup might be closed, that's okay
+    getElementTypeLabel(element) {
+      if (!element) return "Element";
+
+      const tagName = element.tagName.toLowerCase();
+
+      // Check for specific tags first
+      if (tagName === "img") {
+        return "Image";
+      } else if (tagName === "a") {
+        return "Link";
+      } else if (tagName === "button") {
+        return "Button";
+      } else if (["input", "textarea", "select"].includes(tagName)) {
+        return "Input";
+      } else if (
+        [
+          "p",
+          "h1",
+          "h2",
+          "h3",
+          "h4",
+          "h5",
+          "h6",
+          "span",
+          "li",
+          "td",
+          "th",
+          "label",
+          "strong",
+          "em",
+          "b",
+          "i",
+        ].includes(tagName)
+      ) {
+        return "Text";
+      } else if (
+        tagName === "div" ||
+        tagName === "section" ||
+        tagName === "article" ||
+        tagName === "main" ||
+        tagName === "header" ||
+        tagName === "footer" ||
+        tagName === "aside" ||
+        tagName === "nav"
+      ) {
+        // Check for image content in containers
+        if (element.querySelector("img")) {
+          return "Image";
+        } else {
+          const styles = this.getCachedComputedStyle(element);
+          if (
+            styles.backgroundImage &&
+            styles.backgroundImage !== "none" &&
+            styles.backgroundImage.includes("url(")
+          ) {
+            return "Image";
+          } else if (
+            element.textContent &&
+            element.textContent.trim().length > 0
+          ) {
+            return "Text";
+          } else {
+            return "Container";
           }
         }
-      );
-    } catch (error) {
-      // Silently handle errors
-    }
-  }
-
-  handleMouseOver(e) {
-    if (!this.isActive) return;
-
-    // Don't process events for the document or html/body tags
-    const element = e.target;
-    if (
-      !element ||
-      element === document ||
-      element === document.documentElement ||
-      element === document.body
-    ) {
-      return;
-    }
-
-    // Skip if hovering over inspector panel or highlights
-    if (element.closest("#css-inspector-panel")) {
-      return;
-    }
-    if (element.classList.contains("css-inspector-selected")) {
-      return; // Don't highlight already selected elements
-    }
-
-    // Remove previous hover highlight (but keep selected element locked)
-    if (
-      this.hoveredElement &&
-      this.hoveredElement !== this.selectedElement &&
-      this.hoveredElement !== element
-    ) {
-      this.removeOverlay("hover");
-    }
-
-    // Always allow highlighting on hover (even when element is locked)
-    // But only update panel if no element is locked
-    if (element !== this.selectedElement) {
-      this.hoveredElement = element;
-
-        // During scrolling, just update overlay position (lightweight)
-      if (this.isScrolling) {
-        requestAnimationFrame(() => {
-          this.updateOverlay("hover", element);
-        });
       } else {
-        // Use debounced update for better performance
-        this.debouncedMouseOver(element);
+        // Default: capitalize first letter
+        return tagName.charAt(0).toUpperCase() + tagName.slice(1);
       }
     }
-  }
 
-  handleMouseOut(e) {
-    if (!this.isActive) return;
-    const element = e.target;
+    updateLockedElementHeader(element, isLocked = true) {
+      if (!this.inspectorPanel) return;
 
-    // Don't clear selected element (it stays locked)
-    if (element === this.selectedElement) {
-      return;
-    }
+      if (!this.shadowRoot) return;
+      const lockedInfo = this.shadowRoot.querySelector("#locked-element-info");
+      const websiteInfo = this.shadowRoot.querySelector("#website-info");
 
-    // Remove highlight from hovered element (but keep selected element visible)
-    if (element !== this.selectedElement) {
-      this.removeOverlay("hover");
-    }
+      if (element) {
+        // Show element info, hide website info
+        // Format: "Type.tag" (e.g., "Text.p", "Image.div", "Button.button")
+        const tagName = element.tagName.toLowerCase();
+        const typeLabel = this.getElementTypeLabel(element);
+        const typeLabelEscaped = typeLabel
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+        const tagNameEscaped = tagName
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
 
-    if (this.hoveredElement === element) {
-      this.hoveredElement = null;
-      // If we have a selected element, don't trigger any updates - just keep showing it (locked)
-      // This prevents flickering when hovering over other elements
-      if (!this.selectedElement && this.inspectorPanel) {
-        // Clear the header when hover stops (if no element is locked)
-        this.updateLockedElementHeader(null);
-        this.showEmptyState();
-      }
-    }
-  }
-
-  handleMouseDown(e) {
-    if (!this.isActive) return;
-
-    // Don't process events for the document or html/body tags
-    const element = e.target;
-    if (
-      !element ||
-      element === document ||
-      element === document.documentElement ||
-      element === document.body
-    ) {
-      return;
-    }
-
-    // Skip if clicking on inspector panel
-    if (element.closest("#css-inspector-panel")) {
-      return;
-    }
-
-    // Track mousedown position to detect drag vs click
-    this.lastMouseDownPos = {
-      x: e.clientX,
-      y: e.clientY,
-      time: Date.now(),
-    };
-  }
-
-  handleClick(e) {
-    if (!this.isActive) return;
-
-    // Don't process events for the document or html/body tags
-    const element = e.target;
-    if (
-      !element ||
-      element === document ||
-      element === document.documentElement ||
-      element === document.body
-    ) {
-      return;
-    }
-
-    // Skip if clicking on inspector panel
-    if (element.closest("#css-inspector-panel")) {
-      return;
-    }
-
-    // Detect if this was a drag gesture vs a click
-    // If mouse moved significantly (>5px) or took too long (>500ms), it's likely a drag
-    const isDrag =
-      this.lastMouseDownPos &&
-      (Math.abs(e.clientX - this.lastMouseDownPos.x) > 5 ||
-        Math.abs(e.clientY - this.lastMouseDownPos.y) > 5 ||
-        Date.now() - this.lastMouseDownPos.time > 500);
-
-    // Only prevent default for actual clicks, not drag gestures (which are used for scrolling)
-    if (!isDrag) {
-      // Prevent default behavior for clicks to avoid page interactions
-      // (navigation, form submission, text selection, etc.)
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-    } else {
-      // For drags, just stop propagation but allow default behavior (scrolling)
-      e.stopPropagation();
-      // Clear the mousedown position since this was a drag
-      this.lastMouseDownPos = null;
-      return; // Don't process drags as clicks
-    }
-
-    // Check if this is the same element that's already being displayed (before we update selectedElement)
-    // If so, skip animation to avoid re-animating the same content
-    const wasAlreadySelected = this.selectedElement === element;
-    const isSameAsHovered = this.hoveredElement === element;
-    const skipAnimation = wasAlreadySelected || isSameAsHovered;
-
-    // Remove previous selection highlight
-    if (this.selectedElement && this.selectedElement !== element) {
-      this.removeOverlay("selected");
-    }
-
-    // Clear mousedown position since we processed this as a click
-    this.lastMouseDownPos = null;
-
-    // Lock (select) the clicked element
-    this.selectedElement = element;
-    if (this.hoveredElement === element) {
-      this.removeOverlay("hover");
-      this.hoveredElement = null;
-    }
-    this.updateOverlay("selected", element);
-
-    // Ensure the selected element is fully visible (accounting for outline offset and inspector panel)
-    const rect = element.getBoundingClientRect();
-    const outlineWidth = 3; // Selected has 3px outline
-    const outlineOffset = 2;
-    const viewportPadding = 10;
-    const inspectorPanelWidth = 380; // Panel width from CSS
-    const inspectorPanelRightMargin = 20; // Panel right margin from CSS
-    const effectiveViewportRight =
-      window.innerWidth - inspectorPanelWidth - inspectorPanelRightMargin;
-    const totalExtension = outlineWidth + outlineOffset;
-
-    const currentScrollX = window.scrollX || window.pageXOffset || 0;
-    const currentScrollY = window.scrollY || window.pageYOffset || 0;
-
-    // Calculate outline bounds in viewport coordinates
-    const outlineLeft = rect.left - totalExtension;
-    const outlineRight = rect.right + totalExtension;
-    const outlineTop = rect.top - totalExtension;
-    const outlineBottom = rect.bottom + totalExtension;
-
-    // Calculate absolute document coordinates of outline edges
-    const outlineDocLeft = rect.left + currentScrollX - totalExtension;
-    const outlineDocRight = rect.right + currentScrollX + totalExtension;
-    const outlineDocTop = rect.top + currentScrollY - totalExtension;
-    const outlineDocBottom = rect.bottom + currentScrollY + totalExtension;
-
-    // Calculate desired scroll positions
-    let newScrollX = currentScrollX;
-    let newScrollY = currentScrollY;
-
-    // Left edge: if outline extends beyond viewport left, scroll right
-    if (outlineLeft < viewportPadding) {
-      newScrollX = outlineDocLeft - viewportPadding;
-    }
-    // Right edge: if outline extends beyond effective viewport right, scroll left
-    else if (outlineRight > effectiveViewportRight - viewportPadding) {
-      newScrollX = outlineDocRight - (effectiveViewportRight - viewportPadding);
-    }
-
-    // Top edge: if outline extends beyond viewport top, scroll down
-    if (outlineTop < viewportPadding) {
-      newScrollY = outlineDocTop - viewportPadding;
-    }
-    // Bottom edge: if outline extends beyond viewport bottom, scroll up
-    else if (outlineBottom > window.innerHeight - viewportPadding) {
-      newScrollY = outlineDocBottom - (window.innerHeight - viewportPadding);
-    }
-
-    // Ensure scroll positions are non-negative
-    newScrollX = Math.max(0, newScrollX);
-    newScrollY = Math.max(0, newScrollY);
-
-    // Apply scroll if position changed
-    if (newScrollX !== currentScrollX || newScrollY !== currentScrollY) {
-      window.scrollTo(newScrollX, newScrollY);
-      // Update overlay after scroll
-      requestAnimationFrame(() => {
-        this.updateOverlay("selected", element);
-      });
-    }
-
-    // Update panel header to show locked element identifier (with full opacity dot)
-    this.updateLockedElementHeader(element, true); // true = locked
-
-    // Send update to popup with locked state (skipAnimation was determined above)
-    clearTimeout(this.updateTimeout);
-    this.updateTimeout = setTimeout(() => {
-      this.sendElementUpdateToPopup(element, true, skipAnimation);
-    }, 50);
-  }
-
-  getElementIdentifier(element) {
-    const tag = element.tagName.toLowerCase();
-    const id = element.id ? `#${element.id}` : "";
-    const classList = Array.from(element.classList);
-    const classString = classList.length > 0 ? "." + classList.join(".") : "";
-    return `${tag}${id}${classString}`;
-  }
-
-  getElementTypeLabel(element) {
-    if (!element) return "Element";
-
-    const tagName = element.tagName.toLowerCase();
-
-    // Check for specific tags first
-    if (tagName === "img") {
-      return "Image";
-    } else if (tagName === "a") {
-      return "Link";
-    } else if (tagName === "button") {
-      return "Button";
-    } else if (["input", "textarea", "select"].includes(tagName)) {
-      return "Input";
-    } else if (
-      [
-        "p",
-        "h1",
-        "h2",
-        "h3",
-        "h4",
-        "h5",
-        "h6",
-        "span",
-        "li",
-        "td",
-        "th",
-        "label",
-        "strong",
-        "em",
-        "b",
-        "i",
-      ].includes(tagName)
-    ) {
-      return "Text";
-    } else if (
-      tagName === "div" ||
-      tagName === "section" ||
-      tagName === "article" ||
-      tagName === "main" ||
-      tagName === "header" ||
-      tagName === "footer" ||
-      tagName === "aside" ||
-      tagName === "nav"
-    ) {
-      // Check for image content in containers
-      if (element.querySelector("img")) {
-        return "Image";
-      } else {
-        const styles = this.getCachedComputedStyle(element);
-        if (
-          styles.backgroundImage &&
-          styles.backgroundImage !== "none" &&
-          styles.backgroundImage.includes("url(")
-        ) {
-          return "Image";
-        } else if (
-          element.textContent &&
-          element.textContent.trim().length > 0
-        ) {
-          return "Text";
-        } else {
-          return "Container";
-        }
-      }
-    } else {
-      // Default: capitalize first letter
-      return tagName.charAt(0).toUpperCase() + tagName.slice(1);
-    }
-  }
-
-  updateLockedElementHeader(element, isLocked = true) {
-    if (!this.inspectorPanel) return;
-
-    if (!this.shadowRoot) return;
-    const lockedInfo = this.shadowRoot.querySelector(
-      "#locked-element-info"
-    );
-    const websiteInfo = this.shadowRoot.querySelector("#website-info");
-
-    if (element) {
-      // Show element info, hide website info
-      // Format: "Type.tag" (e.g., "Text.p", "Image.div", "Button.button")
-      const tagName = element.tagName.toLowerCase();
-      const typeLabel = this.getElementTypeLabel(element);
-      const typeLabelEscaped = typeLabel
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
-      const tagNameEscaped = tagName
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
-
-      if (lockedInfo) {
-        const colors = this.getThemeColors();
-        // Dot styling: gray when hovered (turned off), green with glow when locked (turned on)
-        const dotColor = isLocked ? "#10B981" : colors.textTertiary; // Green when locked, gray when hovered
-        const dotGlow = isLocked
-          ? "0 0 12px rgba(16, 185, 129, 0.8), 0 0 8px rgba(16, 185, 129, 0.6), 0 0 4px rgba(16, 185, 129, 0.4)"
-          : "none";
-        lockedInfo.style.display = "flex";
-        lockedInfo.style.alignItems = "center";
-        lockedInfo.style.gap = "8px";
-        lockedInfo.innerHTML = `
+        if (lockedInfo) {
+          const colors = this.getThemeColors();
+          // Dot styling: gray when hovered (turned off), green with glow when locked (turned on)
+          const dotColor = isLocked ? "#10B981" : colors.textTertiary; // Green when locked, gray when hovered
+          const dotGlow = isLocked
+            ? "0 0 12px rgba(16, 185, 129, 0.8), 0 0 8px rgba(16, 185, 129, 0.6), 0 0 4px rgba(16, 185, 129, 0.4)"
+            : "none";
+          lockedInfo.style.display = "flex";
+          lockedInfo.style.alignItems = "center";
+          lockedInfo.style.gap = "8px";
+          lockedInfo.innerHTML = `
           <div style="width: 8px; height: 8px; background: ${dotColor}; border-radius: 50%; flex-shrink: 0; box-shadow: ${dotGlow}; transition: background 0.2s, box-shadow 0.2s;"></div>
           <div style="font-size: 24px; font-weight: 600; color: ${colors.textPrimary}; font-family: 'Inter', sans-serif; letter-spacing: -0.01em;">
             <span>${typeLabelEscaped}.</span>
             <span style="opacity: 0.75;">${tagNameEscaped}</span>
       </div>
     `;
-      }
+        }
 
-      if (websiteInfo) {
-        websiteInfo.style.display = "none";
-      }
-    } else {
-      // Hide element info, show website info
-      if (lockedInfo) {
-        lockedInfo.style.display = "none";
-        lockedInfo.innerHTML = "";
-      }
+        if (websiteInfo) {
+          websiteInfo.style.display = "none";
+        }
+      } else {
+        // Hide element info, show website info
+        if (lockedInfo) {
+          lockedInfo.style.display = "none";
+          lockedInfo.innerHTML = "";
+        }
 
-      if (websiteInfo) {
-        websiteInfo.style.display = "flex";
-      }
-    }
-  }
-
-  unlockElement() {
-    if (this.selectedElement) {
-      this.removeOverlay("selected");
-      this.selectedElement = null;
-    }
-
-    // Update header to show website info again
-    this.updateLockedElementHeader(null);
-
-    // Show empty state
-    this.showEmptyState();
-  }
-
-  extractElementInfo(element, styles, rect) {
-    const classList = Array.from(element.classList);
-    const classString = classList.length > 0 ? "." + classList.join(".") : "";
-
-    return {
-      tag: element.tagName.toLowerCase(),
-      classes: classString,
-      id: element.id || null,
-      dimensions: {
-        width: Math.round(rect.width),
-        height: Math.round(rect.height),
-      },
-      typography: {
-        fontFamily: styles.fontFamily,
-        fontSize: styles.fontSize,
-        fontWeight: styles.fontWeight,
-        lineHeight: styles.lineHeight,
-        letterSpacing: styles.letterSpacing,
-      },
-      spacing: {
-        margin: {
-          top: this.parseValue(styles.marginTop),
-          right: this.parseValue(styles.marginRight),
-          bottom: this.parseValue(styles.marginBottom),
-          left: this.parseValue(styles.marginLeft),
-        },
-        padding: {
-          top: this.parseValue(styles.paddingTop),
-          right: this.parseValue(styles.paddingRight),
-          bottom: this.parseValue(styles.paddingBottom),
-          left: this.parseValue(styles.paddingLeft),
-        },
-      },
-      colors: {
-        color: styles.color,
-        backgroundColor: styles.backgroundColor,
-        borderColor: styles.borderColor || styles.borderTopColor,
-      },
-      border: {
-        radius: styles.borderRadius,
-        width: {
-          top: this.parseValue(styles.borderTopWidth),
-          right: this.parseValue(styles.borderRightWidth),
-          bottom: this.parseValue(styles.borderBottomWidth),
-          left: this.parseValue(styles.borderLeftWidth),
-        },
-        style: styles.borderStyle,
-      },
-      position: {
-        top: Math.round(rect.top),
-        left: Math.round(rect.left),
-      },
-    };
-  }
-
-  parseValue(value) {
-    // Convert computed values to numbers with units
-    if (value === "0px" || value === "0") return "0";
-    return value;
-  }
-
-  getInspectorCursor() {
-    // SVG cursor icon - always black with white stroke for visibility on all backgrounds
-    // Increased size to 40x40 for better visibility
-    const cursorSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24"><g fill="none" fill-rule="evenodd"><path d="M24 0v24H0V0zM12.594 23.258l-.012.002l-.071.035l-.02.004l-.014-.004l-.071-.036c-.01-.003-.019 0-.024.006l-.004.01l-.017.428l.005.02l.01.013l.104.074l.015.004l.012-.004l.104-.074l.012-.016l.004-.017l-.017-.427c-.002-.01-.009-.017-.016-.018m.264-.113l-.014.002l-.184.093l-.01.01l-.003.011l.018.43l.005.012l.008.008l.201.092c.012.004.023 0 .029-.008l.004-.014l-.034-.614c-.003-.012-.01-.02-.02-.022m-.715.002a.023.023 0 0 0-.027.006l-.006.014l-.034.614c0 .012.007.02.017.024l.015-.002l.201-.093l.01-.008l.003-.011l.018-.43l-.003-.012l-.01-.01z"/><path fill="#000000" stroke="#FFFFFF" stroke-width="0.75" stroke-linejoin="round" d="M10 3a1 1 0 0 0-2 0v2a1 1 0 0 0 2 0zM5.464 4.05A1 1 0 1 0 4.05 5.464L5.464 6.88A1 1 0 1 0 6.88 5.464zm4.327 4.16c-.978-.326-1.907.603-1.582 1.58l3.533 10.598c.357 1.072 1.84 1.158 2.319.134l2.055-4.406l4.406-2.055c1.024-.478.938-1.962-.134-2.319zm4.159-4.16a1 1 0 0 1 0 1.414L12.536 6.88a1 1 0 1 1-1.415-1.415l1.415-1.414a1 1 0 0 1 1.414 0M2 9a1 1 0 0 1 1-1h2a1 1 0 1 1 0 2H3a1 1 0 0 1-1-1m4.879 3.536a1 1 0 1 0-1.415-1.415L4.05 12.536a1 1 0 1 0 1.414 1.414z"/></g></svg>`;
-    const base64Svg = btoa(unescape(encodeURIComponent(cursorSvg)));
-    // Hotspot at (6, 6) - adjusted for larger cursor size
-    return `url('data:image/svg+xml;base64,${base64Svg}') 6 6, auto`;
-  }
-
-  // Get cursor color based on element background (for site theme adaptation)
-  getCursorColorForElement(element) {
-    if (!element) {
-      // Fallback to site theme
-      const siteTheme = this.detectWebsiteTheme();
-      return siteTheme === "dark" ? "#FFFFFF" : "#000000";
-    }
-
-    try {
-      // Get the background color of the element
-      const styles = this.getCachedComputedStyle(element);
-      let bgColor = styles.backgroundColor;
-
-      // If transparent, check parent elements
-      if (
-        !bgColor ||
-        bgColor === "transparent" ||
-        bgColor === "rgba(0, 0, 0, 0)"
-      ) {
-        let parent = element.parentElement;
-        let depth = 0;
-        while (parent && depth < 5) {
-          const parentStyles = window.getComputedStyle(parent);
-          const parentBg = parentStyles.backgroundColor;
-          if (
-            parentBg &&
-            parentBg !== "transparent" &&
-            parentBg !== "rgba(0, 0, 0, 0)"
-          ) {
-            bgColor = parentBg;
-            break;
-          }
-          parent = parent.parentElement;
-          depth++;
+        if (websiteInfo) {
+          websiteInfo.style.display = "flex";
         }
       }
+    }
 
-      // If still no background, use site theme
-      if (
-        !bgColor ||
-        bgColor === "transparent" ||
-        bgColor === "rgba(0, 0, 0, 0)"
-      ) {
+    unlockElement() {
+      if (this.selectedElement) {
+        this.removeOverlay("selected");
+        this.selectedElement = null;
+      }
+
+      // Update header to show website info again
+      this.updateLockedElementHeader(null);
+
+      // Show empty state
+      this.showEmptyState();
+    }
+
+    extractElementInfo(element, styles, rect) {
+      const classList = Array.from(element.classList);
+      const classString = classList.length > 0 ? "." + classList.join(".") : "";
+
+      return {
+        tag: element.tagName.toLowerCase(),
+        classes: classString,
+        id: element.id || null,
+        dimensions: {
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+        },
+        typography: {
+          fontFamily: styles.fontFamily,
+          fontSize: styles.fontSize,
+          fontWeight: styles.fontWeight,
+          lineHeight: styles.lineHeight,
+          letterSpacing: styles.letterSpacing,
+        },
+        spacing: {
+          margin: {
+            top: this.parseValue(styles.marginTop),
+            right: this.parseValue(styles.marginRight),
+            bottom: this.parseValue(styles.marginBottom),
+            left: this.parseValue(styles.marginLeft),
+          },
+          padding: {
+            top: this.parseValue(styles.paddingTop),
+            right: this.parseValue(styles.paddingRight),
+            bottom: this.parseValue(styles.paddingBottom),
+            left: this.parseValue(styles.paddingLeft),
+          },
+        },
+        colors: {
+          color: styles.color,
+          backgroundColor: styles.backgroundColor,
+          borderColor: styles.borderColor || styles.borderTopColor,
+        },
+        border: {
+          radius: styles.borderRadius,
+          width: {
+            top: this.parseValue(styles.borderTopWidth),
+            right: this.parseValue(styles.borderRightWidth),
+            bottom: this.parseValue(styles.borderBottomWidth),
+            left: this.parseValue(styles.borderLeftWidth),
+          },
+          style: styles.borderStyle,
+        },
+        position: {
+          top: Math.round(rect.top),
+          left: Math.round(rect.left),
+        },
+      };
+    }
+
+    parseValue(value) {
+      // Convert computed values to numbers with units
+      if (value === "0px" || value === "0") return "0";
+      return value;
+    }
+
+    getInspectorCursor() {
+      // SVG cursor icon - always black with white stroke for visibility on all backgrounds
+      // Increased size to 40x40 for better visibility
+      const cursorSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24"><g fill="none" fill-rule="evenodd"><path d="M24 0v24H0V0zM12.594 23.258l-.012.002l-.071.035l-.02.004l-.014-.004l-.071-.036c-.01-.003-.019 0-.024.006l-.004.01l-.017.428l.005.02l.01.013l.104.074l.015.004l.012-.004l.104-.074l.012-.016l.004-.017l-.017-.427c-.002-.01-.009-.017-.016-.018m.264-.113l-.014.002l-.184.093l-.01.01l-.003.011l.018.43l.005.012l.008.008l.201.092c.012.004.023 0 .029-.008l.004-.014l-.034-.614c-.003-.012-.01-.02-.02-.022m-.715.002a.023.023 0 0 0-.027.006l-.006.014l-.034.614c0 .012.007.02.017.024l.015-.002l.201-.093l.01-.008l.003-.011l.018-.43l-.003-.012l-.01-.01z"/><path fill="#000000" stroke="#FFFFFF" stroke-width="0.75" stroke-linejoin="round" d="M10 3a1 1 0 0 0-2 0v2a1 1 0 0 0 2 0zM5.464 4.05A1 1 0 1 0 4.05 5.464L5.464 6.88A1 1 0 1 0 6.88 5.464zm4.327 4.16c-.978-.326-1.907.603-1.582 1.58l3.533 10.598c.357 1.072 1.84 1.158 2.319.134l2.055-4.406l4.406-2.055c1.024-.478.938-1.962-.134-2.319zm4.159-4.16a1 1 0 0 1 0 1.414L12.536 6.88a1 1 0 1 1-1.415-1.415l1.415-1.414a1 1 0 0 1 1.414 0M2 9a1 1 0 0 1 1-1h2a1 1 0 1 1 0 2H3a1 1 0 0 1-1-1m4.879 3.536a1 1 0 1 0-1.415-1.415L4.05 12.536a1 1 0 1 0 1.414 1.414z"/></g></svg>`;
+      const base64Svg = btoa(unescape(encodeURIComponent(cursorSvg)));
+      // Hotspot at (6, 6) - adjusted for larger cursor size
+      return `url('data:image/svg+xml;base64,${base64Svg}') 6 6, auto`;
+    }
+
+    // Get cursor color based on element background (for site theme adaptation)
+    getCursorColorForElement(element) {
+      if (!element) {
+        // Fallback to site theme
         const siteTheme = this.detectWebsiteTheme();
         return siteTheme === "dark" ? "#FFFFFF" : "#000000";
       }
 
-      // Determine if background is light or dark
-      const isLight = this.isColorLight(bgColor);
-      return isLight ? "#000000" : "#FFFFFF";
-    } catch (e) {
-      // Fallback to site theme on error
-      const siteTheme = this.detectWebsiteTheme();
-      return siteTheme === "dark" ? "#FFFFFF" : "#000000";
-    }
-  }
+      try {
+        // Get the background color of the element
+        const styles = this.getCachedComputedStyle(element);
+        let bgColor = styles.backgroundColor;
 
-  createSquircleClipPath(width, height, cornerRadius) {
-    // Generate a squircle (superellipse) clip-path using cubic bezier approximation
-    // This creates smooth, continuous curvature like iOS app icons
-    const r = cornerRadius;
-    const w = width;
-    const h = height;
+        // If transparent, check parent elements
+        if (
+          !bgColor ||
+          bgColor === "transparent" ||
+          bgColor === "rgba(0, 0, 0, 0)"
+        ) {
+          let parent = element.parentElement;
+          let depth = 0;
+          while (parent && depth < 5) {
+            const parentStyles = window.getComputedStyle(parent);
+            const parentBg = parentStyles.backgroundColor;
+            if (
+              parentBg &&
+              parentBg !== "transparent" &&
+              parentBg !== "rgba(0, 0, 0, 0)"
+            ) {
+              bgColor = parentBg;
+              break;
+            }
+            parent = parent.parentElement;
+            depth++;
+          }
+        }
 
-    // Magic number for smooth cubic bezier approximation of a circle
-    const c = 0.551915024494;
+        // If still no background, use site theme
+        if (
+          !bgColor ||
+          bgColor === "transparent" ||
+          bgColor === "rgba(0, 0, 0, 0)"
+        ) {
+          const siteTheme = this.detectWebsiteTheme();
+          return siteTheme === "dark" ? "#FFFFFF" : "#000000";
+        }
 
-    // Generate path with smooth transitions
-    return `M ${r},0 L ${w - r},0 C ${w - r + r * c},0 ${w},${
-      r - r * c
-    } ${w},${r} L ${w},${h - r} C ${w},${h - r + r * c} ${w - r + r * c},${h} ${
-      w - r
-    },${h} L ${r},${h} C ${r - r * c},${h} 0,${h - r + r * c} 0,${
-      h - r
-    } L 0,${r} C 0,${r - r * c} ${r - r * c},0 ${r},0 Z`;
-  }
-
-  applyInspectorSquircles() {
-    // Apply squircle clip-paths to all inspector elements with the inspector-squircle class
-    const squircleElements = document.querySelectorAll(".inspector-squircle");
-    squircleElements.forEach((el) => {
-      const rect = el.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        const path = this.createSquircleClipPath(rect.width, rect.height, 12);
-        el.style.clipPath = `path('${path}')`;
+        // Determine if background is light or dark
+        const isLight = this.isColorLight(bgColor);
+        return isLight ? "#000000" : "#FFFFFF";
+      } catch (e) {
+        // Fallback to site theme on error
+        const siteTheme = this.detectWebsiteTheme();
+        return siteTheme === "dark" ? "#FFFFFF" : "#000000";
       }
-    });
-  }
+    }
 
-  formatElementInfo(info, isSelected, hasText = true) {
-    const selector = `${info.tag}${info.id ? "#" + info.id : ""}${
-      info.classes
-    }`;
+    createSquircleClipPath(width, height, cornerRadius) {
+      // Generate a squircle (superellipse) clip-path using cubic bezier approximation
+      // This creates smooth, continuous curvature like iOS app icons
+      const r = cornerRadius;
+      const w = width;
+      const h = height;
 
-    // Get website name and URL
-    const websiteName = document.title || "Untitled Page";
-    const websiteUrl = window.location.href;
+      // Magic number for smooth cubic bezier approximation of a circle
+      const c = 0.551915024494;
 
-    // Get theme colors
-    const colors = this.getThemeColors();
-    const hoverBg = this.theme === "light" ? "#E8E8E8" : "#222222";
-    const hoverBorder = this.theme === "light" ? "#D5D5D5" : "#3A3A3A";
-    const popoverBg = colors.bgTertiary;
-    const popoverText = colors.textPrimary;
+      // Generate path with smooth transitions
+      return `M ${r},0 L ${w - r},0 C ${w - r + r * c},0 ${w},${
+        r - r * c
+      } ${w},${r} L ${w},${h - r} C ${w},${h - r + r * c} ${
+        w - r + r * c
+      },${h} ${w - r},${h} L ${r},${h} C ${r - r * c},${h} 0,${
+        h - r + r * c
+      } 0,${h - r} L 0,${r} C 0,${r - r * c} ${r - r * c},0 ${r},0 Z`;
+    }
 
-    // Spacing preview colors - CSS Peeper style
-    // Box 3 (outermost margin): subtle gray
-    // Box 2 (padding): same as panel background (black in dark, white in light)
-    // Box 1 (content): white in dark, black in light
-    const spacingBox3Bg =
-      this.theme === "light"
-        ? "rgba(0, 0, 0, 0.08)"
-        : "rgba(255, 255, 255, 0.08)";
-    const spacingBox2Bg = this.theme === "light" ? "#FFFFFF" : "#0D0D0D";
-    const spacingBox2Border =
-      this.theme === "light"
-        ? "rgba(0, 0, 0, 0.25)"
-        : "rgba(255, 255, 255, 0.25)";
-    const spacingBox1Bg = this.theme === "light" ? "#0D0D0D" : "#FFFFFF";
-    const spacingBox1Text = this.theme === "light" ? "#FFFFFF" : "#0D0D0D";
-    const spacingBox1Border =
-      this.theme === "light"
-        ? "rgba(0, 0, 0, 0.15)"
-        : "rgba(255, 255, 255, 0.15)";
-    const spacingCornerStroke = this.theme === "light" ? "#666666" : "#A5A5A5";
+    applyInspectorSquircles() {
+      // Apply squircle clip-paths to all inspector elements with the inspector-squircle class
+      const squircleElements = document.querySelectorAll(".inspector-squircle");
+      squircleElements.forEach((el) => {
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          const path = this.createSquircleClipPath(rect.width, rect.height, 12);
+          el.style.clipPath = `path('${path}')`;
+        }
+      });
+    }
 
-    // Calculate contrast if we have background and text colors
-    const contrast = this.calculateContrast(
-      info.colors.color,
-      info.colors.backgroundColor
-    );
+    formatElementInfo(info, isSelected, hasText = true) {
+      const selector = `${info.tag}${info.id ? "#" + info.id : ""}${
+        info.classes
+      }`;
 
-    const contrastBg =
-      contrast.level === "aaa"
-        ? "#10b981"
-        : contrast.level === "aa"
-        ? "#3b82f6"
-        : contrast.level === "aa-large"
-        ? "#f59e0b"
-        : "#ef4444";
+      // Get website name and URL
+      const websiteName = document.title || "Untitled Page";
+      const websiteUrl = window.location.href;
 
-    // Determine if text color is light or dark, then set appropriate background for readability
-    const textLuminance = this.getLuminance(info.colors.color);
-    const isLightText = textLuminance > 0.5;
+      // Get theme colors
+      const colors = this.getThemeColors();
+      const hoverBg = this.theme === "light" ? "#E8E8E8" : "#222222";
+      const hoverBorder = this.theme === "light" ? "#D5D5D5" : "#3A3A3A";
+      const popoverBg = colors.bgTertiary;
+      const popoverText = colors.textPrimary;
 
-    // Invert background based on text color: dark text = light bg, light text = dark bg
-    // Always ensure good contrast regardless of theme
-    let previewBg;
-    if (
-      this.isValidColor(info.colors.backgroundColor) &&
-      info.colors.backgroundColor !== "rgba(0, 0, 0, 0)" &&
-      info.colors.backgroundColor !== "transparent"
-    ) {
-      // Use element's background if it exists and is valid
-      const bgLuminance = this.getLuminance(info.colors.backgroundColor);
-      // If background would create poor contrast, invert it
+      // Spacing preview colors - CSS Peeper style
+      // Box 3 (outermost margin): subtle gray
+      // Box 2 (padding): same as panel background (black in dark, white in light)
+      // Box 1 (content): white in dark, black in light
+      const spacingBox3Bg =
+        this.theme === "light"
+          ? "rgba(0, 0, 0, 0.08)"
+          : "rgba(255, 255, 255, 0.08)";
+      const spacingBox2Bg = this.theme === "light" ? "#FFFFFF" : "#0D0D0D";
+      const spacingBox2Border =
+        this.theme === "light"
+          ? "rgba(0, 0, 0, 0.25)"
+          : "rgba(255, 255, 255, 0.25)";
+      const spacingBox1Bg = this.theme === "light" ? "#0D0D0D" : "#FFFFFF";
+      const spacingBox1Text = this.theme === "light" ? "#FFFFFF" : "#0D0D0D";
+      const spacingBox1Border =
+        this.theme === "light"
+          ? "rgba(0, 0, 0, 0.15)"
+          : "rgba(255, 255, 255, 0.15)";
+      const spacingCornerStroke =
+        this.theme === "light" ? "#666666" : "#A5A5A5";
+
+      // Calculate contrast if we have background and text colors
+      const contrast = this.calculateContrast(
+        info.colors.color,
+        info.colors.backgroundColor
+      );
+
+      const contrastBg =
+        contrast.level === "aaa"
+          ? "#10b981"
+          : contrast.level === "aa"
+          ? "#3b82f6"
+          : contrast.level === "aa-large"
+          ? "#f59e0b"
+          : "#ef4444";
+
+      // Determine if text color is light or dark, then set appropriate background for readability
+      const textLuminance = this.getLuminance(info.colors.color);
+      const isLightText = textLuminance > 0.5;
+
+      // Invert background based on text color: dark text = light bg, light text = dark bg
+      // Always ensure good contrast regardless of theme
+      let previewBg;
       if (
-        (isLightText && bgLuminance > 0.5) ||
-        (!isLightText && bgLuminance <= 0.5)
+        this.isValidColor(info.colors.backgroundColor) &&
+        info.colors.backgroundColor !== "rgba(0, 0, 0, 0)" &&
+        info.colors.backgroundColor !== "transparent"
       ) {
-        // Poor contrast - use theme-appropriate inverted background
-        // For light text, use dark background; for dark text, use light background
-        previewBg = isLightText ? "#0D0D0D" : "#FFFFFF";
+        // Use element's background if it exists and is valid
+        const bgLuminance = this.getLuminance(info.colors.backgroundColor);
+        // If background would create poor contrast, invert it
+        if (
+          (isLightText && bgLuminance > 0.5) ||
+          (!isLightText && bgLuminance <= 0.5)
+        ) {
+          // Poor contrast - use theme-appropriate inverted background
+          // For light text, use dark background; for dark text, use light background
+          previewBg = isLightText ? "#0D0D0D" : "#FFFFFF";
+        } else {
+          // Good contrast - use element's actual background
+          previewBg = info.colors.backgroundColor;
+        }
       } else {
-        // Good contrast - use element's actual background
-        previewBg = info.colors.backgroundColor;
+        // No background - use inverted color based on text
+        // Always use fixed colors that contrast well: dark for light text, light for dark text
+        previewBg = isLightText ? "#0D0D0D" : "#FFFFFF";
       }
-    } else {
-      // No background - use inverted color based on text
-      // Always use fixed colors that contrast well: dark for light text, light for dark text
-      previewBg = isLightText ? "#0D0D0D" : "#FFFFFF";
-    }
 
-    // Calculate background color display value and text color for readability
-    // Check if background color is valid and not transparent
-    const bgHex = this.rgbToHex(info.colors.backgroundColor);
-    const bgColorDisplay =
-      bgHex && this.isValidColor(info.colors.backgroundColor)
-        ? info.colors.backgroundColor
-        : "#FFFFFF";
-    const bgColorTextColor =
-      this.getLuminance(bgColorDisplay) > 0.5 ? "#000" : "#FFF";
+      // Calculate background color display value and text color for readability
+      // Check if background color is valid and not transparent
+      const bgHex = this.rgbToHex(info.colors.backgroundColor);
+      const bgColorDisplay =
+        bgHex && this.isValidColor(info.colors.backgroundColor)
+          ? info.colors.backgroundColor
+          : "#FFFFFF";
+      const bgColorTextColor =
+        this.getLuminance(bgColorDisplay) > 0.5 ? "#000" : "#FFF";
 
-    return `
+      return `
       <div class="inspector-section" style="margin-bottom: 16px; opacity: 1; transform: translateY(0); transition: opacity 0.2s ease-out, transform 0.2s ease-out;">
         <div style="margin-bottom: 10px;">
           <h4 style="margin: 0; font-size: 13px; font-weight: 600; color: ${
@@ -3651,12 +7147,12 @@ class CSSInspector {
           <div style="padding: 12px; background: ${
             colors.bgSecondary
           }; border: 1px solid ${
-      colors.border
-    }; border-radius: 12px; cursor: pointer; transition: all 0.2s;" class="inspector-squircle" onmouseover="this.style.background='${hoverBg}'" onmouseout="this.style.background='${
-      colors.bgSecondary
-    }'" data-copy-value="${
-      info.dimensions.width
-    }px" data-copy-message="Width copied">
+        colors.border
+      }; border-radius: 12px; cursor: pointer; transition: all 0.2s;" class="inspector-squircle" onmouseover="this.style.background='${hoverBg}'" onmouseout="this.style.background='${
+        colors.bgSecondary
+      }'" data-copy-value="${
+        info.dimensions.width
+      }px" data-copy-message="Width copied">
             <div style="color: ${
               colors.textSecondary
             }; font-size: 11px; font-family: 'Inter', sans-serif; margin-bottom: 4px;">Width</div>
@@ -3669,12 +7165,12 @@ class CSSInspector {
           <div style="padding: 12px; background: ${
             colors.bgSecondary
           }; border: 1px solid ${
-      colors.border
-    }; border-radius: 12px; cursor: pointer; transition: all 0.2s;" class="inspector-squircle" onmouseover="this.style.background='${hoverBg}'" onmouseout="this.style.background='${
-      colors.bgSecondary
-    }'" data-copy-value="${
-      info.dimensions.height
-    }px" data-copy-message="Height copied">
+        colors.border
+      }; border-radius: 12px; cursor: pointer; transition: all 0.2s;" class="inspector-squircle" onmouseover="this.style.background='${hoverBg}'" onmouseout="this.style.background='${
+        colors.bgSecondary
+      }'" data-copy-value="${
+        info.dimensions.height
+      }px" data-copy-message="Height copied">
             <div style="color: ${
               colors.textSecondary
             }; font-size: 11px; font-family: 'Inter', sans-serif; margin-bottom: 4px;">Height</div>
@@ -3824,89 +7320,93 @@ class CSSInspector {
                 ? colors.textPrimary
                 : colors.textSecondary
             }; font-family: 'Inter', sans-serif; ${
-      info.spacing.margin.top !== "0" ? "cursor: pointer;" : "cursor: default;"
-    } white-space: nowrap; z-index: 10;" 
+        info.spacing.margin.top !== "0"
+          ? "cursor: pointer;"
+          : "cursor: default;"
+      } white-space: nowrap; z-index: 10;" 
                   ${
                     info.spacing.margin.top !== "0"
                       ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.top-boxRect.top+elRect.height+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'margin');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.spacing.margin.top}" data-copy-message="Margin top copied"`
                       : ""
                   }>${
-      info.spacing.margin.top !== "0"
-        ? info.spacing.margin.top.replace(/px/g, "")
-        : "-"
-    }</div>
+        info.spacing.margin.top !== "0"
+          ? info.spacing.margin.top.replace(/px/g, "")
+          : "-"
+      }</div>
             <div class="spacing-value" style="position: absolute; right: -40px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 500; color: ${
               info.spacing.margin.right !== "0"
                 ? colors.textPrimary
                 : colors.textSecondary
             }; font-family: 'Inter', sans-serif; ${
-      info.spacing.margin.right !== "0"
-        ? "cursor: pointer;"
-        : "cursor: default;"
-    } white-space: nowrap; z-index: 10;" 
+        info.spacing.margin.right !== "0"
+          ? "cursor: pointer;"
+          : "cursor: default;"
+      } white-space: nowrap; z-index: 10;" 
                   ${
                     info.spacing.margin.right !== "0"
                       ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'margin');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.spacing.margin.right}" data-copy-message="Margin right copied"`
                       : ""
                   }>${
-      info.spacing.margin.right !== "0"
-        ? info.spacing.margin.right.replace(/px/g, "")
-        : "-"
-    }</div>
+        info.spacing.margin.right !== "0"
+          ? info.spacing.margin.right.replace(/px/g, "")
+          : "-"
+      }</div>
             <div class="spacing-value" style="position: absolute; bottom: -24px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 500; color: ${
               info.spacing.margin.bottom !== "0"
                 ? colors.textPrimary
                 : colors.textSecondary
             }; font-family: 'Inter', sans-serif; ${
-      info.spacing.margin.bottom !== "0"
-        ? "cursor: pointer;"
-        : "cursor: default;"
-    } white-space: nowrap; z-index: 10;" 
+        info.spacing.margin.bottom !== "0"
+          ? "cursor: pointer;"
+          : "cursor: default;"
+      } white-space: nowrap; z-index: 10;" 
                   ${
                     info.spacing.margin.bottom !== "0"
                       ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'margin');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.spacing.margin.bottom}" data-copy-message="Margin bottom copied"`
                       : ""
                   }>${
-      info.spacing.margin.bottom !== "0"
-        ? info.spacing.margin.bottom.replace(/px/g, "")
-        : "-"
-    }</div>
+        info.spacing.margin.bottom !== "0"
+          ? info.spacing.margin.bottom.replace(/px/g, "")
+          : "-"
+      }</div>
             <div class="spacing-value" style="position: absolute; left: -40px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 500; color: ${
               info.spacing.margin.left !== "0"
                 ? colors.textPrimary
                 : colors.textSecondary
             }; font-family: 'Inter', sans-serif; ${
-      info.spacing.margin.left !== "0" ? "cursor: pointer;" : "cursor: default;"
-    } white-space: nowrap; z-index: 10;" 
+        info.spacing.margin.left !== "0"
+          ? "cursor: pointer;"
+          : "cursor: default;"
+      } white-space: nowrap; z-index: 10;" 
                   ${
                     info.spacing.margin.left !== "0"
                       ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'margin');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.spacing.margin.left}" data-copy-message="Margin left copied"`
                       : ""
                   }>${
-      info.spacing.margin.left !== "0"
-        ? info.spacing.margin.left.replace(/px/g, "")
-        : "-"
-    }</div>
+        info.spacing.margin.left !== "0"
+          ? info.spacing.margin.left.replace(/px/g, "")
+          : "-"
+      }</div>
             
             <!-- 3. Margin (outermost) - Always shown -->
             <div style="position: absolute; inset: 0; background: ${spacingBox3Bg}; box-sizing: border-box; border-radius: 8px; overflow: hidden;">
               <!-- Corner strokes using CSS borders -->
               <!-- Top-left corner -->
               <div style="position: absolute; top: 0; left: 0; width: 16px; height: 16px; border-top: 2.5px solid ${spacingCornerStroke}; border-left: 2.5px solid ${spacingCornerStroke}; border-radius: 8px 0 0 0; pointer-events: none; z-index: 1; opacity: ${
-      info.border.radius === "0px" || info.border.radius === "0" ? "0.3" : "1"
-    };"></div>
+        info.border.radius === "0px" || info.border.radius === "0" ? "0.3" : "1"
+      };"></div>
               <!-- Top-right corner -->
               <div style="position: absolute; top: 0; right: 0; width: 16px; height: 16px; border-top: 2.5px solid ${spacingCornerStroke}; border-right: 2.5px solid ${spacingCornerStroke}; border-radius: 0 8px 0 0; pointer-events: none; z-index: 1; opacity: ${
-      info.border.radius === "0px" || info.border.radius === "0" ? "0.3" : "1"
-    };"></div>
+        info.border.radius === "0px" || info.border.radius === "0" ? "0.3" : "1"
+      };"></div>
               <!-- Bottom-right corner -->
               <div style="position: absolute; bottom: 0; right: 0; width: 16px; height: 16px; border-bottom: 2.5px solid ${spacingCornerStroke}; border-right: 2.5px solid ${spacingCornerStroke}; border-radius: 0 0 8px 0; pointer-events: none; z-index: 1; opacity: ${
-      info.border.radius === "0px" || info.border.radius === "0" ? "0.3" : "1"
-    };"></div>
+        info.border.radius === "0px" || info.border.radius === "0" ? "0.3" : "1"
+      };"></div>
               <!-- Bottom-left corner -->
               <div style="position: absolute; bottom: 0; left: 0; width: 16px; height: 16px; border-bottom: 2.5px solid ${spacingCornerStroke}; border-left: 2.5px solid ${spacingCornerStroke}; border-radius: 0 0 0 8px; pointer-events: none; z-index: 1; opacity: ${
-      info.border.radius === "0px" || info.border.radius === "0" ? "0.3" : "1"
-    };"></div>
+        info.border.radius === "0px" || info.border.radius === "0" ? "0.3" : "1"
+      };"></div>
           </div>
             
             <!-- Border-radius corner value labels -->
@@ -3915,53 +7415,53 @@ class CSSInspector {
                 ? "cursor: pointer;"
                 : "cursor: default;"
             } z-index: 20; color: ${colors.textSecondary};" ${
-      info.border.radius !== "0px" && info.border.radius !== "0"
-        ? `onmouseenter="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent='radius'; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this);" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.border.radius}" data-copy-message="Border radius copied"`
-        : ""
-    }>${
-      info.border.radius !== "0px" && info.border.radius !== "0"
-        ? this.parseBorderRadius(info.border.radius)
-        : "-"
-    }</div>
+        info.border.radius !== "0px" && info.border.radius !== "0"
+          ? `onmouseenter="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent='radius'; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this);" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.border.radius}" data-copy-message="Border radius copied"`
+          : ""
+      }>${
+        info.border.radius !== "0px" && info.border.radius !== "0"
+          ? this.parseBorderRadius(info.border.radius)
+          : "-"
+      }</div>
             <div style="position: absolute; top: 8px; right: 8px; font-size: 11px; font-weight: 500; color: #8B8B8B; font-family: 'Inter', sans-serif; ${
               info.border.radius !== "0px" && info.border.radius !== "0"
                 ? "cursor: pointer;"
                 : "cursor: default;"
             } z-index: 20; color: ${colors.textSecondary};" ${
-      info.border.radius !== "0px" && info.border.radius !== "0"
-        ? `onmouseenter="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent='radius'; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this);" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.border.radius}" data-copy-message="Border radius copied"`
-        : ""
-    }>${
-      info.border.radius !== "0px" && info.border.radius !== "0"
-        ? this.parseBorderRadius(info.border.radius)
-        : "-"
-    }</div>
+        info.border.radius !== "0px" && info.border.radius !== "0"
+          ? `onmouseenter="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent='radius'; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this);" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.border.radius}" data-copy-message="Border radius copied"`
+          : ""
+      }>${
+        info.border.radius !== "0px" && info.border.radius !== "0"
+          ? this.parseBorderRadius(info.border.radius)
+          : "-"
+      }</div>
             <div style="position: absolute; bottom: 8px; right: 8px; font-size: 11px; font-weight: 500; color: #8B8B8B; font-family: 'Inter', sans-serif; ${
               info.border.radius !== "0px" && info.border.radius !== "0"
                 ? "cursor: pointer;"
                 : "cursor: default;"
             } z-index: 20; color: ${colors.textSecondary};" ${
-      info.border.radius !== "0px" && info.border.radius !== "0"
-        ? `onmouseenter="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent='radius'; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this);" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.border.radius}" data-copy-message="Border radius copied"`
-        : ""
-    }>${
-      info.border.radius !== "0px" && info.border.radius !== "0"
-        ? this.parseBorderRadius(info.border.radius)
-        : "-"
-    }</div>
+        info.border.radius !== "0px" && info.border.radius !== "0"
+          ? `onmouseenter="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent='radius'; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this);" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.border.radius}" data-copy-message="Border radius copied"`
+          : ""
+      }>${
+        info.border.radius !== "0px" && info.border.radius !== "0"
+          ? this.parseBorderRadius(info.border.radius)
+          : "-"
+      }</div>
             <div style="position: absolute; bottom: 8px; left: 8px; font-size: 11px; font-weight: 500; color: #8B8B8B; font-family: 'Inter', sans-serif; ${
               info.border.radius !== "0px" && info.border.radius !== "0"
                 ? "cursor: pointer;"
                 : "cursor: default;"
             } z-index: 20; color: ${colors.textSecondary};" ${
-      info.border.radius !== "0px" && info.border.radius !== "0"
-        ? `onmouseenter="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent='radius'; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this);" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.border.radius}" data-copy-message="Border radius copied"`
-        : ""
-    }>${
-      info.border.radius !== "0px" && info.border.radius !== "0"
-        ? this.parseBorderRadius(info.border.radius)
-        : "-"
-    }</div>
+        info.border.radius !== "0px" && info.border.radius !== "0"
+          ? `onmouseenter="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent='radius'; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this);" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.border.radius}" data-copy-message="Border radius copied"`
+          : ""
+      }>${
+        info.border.radius !== "0px" && info.border.radius !== "0"
+          ? this.parseBorderRadius(info.border.radius)
+          : "-"
+      }</div>
             
             <!-- 2. Padding Container - Always shown -->
             <div style="position: absolute; inset: 25px 30px; box-sizing: border-box; border: 1px solid ${spacingBox2Border}; border-radius: 8px; background: ${spacingBox2Bg};">
@@ -3970,76 +7470,78 @@ class CSSInspector {
                   ? colors.textPrimary
                   : colors.textSecondary
               }; font-family: 'Inter', sans-serif; ${
-      info.spacing.padding.top !== "0" ? "cursor: pointer;" : "cursor: default;"
-    } white-space: nowrap; z-index: 10;" 
+        info.spacing.padding.top !== "0"
+          ? "cursor: pointer;"
+          : "cursor: default;"
+      } white-space: nowrap; z-index: 10;" 
                   ${
                     info.spacing.padding.top !== "0"
                       ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.top-boxRect.top+elRect.height+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'padding');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.spacing.padding.top}" data-copy-message="Padding top copied"`
                       : ""
                   }>${
-      info.spacing.padding.top !== "0"
-        ? info.spacing.padding.top.replace(/px/g, "")
-        : "-"
-    }</div>
+        info.spacing.padding.top !== "0"
+          ? info.spacing.padding.top.replace(/px/g, "")
+          : "-"
+      }</div>
               <div class="spacing-value" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 500; color: ${
                 info.spacing.padding.right !== "0"
                   ? colors.textPrimary
                   : colors.textSecondary
               }; font-family: 'Inter', sans-serif; ${
-      info.spacing.padding.right !== "0"
-        ? "cursor: pointer;"
-        : "cursor: default;"
-    } white-space: nowrap; z-index: 10;" 
+        info.spacing.padding.right !== "0"
+          ? "cursor: pointer;"
+          : "cursor: default;"
+      } white-space: nowrap; z-index: 10;" 
                   ${
                     info.spacing.padding.right !== "0"
                       ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'padding');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.spacing.padding.right}" data-copy-message="Padding right copied"`
                       : ""
                   }>${
-      info.spacing.padding.right !== "0"
-        ? info.spacing.padding.right.replace(/px/g, "")
-        : "-"
-    }</div>
+        info.spacing.padding.right !== "0"
+          ? info.spacing.padding.right.replace(/px/g, "")
+          : "-"
+      }</div>
               <div class="spacing-value" style="position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 500; color: ${
                 info.spacing.padding.bottom !== "0"
                   ? colors.textPrimary
                   : colors.textSecondary
               }; font-family: 'Inter', sans-serif; ${
-      info.spacing.padding.bottom !== "0"
-        ? "cursor: pointer;"
-        : "cursor: default;"
-    } white-space: nowrap; z-index: 10;" 
+        info.spacing.padding.bottom !== "0"
+          ? "cursor: pointer;"
+          : "cursor: default;"
+      } white-space: nowrap; z-index: 10;" 
                   ${
                     info.spacing.padding.bottom !== "0"
                       ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'padding');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.spacing.padding.bottom}" data-copy-message="Padding bottom copied"`
                       : ""
                   }>${
-      info.spacing.padding.bottom !== "0"
-        ? info.spacing.padding.bottom.replace(/px/g, "")
-        : "-"
-    }</div>
+        info.spacing.padding.bottom !== "0"
+          ? info.spacing.padding.bottom.replace(/px/g, "")
+          : "-"
+      }</div>
               <div class="spacing-value" style="position: absolute; left: 8px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 500; color: ${
                 info.spacing.padding.left !== "0"
                   ? colors.textPrimary
                   : colors.textSecondary
               }; font-family: 'Inter', sans-serif; ${
-      info.spacing.padding.left !== "0"
-        ? "cursor: pointer;"
-        : "cursor: default;"
-    } white-space: nowrap; z-index: 10;" 
+        info.spacing.padding.left !== "0"
+          ? "cursor: pointer;"
+          : "cursor: default;"
+      } white-space: nowrap; z-index: 10;" 
                   ${
                     info.spacing.padding.left !== "0"
                       ? `onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el, prop){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent=prop; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this,'padding');" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${info.spacing.padding.left}" data-copy-message="Padding left copied"`
                       : ""
                   }>${
-      info.spacing.padding.left !== "0"
-        ? info.spacing.padding.left.replace(/px/g, "")
-        : "-"
-    }</div>
+        info.spacing.padding.left !== "0"
+          ? info.spacing.padding.left.replace(/px/g, "")
+          : "-"
+      }</div>
               
             <!-- 1. Content (width x height) - Always shown -->
             <div style="position: absolute; inset: 28px 45px; background: ${spacingBox1Bg}; border: 1px solid ${spacingBox1Border}; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: ${spacingBox1Text}; font-size: 11px; font-weight: 500; font-family: 'Inter', sans-serif; box-sizing: border-box; cursor: pointer;" onmouseover="this.style.opacity='0.7';" onmouseout="this.style.opacity='1';" onmouseenter="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const existingPopover=previewBox.querySelector('.spacing-popover'); if(existingPopover) existingPopover.remove(); const elRect=el.getBoundingClientRect(); const boxRect=previewBox.getBoundingClientRect(); const popover=document.createElement('div'); popover.className='spacing-popover'; popover.textContent='width × height'; popover.style.cssText='position:absolute;top:'+(elRect.bottom-boxRect.top+4)+'px;left:'+(elRect.left-boxRect.left+(elRect.width/2))+'px;transform:translateX(-50%);background:${popoverBg};color:${popoverText};padding:4px 8px;border-radius:4px;font-size:11px;font-family:Inter,sans-serif;white-space:nowrap;z-index:10000;pointer-events:none;';previewBox.appendChild(popover);}})(this);" onmouseleave="(function(el){const previewBox=el.closest('[id^=spacing-preview-box]'); if(previewBox){const popover=previewBox.querySelector('.spacing-popover'); if(popover) popover.remove();}})(this);" data-copy-value="${
-      info.dimensions.width
-    } × ${info.dimensions.height}" data-copy-message="Dimensions copied">
+        info.dimensions.width
+      } × ${info.dimensions.height}" data-copy-message="Dimensions copied">
               ${info.dimensions.width} × ${info.dimensions.height}
           </div>
           </div>
@@ -4152,157 +7654,50 @@ class CSSInspector {
       }
 
     `;
-  }
-
-  extractColors() {
-    // Return cached result if available
-    if (this.colorExtractionCache) {
-      return this.colorExtractionCache;
     }
 
-    const colors = new Map();
-
-    const allElements = document.querySelectorAll("*");
-
-    allElements.forEach((element) => {
-      // Skip inspector panel and overlay elements
-      if (
-        element.id === "css-inspector-panel" ||
-        element.closest("#css-inspector-panel") ||
-        element.classList.contains("css-inspector-overlay") ||
-        element.classList.contains("css-inspector-highlight")
-      ) {
-        return;
+    extractColors() {
+      // Return cached result if available
+      if (this.colorExtractionCache) {
+        return this.colorExtractionCache;
       }
 
-      const styles = this.getCachedComputedStyle(element);
+      const colors = new Map();
 
-      // Only process visible elements (check rendering, not viewport position)
-      const rect = element.getBoundingClientRect();
-      const isVisible = this.isElementVisible(element, styles, rect);
+      const allElements = document.querySelectorAll("*");
 
-      if (!isVisible) {
-        return;
-      }
-
-      // Calculate element area for weighting
-      const elementArea = rect.width * rect.height;
-
-      // Text color - weight by approximate text area
-      // Estimate text area as a fraction of element area (text typically doesn't fill entire element)
-      if (
-        styles.color &&
-        styles.color !== "rgba(0, 0, 0, 0)" &&
-        styles.color !== "transparent"
-      ) {
-        const hex = this.rgbToHex(styles.color);
-        if (hex) {
-          const existing = colors.get(hex) || {
-            hex,
-            instances: 0,
-            area: 0,
-            categories: new Set(),
-          };
-          // For text, estimate area as 30-50% of element area (text doesn't fill entire element)
-          // Use font size to determine coverage: larger fonts = more coverage
-          const fontSize = parseFloat(styles.fontSize) || 16;
-          const textCoverageRatio = Math.min(0.5, Math.max(0.2, fontSize / 40)); // Between 20-50% based on font size
-          const estimatedTextArea = elementArea * textCoverageRatio;
-          existing.instances++;
-          existing.area += estimatedTextArea;
-          existing.categories.add("typography");
-          colors.set(hex, existing);
+      allElements.forEach((element) => {
+        // Skip inspector panel and overlay elements
+        if (
+          element.id === "css-inspector-panel" ||
+          element.closest("#css-inspector-panel") ||
+          element.classList.contains("css-inspector-overlay") ||
+          element.classList.contains("css-inspector-highlight")
+        ) {
+          return;
         }
-      }
 
-      // Background color - calculate visible area (parent area minus child areas)
-      // Only count if element is large enough (filters out tiny decorative elements)
-      const minBackgroundArea = 1000; // Minimum 1000px² to count
-      if (
-        elementArea >= minBackgroundArea &&
-        styles.backgroundColor &&
-        styles.backgroundColor !== "rgba(0, 0, 0, 0)" &&
-        styles.backgroundColor !== "transparent"
-      ) {
-        // Calculate visible area by subtracting only direct children with different backgrounds
-        // This is more accurate than deep recursion which can over-subtract
-        const parentBgHex = this.rgbToHex(styles.backgroundColor);
-        if (!parentBgHex) {
-          return; // Skip if we can't convert the background color
+        const styles = this.getCachedComputedStyle(element);
+
+        // Only process visible elements (check rendering, not viewport position)
+        const rect = element.getBoundingClientRect();
+        const isVisible = this.isElementVisible(element, styles, rect);
+
+        if (!isVisible) {
+          return;
         }
-        const transparentHex = this.rgbToHex("rgba(0, 0, 0, 0)");
-        const transparentHex2 = this.rgbToHex("transparent");
 
-        // Track all descendant elements with different backgrounds (not just direct children)
-        // Use a Set to avoid double-counting overlapping elements
-        const processedElements = new Set();
+        // Calculate element area for weighting
+        const elementArea = rect.width * rect.height;
 
-        const calculateDescendantAreaSum = (parentElement, parentBgHex) => {
-          let sum = 0;
-
-          // Use a queue to process all descendants level by level
-          const queue = Array.from(parentElement.children);
-
-          while (queue.length > 0) {
-            const child = queue.shift();
-
-            // Skip if already processed (handles overlapping elements)
-            if (processedElements.has(child)) {
-              continue;
-            }
-
-            const childStyles = window.getComputedStyle(child);
-            const childRect = child.getBoundingClientRect();
-            const childVisible =
-              childRect.width > 0 &&
-              childRect.height > 0 &&
-              childStyles.display !== "none" &&
-              childStyles.visibility !== "hidden" &&
-              childStyles.opacity !== "0";
-
-            if (!childVisible) {
-              continue;
-            }
-
-            const childBg = childStyles.backgroundColor;
-            const childBgHex = this.rgbToHex(childBg);
-
-            // If child has a different, non-transparent background, subtract its area
-            if (
-              childBgHex &&
-              childBgHex !== transparentHex &&
-              childBgHex !== transparentHex2 &&
-              childBgHex !== parentBgHex
-            ) {
-              // Child has different background - subtract its full area
-              // Don't process its children (they cover the child, not the parent)
-              const childArea = childRect.width * childRect.height;
-              sum += childArea;
-              processedElements.add(child);
-            } else {
-              // Child has same/transparent/undefined background - add its children to queue
-              // (they might have backgrounds that cover the parent)
-              for (const grandchild of child.children) {
-                if (!processedElements.has(grandchild)) {
-                  queue.push(grandchild);
-                }
-              }
-            }
-          }
-
-          return sum;
-        };
-
-        // Calculate visible area = parent area - sum of all descendant areas with different backgrounds
-        const descendantAreaSum = calculateDescendantAreaSum(
-          element,
-          parentBgHex
-        );
-        const visibleArea = Math.max(0, elementArea - descendantAreaSum);
-
-        // Only count if visible area is significant
-        if (visibleArea > 0) {
-          const hex = this.rgbToHex(styles.backgroundColor);
+        // Text color - weight by approximate text area
+        // Estimate text area as a fraction of element area (text typically doesn't fill entire element)
+        if (
+          styles.color &&
+          styles.color !== "rgba(0, 0, 0, 0)" &&
+          styles.color !== "transparent"
+        ) {
+          const hex = this.rgbToHex(styles.color);
           if (hex) {
             const existing = colors.get(hex) || {
               hex,
@@ -4310,335 +7705,456 @@ class CSSInspector {
               area: 0,
               categories: new Set(),
             };
+            // For text, estimate area as 30-50% of element area (text doesn't fill entire element)
+            // Use font size to determine coverage: larger fonts = more coverage
+            const fontSize = parseFloat(styles.fontSize) || 16;
+            const textCoverageRatio = Math.min(
+              0.5,
+              Math.max(0.2, fontSize / 40)
+            ); // Between 20-50% based on font size
+            const estimatedTextArea = elementArea * textCoverageRatio;
             existing.instances++;
-            existing.area += visibleArea;
-            existing.categories.add("background");
+            existing.area += estimatedTextArea;
+            existing.categories.add("typography");
             colors.set(hex, existing);
           }
         }
-      }
 
-      // Border color - weight by border area
-      const borderColor = styles.borderColor || styles.borderTopColor;
-      if (
-        borderColor &&
-        borderColor !== "rgba(0, 0, 0, 0)" &&
-        borderColor !== "transparent" &&
-        styles.borderWidth !== "0px"
-      ) {
-        const hex = this.rgbToHex(borderColor);
-        if (hex) {
-          const existing = colors.get(hex) || {
-            hex,
-            instances: 0,
-            area: 0,
-            categories: new Set(),
-          };
-          // Calculate border area: perimeter × border width
-          const borderWidth = parseFloat(styles.borderWidth) || 1;
-          const borderArea = (rect.width * 2 + rect.height * 2) * borderWidth;
-          existing.instances++;
-          existing.area += borderArea;
-          existing.categories.add("border");
-          colors.set(hex, existing);
-        }
-      }
-    });
-
-    const result = Array.from(colors.values())
-      .map((color) => ({
-        hex: color.hex,
-        instances: color.instances,
-        area: color.area,
-        categories: Array.from(color.categories),
-      }))
-      .sort((a, b) => b.area - a.area); // Sort by area instead of instances
-
-    // Cache the result
-    this.colorExtractionCache = result;
-    return result;
-  }
-
-  extractTypography() {
-    // Return cached result if available
-    if (this.typographyExtractionCache) {
-      return this.typographyExtractionCache;
-    }
-
-    const fontFamilyMap = new Map();
-
-    const allElements = document.querySelectorAll("*");
-
-    allElements.forEach((element) => {
-      // Skip inspector panel and overlay elements
-      if (
-        element.id === "css-inspector-panel" ||
-        element.closest("#css-inspector-panel") ||
-        element.classList.contains("css-inspector-overlay") ||
-        element.classList.contains("css-inspector-highlight")
-      ) {
-        return;
-      }
-
-      const styles = this.getCachedComputedStyle(element);
-
-      // Only process visible elements (check rendering, not viewport position)
-      const rect = element.getBoundingClientRect();
-      const isVisible = this.isElementVisible(element, styles, rect);
-
-      if (!isVisible) {
-        return;
-      }
-
-      // Extract font family - detect which font is actually being rendered
-      const fontFamilyStack = styles.fontFamily.split(",");
-      let fontFamily = null;
-
-      // List of common system fonts to exclude
-      const systemFonts = new Set([
-        "initial",
-        "inherit",
-        "serif",
-        "sans-serif",
-        "monospace",
-        "cursive",
-        "fantasy",
-        "system-ui",
-        "-apple-system",
-        "BlinkMacSystemFont",
-        "Times",
-        "Times New Roman",
-        "Arial",
-        "Helvetica",
-        "Helvetica Neue",
-        "Courier",
-        "Courier New",
-        "Georgia",
-        "Verdana",
-        "Tahoma",
-        "Trebuchet MS",
-        "Impact",
-        "Comic Sans MS",
-        "Lucida Console",
-        "Lucida Sans Unicode",
-        "Palatino",
-        "Garamond",
-        "Bookman",
-        "Avant Garde",
-        "Verdana",
-        "Geneva",
-        "Optima",
-        "Futura",
-        "Baskerville",
-        "Didot",
-        "Bodoni",
-        "Hoefler Text",
-        "American Typewriter",
-        "Andale Mono",
-        "Monaco",
-        "Menlo",
-        "Consolas",
-        "Liberation Sans",
-        "Liberation Serif",
-        "Liberation Mono",
-        "DejaVu Sans",
-        "DejaVu Serif",
-        "DejaVu Sans Mono",
-      ]);
-
-      // First, try to detect the actually rendered font using canvas measurement
-      // This is the most reliable method - it measures which font actually renders the text
-      const actualRenderedFont = this.getActualRenderedFont(element, fontFamilyStack);
-      if (actualRenderedFont) {
-        // Use the actually rendered font, even if it's a system font
-        // If it's actually being rendered, it's what the user sees, so we should show it
-        fontFamily = actualRenderedFont;
-      } else {
-        // Fallback: Check each font in the stack to find one that's actually loaded
-        for (let i = 0; i < fontFamilyStack.length; i++) {
-          const candidate = fontFamilyStack[i]
-            .replace(/['"]/g, "")
-            .trim();
-          
-          // Skip generic/system fonts initially
-          if (!candidate || systemFonts.has(candidate)) {
-            continue;
+        // Background color - calculate visible area (parent area minus child areas)
+        // Only count if element is large enough (filters out tiny decorative elements)
+        const minBackgroundArea = 1000; // Minimum 1000px² to count
+        if (
+          elementArea >= minBackgroundArea &&
+          styles.backgroundColor &&
+          styles.backgroundColor !== "rgba(0, 0, 0, 0)" &&
+          styles.backgroundColor !== "transparent"
+        ) {
+          // Calculate visible area by subtracting only direct children with different backgrounds
+          // This is more accurate than deep recursion which can over-subtract
+          const parentBgHex = this.rgbToHex(styles.backgroundColor);
+          if (!parentBgHex) {
+            return; // Skip if we can't convert the background color
           }
-          
-          // Check if font is actually loaded using Font Loading API
-          if (document.fonts && typeof document.fonts.check === 'function') {
-            // Try different font weights/styles to see if any variant is loaded
-            const weights = [400, 700];
-            const styles = ['normal', 'italic'];
-            let fontLoaded = false;
-            
-            for (const weight of weights) {
-              for (const style of styles) {
-                const fontSpec = `${style} ${weight} 16px "${candidate}"`;
-                if (document.fonts.check(fontSpec)) {
-                  fontFamily = candidate;
-                  fontLoaded = true;
-                  break;
+          const transparentHex = this.rgbToHex("rgba(0, 0, 0, 0)");
+          const transparentHex2 = this.rgbToHex("transparent");
+
+          // Track all descendant elements with different backgrounds (not just direct children)
+          // Use a Set to avoid double-counting overlapping elements
+          const processedElements = new Set();
+
+          const calculateDescendantAreaSum = (parentElement, parentBgHex) => {
+            let sum = 0;
+
+            // Use a queue to process all descendants level by level
+            const queue = Array.from(parentElement.children);
+
+            while (queue.length > 0) {
+              const child = queue.shift();
+
+              // Skip if already processed (handles overlapping elements)
+              if (processedElements.has(child)) {
+                continue;
+              }
+
+              const childStyles = window.getComputedStyle(child);
+              const childRect = child.getBoundingClientRect();
+              const childVisible =
+                childRect.width > 0 &&
+                childRect.height > 0 &&
+                childStyles.display !== "none" &&
+                childStyles.visibility !== "hidden" &&
+                childStyles.opacity !== "0";
+
+              if (!childVisible) {
+                continue;
+              }
+
+              const childBg = childStyles.backgroundColor;
+              const childBgHex = this.rgbToHex(childBg);
+
+              // If child has a different, non-transparent background, subtract its area
+              if (
+                childBgHex &&
+                childBgHex !== transparentHex &&
+                childBgHex !== transparentHex2 &&
+                childBgHex !== parentBgHex
+              ) {
+                // Child has different background - subtract its full area
+                // Don't process its children (they cover the child, not the parent)
+                const childArea = childRect.width * childRect.height;
+                sum += childArea;
+                processedElements.add(child);
+              } else {
+                // Child has same/transparent/undefined background - add its children to queue
+                // (they might have backgrounds that cover the parent)
+                for (const grandchild of child.children) {
+                  if (!processedElements.has(grandchild)) {
+                    queue.push(grandchild);
+                  }
                 }
               }
-              if (fontLoaded) break;
             }
-            
-            if (fontLoaded) {
-              break;
+
+            return sum;
+          };
+
+          // Calculate visible area = parent area - sum of all descendant areas with different backgrounds
+          const descendantAreaSum = calculateDescendantAreaSum(
+            element,
+            parentBgHex
+          );
+          const visibleArea = Math.max(0, elementArea - descendantAreaSum);
+
+          // Only count if visible area is significant
+          if (visibleArea > 0) {
+            const hex = this.rgbToHex(styles.backgroundColor);
+            if (hex) {
+              const existing = colors.get(hex) || {
+                hex,
+                instances: 0,
+                area: 0,
+                categories: new Set(),
+              };
+              existing.instances++;
+              existing.area += visibleArea;
+              existing.categories.add("background");
+              colors.set(hex, existing);
             }
-          }
-          
-          // If Font Loading API check fails or is unavailable, 
-          // check if font is in @font-face rules (indicating it's defined)
-          if (!fontFamily && this.isFontDefined(candidate)) {
-            fontFamily = candidate;
-            break;
           }
         }
 
-        // If no custom font found that's loaded, use the first non-system font from stack
-        // (This handles cases where Font Loading API isn't available or fonts load asynchronously)
-        if (!fontFamily) {
+        // Border color - weight by border area
+        const borderColor = styles.borderColor || styles.borderTopColor;
+        if (
+          borderColor &&
+          borderColor !== "rgba(0, 0, 0, 0)" &&
+          borderColor !== "transparent" &&
+          styles.borderWidth !== "0px"
+        ) {
+          const hex = this.rgbToHex(borderColor);
+          if (hex) {
+            const existing = colors.get(hex) || {
+              hex,
+              instances: 0,
+              area: 0,
+              categories: new Set(),
+            };
+            // Calculate border area: perimeter × border width
+            const borderWidth = parseFloat(styles.borderWidth) || 1;
+            const borderArea = (rect.width * 2 + rect.height * 2) * borderWidth;
+            existing.instances++;
+            existing.area += borderArea;
+            existing.categories.add("border");
+            colors.set(hex, existing);
+          }
+        }
+      });
+
+      const result = Array.from(colors.values())
+        .map((color) => ({
+          hex: color.hex,
+          instances: color.instances,
+          area: color.area,
+          categories: Array.from(color.categories),
+        }))
+        .sort((a, b) => b.area - a.area); // Sort by area instead of instances
+
+      // Cache the result
+      this.colorExtractionCache = result;
+      return result;
+    }
+
+    extractTypography() {
+      // Return cached result if available
+      if (this.typographyExtractionCache) {
+        return this.typographyExtractionCache;
+      }
+
+      const fontFamilyMap = new Map();
+
+      const allElements = document.querySelectorAll("*");
+
+      allElements.forEach((element) => {
+        // Skip inspector panel and overlay elements
+        if (
+          element.id === "css-inspector-panel" ||
+          element.closest("#css-inspector-panel") ||
+          element.classList.contains("css-inspector-overlay") ||
+          element.classList.contains("css-inspector-highlight")
+        ) {
+          return;
+        }
+
+        const styles = this.getCachedComputedStyle(element);
+
+        // Only process visible elements (check rendering, not viewport position)
+        const rect = element.getBoundingClientRect();
+        const isVisible = this.isElementVisible(element, styles, rect);
+
+        if (!isVisible) {
+          return;
+        }
+
+        // Extract font family - detect which font is actually being rendered
+        const fontFamilyStack = styles.fontFamily.split(",");
+        let fontFamily = null;
+
+        // List of common system fonts to exclude
+        const systemFonts = new Set([
+          "initial",
+          "inherit",
+          "serif",
+          "sans-serif",
+          "monospace",
+          "cursive",
+          "fantasy",
+          "system-ui",
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "Times",
+          "Times New Roman",
+          "Arial",
+          "Helvetica",
+          "Helvetica Neue",
+          "Courier",
+          "Courier New",
+          "Georgia",
+          "Verdana",
+          "Tahoma",
+          "Trebuchet MS",
+          "Impact",
+          "Comic Sans MS",
+          "Lucida Console",
+          "Lucida Sans Unicode",
+          "Palatino",
+          "Garamond",
+          "Bookman",
+          "Avant Garde",
+          "Verdana",
+          "Geneva",
+          "Optima",
+          "Futura",
+          "Baskerville",
+          "Didot",
+          "Bodoni",
+          "Hoefler Text",
+          "American Typewriter",
+          "Andale Mono",
+          "Monaco",
+          "Menlo",
+          "Consolas",
+          "Liberation Sans",
+          "Liberation Serif",
+          "Liberation Mono",
+          "DejaVu Sans",
+          "DejaVu Serif",
+          "DejaVu Sans Mono",
+        ]);
+
+        // First, try to detect the actually rendered font using canvas measurement
+        // This is the most reliable method - it measures which font actually renders the text
+        const actualRenderedFont = this.getActualRenderedFont(
+          element,
+          fontFamilyStack
+        );
+        if (actualRenderedFont) {
+          // Use the actually rendered font, even if it's a system font
+          // If it's actually being rendered, it's what the user sees, so we should show it
+          fontFamily = actualRenderedFont;
+        } else {
+          // Fallback: Check each font in the stack to find one that's actually loaded
           for (let i = 0; i < fontFamilyStack.length; i++) {
-            const candidate = fontFamilyStack[i]
-              .replace(/['"]/g, "")
-              .trim();
-            if (candidate && !systemFonts.has(candidate)) {
+            const candidate = fontFamilyStack[i].replace(/['"]/g, "").trim();
+
+            // Skip generic/system fonts initially
+            if (!candidate || systemFonts.has(candidate)) {
+              continue;
+            }
+
+            // Check if font is actually loaded using Font Loading API
+            if (document.fonts && typeof document.fonts.check === "function") {
+              // Try different font weights/styles to see if any variant is loaded
+              const weights = [400, 700];
+              const styles = ["normal", "italic"];
+              let fontLoaded = false;
+
+              for (const weight of weights) {
+                for (const style of styles) {
+                  const fontSpec = `${style} ${weight} 16px "${candidate}"`;
+                  if (document.fonts.check(fontSpec)) {
+                    fontFamily = candidate;
+                    fontLoaded = true;
+                    break;
+                  }
+                }
+                if (fontLoaded) break;
+              }
+
+              if (fontLoaded) {
+                break;
+              }
+            }
+
+            // If Font Loading API check fails or is unavailable,
+            // check if font is in @font-face rules (indicating it's defined)
+            if (!fontFamily && this.isFontDefined(candidate)) {
               fontFamily = candidate;
               break;
             }
           }
+
+          // If no custom font found that's loaded, use the first non-system font from stack
+          // (This handles cases where Font Loading API isn't available or fonts load asynchronously)
+          if (!fontFamily) {
+            for (let i = 0; i < fontFamilyStack.length; i++) {
+              const candidate = fontFamilyStack[i].replace(/['"]/g, "").trim();
+              if (candidate && !systemFonts.has(candidate)) {
+                fontFamily = candidate;
+                break;
+              }
+            }
+          }
         }
-      }
 
-      // Skip if still no valid font
-      if (!fontFamily) {
-        return;
-      }
+        // Skip if still no valid font
+        if (!fontFamily) {
+          return;
+        }
 
-      if (!fontFamilyMap.has(fontFamily)) {
-        fontFamilyMap.set(fontFamily, {
-          fontFamily: fontFamily,
-          instances: 0,
-          maxFontSize: 0, // Track maximum font size for display font detection
-          sizes: new Set(), // Track unique font sizes
-          weights: new Set(), // Track unique font weights
-        });
-      }
+        if (!fontFamilyMap.has(fontFamily)) {
+          fontFamilyMap.set(fontFamily, {
+            fontFamily: fontFamily,
+            instances: 0,
+            maxFontSize: 0, // Track maximum font size for display font detection
+            sizes: new Set(), // Track unique font sizes
+            weights: new Set(), // Track unique font weights
+          });
+        }
 
-      const entry = fontFamilyMap.get(fontFamily);
-      entry.instances++;
+        const entry = fontFamilyMap.get(fontFamily);
+        entry.instances++;
 
-      // Track font size for display font detection
-      const fontSize = parseFloat(styles.fontSize) || 16;
-      if (fontSize > entry.maxFontSize) {
-        entry.maxFontSize = fontSize;
-      }
+        // Track font size for display font detection
+        const fontSize = parseFloat(styles.fontSize) || 16;
+        if (fontSize > entry.maxFontSize) {
+          entry.maxFontSize = fontSize;
+        }
 
-      // Track sizes and weights separately
-      const fontWeight = styles.fontWeight;
+        // Track sizes and weights separately
+        const fontWeight = styles.fontWeight;
 
-      // Parse and normalize font size (remove 'px' for sorting)
-      const sizeValue = parseFloat(fontSize);
-      if (!isNaN(sizeValue)) {
-        entry.sizes.add(sizeValue);
-      }
+        // Parse and normalize font size (remove 'px' for sorting)
+        const sizeValue = parseFloat(fontSize);
+        if (!isNaN(sizeValue)) {
+          entry.sizes.add(sizeValue);
+        }
 
-      // Parse and normalize font weight
-      const weightValue =
-        fontWeight === "normal"
-          ? 400
-          : fontWeight === "bold"
-          ? 700
-          : parseInt(fontWeight);
-      if (!isNaN(weightValue)) {
-        entry.weights.add(weightValue);
-      }
-    });
+        // Parse and normalize font weight
+        const weightValue =
+          fontWeight === "normal"
+            ? 400
+            : fontWeight === "bold"
+            ? 700
+            : parseInt(fontWeight);
+        if (!isNaN(weightValue)) {
+          entry.weights.add(weightValue);
+        }
+      });
 
-    // Return font families sorted by text area (visual prominence)
-    const result = Array.from(fontFamilyMap.values())
-      .map((font) => {
-        // Sort sizes and weights for display
-        const sortedSizes = Array.from(font.sizes).sort((a, b) => a - b);
-        const sortedWeights = Array.from(font.weights).sort((a, b) => a - b);
+      // Return font families sorted by text area (visual prominence)
+      const result = Array.from(fontFamilyMap.values())
+        .map((font) => {
+          // Sort sizes and weights for display
+          const sortedSizes = Array.from(font.sizes).sort((a, b) => a - b);
+          const sortedWeights = Array.from(font.weights).sort((a, b) => a - b);
 
-        return {
-          fontFamily: font.fontFamily,
-          instances: font.instances,
-          maxFontSize: font.maxFontSize,
-          sizes: sortedSizes,
-          weights: sortedWeights,
-        };
-      })
-      .sort((a, b) => b.instances - a.instances); // Sort by instance count
+          return {
+            fontFamily: font.fontFamily,
+            instances: font.instances,
+            maxFontSize: font.maxFontSize,
+            sizes: sortedSizes,
+            weights: sortedWeights,
+          };
+        })
+        .sort((a, b) => b.instances - a.instances); // Sort by instance count
 
-    // Cache the result
-    this.typographyExtractionCache = result;
-    return result;
-  }
-
-  // Color utility methods - using shared colorUtils.js
-  isValidColor(color) {
-    return isValidColor(color);
-  }
-
-  rgbToHex(rgb) {
-    return rgbToHex(rgb);
-  }
-
-  parseBorderRadius(radius) {
-    if (!radius || radius === "0" || radius === "0px") return "0";
-    // Extract the first value if it's a multi-value radius (e.g., "8px 4px" -> "8")
-    // For simplicity in the preview, we'll use the first value
-    const match = radius.match(/^([\d.]+)px/);
-    if (match) {
-      return match[1];
-    }
-    // If it's a percentage or other format, return as-is (without px)
-    return radius.replace(/px/g, "");
-  }
-
-  calculateContrast(color1, color2) {
-    return calculateContrast(color1, color2);
-  }
-
-  getLuminance(color) {
-    return getLuminance(color);
-  }
-
-  showToast(message, clickedElement) {
-    if (!this.inspectorPanel) return;
-
-    const colors = this.getThemeColors();
-
-    // Clear any existing timeout
-    if (this.toastTimeout) {
-      clearTimeout(this.toastTimeout);
-      this.toastTimeout = null;
+      // Cache the result
+      this.typographyExtractionCache = result;
+      return result;
     }
 
-    // Use the inspector panel as the reference point (always visible and reliable)
-    const panelRect = this.inspectorPanel.getBoundingClientRect();
+    // Color utility methods - using shared colorUtils.js
+    isValidColor(color) {
+      return isValidColor(color);
+    }
 
-    // Calculate toast position relative to panel
-    // Header area (tabs + info section) is approximately 60-70px from top
-    // Try to get actual header element position if visible, otherwise use fixed offset
-    let headerBottom = panelRect.top + 70; // Default fallback offset
+    rgbToHex(rgb) {
+      return rgbToHex(rgb);
+    }
 
-    // Try to get the actual header element's bottom position for accuracy
-    if (!this.shadowRoot) return;
-    const lockedInfo = this.shadowRoot.querySelector(
-      "#locked-element-info"
-    );
-    const websiteInfo = this.shadowRoot.querySelector("#website-info");
+    parseBorderRadius(radius) {
+      if (!radius || radius === "0" || radius === "0px") return "0";
+      // Extract the first value if it's a multi-value radius (e.g., "8px 4px" -> "8")
+      // For simplicity in the preview, we'll use the first value
+      const match = radius.match(/^([\d.]+)px/);
+      if (match) {
+        return match[1];
+      }
+      // If it's a percentage or other format, return as-is (without px)
+      return radius.replace(/px/g, "");
+    }
 
-    // Check which header is visible and use its actual position
-    if (lockedInfo) {
-      const lockedRect = lockedInfo.getBoundingClientRect();
-      if (lockedRect.width > 0 && lockedRect.height > 0 && lockedRect.top > 0) {
-        headerBottom = lockedRect.bottom;
+    calculateContrast(color1, color2) {
+      return calculateContrast(color1, color2);
+    }
+
+    getLuminance(color) {
+      return getLuminance(color);
+    }
+
+    showToast(message, clickedElement) {
+      if (!this.inspectorPanel) return;
+
+      const colors = this.getThemeColors();
+
+      // Clear any existing timeout
+      if (this.toastTimeout) {
+        clearTimeout(this.toastTimeout);
+        this.toastTimeout = null;
+      }
+
+      // Use the inspector panel as the reference point (always visible and reliable)
+      const panelRect = this.inspectorPanel.getBoundingClientRect();
+
+      // Calculate toast position relative to panel
+      // Header area (tabs + info section) is approximately 60-70px from top
+      // Try to get actual header element position if visible, otherwise use fixed offset
+      let headerBottom = panelRect.top + 70; // Default fallback offset
+
+      // Try to get the actual header element's bottom position for accuracy
+      if (!this.shadowRoot) return;
+      const lockedInfo = this.shadowRoot.querySelector("#locked-element-info");
+      const websiteInfo = this.shadowRoot.querySelector("#website-info");
+
+      // Check which header is visible and use its actual position
+      if (lockedInfo) {
+        const lockedRect = lockedInfo.getBoundingClientRect();
+        if (
+          lockedRect.width > 0 &&
+          lockedRect.height > 0 &&
+          lockedRect.top > 0
+        ) {
+          headerBottom = lockedRect.bottom;
+        } else if (websiteInfo) {
+          const websiteRect = websiteInfo.getBoundingClientRect();
+          if (
+            websiteRect.width > 0 &&
+            websiteRect.height > 0 &&
+            websiteRect.top > 0
+          ) {
+            headerBottom = websiteRect.bottom;
+          }
+        }
       } else if (websiteInfo) {
         const websiteRect = websiteInfo.getBoundingClientRect();
         if (
@@ -4649,61 +8165,51 @@ class CSSInspector {
           headerBottom = websiteRect.bottom;
         }
       }
-    } else if (websiteInfo) {
-      const websiteRect = websiteInfo.getBoundingClientRect();
-      if (
-        websiteRect.width > 0 &&
-        websiteRect.height > 0 &&
-        websiteRect.top > 0
-      ) {
-        headerBottom = websiteRect.bottom;
+
+      // Calculate toast position (centered horizontally on panel)
+      const toastTop = headerBottom + 8;
+      const toastLeft = panelRect.left + panelRect.width / 2;
+
+      // Parse message to extract property name (remove "copied" suffix, case-insensitive)
+      // Handles formats like "Width copied", "Font size copied", "Color copied", etc.
+      let propertyName = message.trim();
+      const copiedMatch = propertyName.match(/^(.+?)\s+copied$/i);
+      if (copiedMatch) {
+        propertyName = copiedMatch[1]; // Extract the property name before "copied"
+      } else if (propertyName.toLowerCase() === "copied") {
+        propertyName = ""; // Handle case where message is just "Copied"
       }
-    }
+      const isDark = this.theme === "dark";
+      const copiedColor = isDark ? "#FFFFFF" : "#000000";
+      const propertyColor = isDark
+        ? "rgba(255, 255, 255, 0.7)"
+        : "rgba(0, 0, 0, 0.7)";
 
-    // Calculate toast position (centered horizontally on panel)
-    const toastTop = headerBottom + 8;
-    const toastLeft = panelRect.left + panelRect.width / 2;
+      // Check if toast already exists and is in the DOM
+      let toast = this.toastElement;
+      const isNewToast = !toast || !toast.parentNode;
 
-    // Parse message to extract property name (remove "copied" suffix, case-insensitive)
-    // Handles formats like "Width copied", "Font size copied", "Color copied", etc.
-    let propertyName = message.trim();
-    const copiedMatch = propertyName.match(/^(.+?)\s+copied$/i);
-    if (copiedMatch) {
-      propertyName = copiedMatch[1]; // Extract the property name before "copied"
-    } else if (propertyName.toLowerCase() === "copied") {
-      propertyName = ""; // Handle case where message is just "Copied"
-    }
-    const isDark = this.theme === "dark";
-    const copiedColor = isDark ? "#FFFFFF" : "#000000";
-    const propertyColor = isDark
-      ? "rgba(255, 255, 255, 0.7)"
-      : "rgba(0, 0, 0, 0.7)";
-
-    // Check if toast already exists and is in the DOM
-    let toast = this.toastElement;
-    const isNewToast = !toast || !toast.parentNode;
-
-    // Remove any orphaned toasts from DOM (safety check)
-    if (toast && !toast.parentNode) {
-      this.toastElement = null;
-      toast = null;
-    }
-
-    // Also check for any existing toasts in DOM and remove them
-    const existingToasts = document.querySelectorAll(".copy-toast");
-    existingToasts.forEach((t) => {
-      if (t !== this.toastElement) {
-        t.remove();
+      // Remove any orphaned toasts from DOM (safety check)
+      if (toast && !toast.parentNode) {
+        this.toastElement = null;
+        toast = null;
       }
-    });
 
-    if (isNewToast) {
-      // Create new toast element
-      toast = document.createElement("div");
-      toast.className = "copy-toast";
-      this.toastElement = toast;
+      // Also check for any existing toasts in DOM and remove them
+      const existingToasts = document.querySelectorAll(".copy-toast");
+      existingToasts.forEach((t) => {
+        if (t !== this.toastElement) {
+          t.remove();
+        }
+      });
 
-      toast.style.cssText = `
+      if (isNewToast) {
+        // Create new toast element
+        toast = document.createElement("div");
+        toast.className = "copy-toast";
+        this.toastElement = toast;
+
+        toast.style.cssText = `
         position: fixed;
         top: ${toastTop}px;
         left: ${toastLeft}px;
@@ -4725,151 +8231,150 @@ class CSSInspector {
         align-items: center;
       `;
 
-      document.body.appendChild(toast);
+        document.body.appendChild(toast);
 
-      // Animate in - use double requestAnimationFrame to ensure DOM is ready
-      requestAnimationFrame(() => {
+        // Animate in - use double requestAnimationFrame to ensure DOM is ready
         requestAnimationFrame(() => {
-          toast.style.transform = `translateX(-50%) translateY(0)`;
-          toast.style.opacity = "1";
+          requestAnimationFrame(() => {
+            toast.style.transform = `translateX(-50%) translateY(0)`;
+            toast.style.opacity = "1";
+          });
         });
-      });
-    } else {
-      // Update existing toast - update position in case header moved
-      toast.style.top = `${toastTop}px`;
-      toast.style.left = `${toastLeft}px`;
-    }
+      } else {
+        // Update existing toast - update position in case header moved
+        toast.style.top = `${toastTop}px`;
+        toast.style.left = `${toastLeft}px`;
+      }
 
-    // Update toast content (instant, no width animation)
-    toast.innerHTML = `
+      // Update toast content (instant, no width animation)
+      toast.innerHTML = `
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" style="margin-right: 6px; flex-shrink: 0;">
         <path fill="#10B981" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
       </svg>
       <span style="color: ${copiedColor};">Copied: </span><span style="color: ${propertyColor};">${propertyName}</span>
     `;
 
-    // Set timeout to animate out and remove
-    this.toastTimeout = setTimeout(() => {
-      toast.style.transform = `translateX(-50%) translateY(-10px)`;
-      toast.style.opacity = "0";
-      setTimeout(() => {
-        if (toast.parentNode) {
-          toast.remove();
+      // Set timeout to animate out and remove
+      this.toastTimeout = setTimeout(() => {
+        toast.style.transform = `translateX(-50%) translateY(-10px)`;
+        toast.style.opacity = "0";
+        setTimeout(() => {
+          if (toast.parentNode) {
+            toast.remove();
+          }
+          this.toastElement = null;
+          this.toastTimeout = null;
+        }, 300);
+      }, 2000);
+    }
+
+    hexToRgb(hex) {
+      return hexToRgb(hex);
+    }
+
+    normalizeInspectorSpacing() {
+      if (!this.shadowRoot) return;
+      const elementInfo = this.shadowRoot.querySelector("#element-info");
+      if (!elementInfo) return;
+
+      // Normalize all inspector sections - use setProperty with !important to override page CSS
+      const sections = elementInfo.querySelectorAll(".inspector-section");
+      sections.forEach((section) => {
+        section.style.setProperty("margin-top", "0", "important");
+        section.style.setProperty("margin-bottom", "16px", "important");
+
+        const headerDiv = section.firstElementChild;
+        if (headerDiv && headerDiv.tagName === "DIV") {
+          headerDiv.style.setProperty("margin-top", "0", "important");
+          headerDiv.style.setProperty("margin-bottom", "10px", "important");
         }
-        this.toastElement = null;
-        this.toastTimeout = null;
-      }, 300);
-    }, 2000);
-  }
 
-  hexToRgb(hex) {
-    return hexToRgb(hex);
-  }
-
-  normalizeInspectorSpacing() {
-    if (!this.shadowRoot) return;
-    const elementInfo = this.shadowRoot.querySelector("#element-info");
-    if (!elementInfo) return;
-
-    // Normalize all inspector sections - use setProperty with !important to override page CSS
-    const sections = elementInfo.querySelectorAll(".inspector-section");
-    sections.forEach((section) => {
-      section.style.setProperty("margin-top", "0", "important");
-      section.style.setProperty("margin-bottom", "16px", "important");
-      
-      const headerDiv = section.firstElementChild;
-      if (headerDiv && headerDiv.tagName === "DIV") {
-        headerDiv.style.setProperty("margin-top", "0", "important");
-        headerDiv.style.setProperty("margin-bottom", "10px", "important");
-      }
-      
-      const h4 = section.querySelector("h4");
-      if (h4) {
-        h4.style.setProperty("margin", "0", "important");
-        h4.style.setProperty("padding", "0", "important");
-      }
-    });
-    
-    // Ensure element-info has no extra spacing
-    elementInfo.style.setProperty("margin", "0", "important");
-    elementInfo.style.setProperty("padding", "0", "important");
-    
-    // Reset margins on all direct children
-    Array.from(elementInfo.children).forEach((child) => {
-      child.style.setProperty("margin-top", "0", "important");
-    });
-  }
-}
-
-// Initialize inspector when script loads
-let inspector;
-let inspectorReady = false;
-
-function initializeInspector() {
-  // Check if we're in a valid context
-  if (typeof document === "undefined") {
-    console.log("[CSS Inspector] Document not available, waiting...");
-    setTimeout(initializeInspector, 100);
-    return;
-  }
-
-  // Wait for document.body to be available
-  if (!document.body) {
-    console.log("[CSS Inspector] Document body not ready, waiting...");
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", initializeInspector, {
-        once: true,
+        const h4 = section.querySelector("h4");
+        if (h4) {
+          h4.style.setProperty("margin", "0", "important");
+          h4.style.setProperty("padding", "0", "important");
+        }
       });
-    } else {
-      // Document loaded but body not ready yet, wait a bit
+
+      // Ensure element-info has no extra spacing
+      elementInfo.style.setProperty("margin", "0", "important");
+      elementInfo.style.setProperty("padding", "0", "important");
+
+      // Reset margins on all direct children
+      Array.from(elementInfo.children).forEach((child) => {
+        child.style.setProperty("margin-top", "0", "important");
+      });
+    }
+  }
+
+  // Initialize inspector when script loads
+  let inspector;
+  let inspectorReady = false;
+
+  function initializeInspector() {
+    // Check if we're in a valid context
+    if (typeof document === "undefined") {
+      console.log("[CSS Inspector] Document not available, waiting...");
       setTimeout(initializeInspector, 100);
+      return;
     }
-    return;
-  }
 
-  if (!inspector) {
-    console.log("[CSS Inspector] Creating new CSSInspector instance...");
-    try {
-      inspector = new CSSInspector();
-      inspectorReady = true;
-      // Make inspector accessible globally
-      if (typeof window !== "undefined") {
-        window.cssInspector = inspector;
-        window.inspectorInstance = inspector;
-        window.inspector = inspector;
-        window.cssInspectorReady = true;
-          window.__CSSInspectorLoaded = true; // Set flag only after successful initialization
+    // Wait for document.body to be available
+    if (!document.body) {
+      console.log("[CSS Inspector] Document body not ready, waiting...");
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", initializeInspector, {
+          once: true,
+        });
+      } else {
+        // Document loaded but body not ready yet, wait a bit
+        setTimeout(initializeInspector, 100);
       }
-      console.log(
-        "[CSS Inspector] Inspector instance initialized, ready:",
-        inspectorReady
-      );
-    } catch (error) {
-      console.error("[CSS Inspector] Error initializing inspector:", error);
+      return;
     }
+
+    if (!inspector) {
+      console.log("[CSS Inspector] Creating new CSSInspector instance...");
+      try {
+        inspector = new CSSInspector();
+        inspectorReady = true;
+        // Make inspector accessible globally
+        if (typeof window !== "undefined") {
+          window.cssInspector = inspector;
+          window.inspectorInstance = inspector;
+          window.inspector = inspector;
+          window.cssInspectorReady = true;
+          window.__CSSInspectorLoaded = true; // Set flag only after successful initialization
+        }
+        console.log(
+          "[CSS Inspector] Inspector instance initialized, ready:",
+          inspectorReady
+        );
+      } catch (error) {
+        console.error("[CSS Inspector] Error initializing inspector:", error);
+      }
+    } else {
+      console.log("[CSS Inspector] Inspector instance already exists");
+    }
+    return inspector;
+  }
+
+  // Initialize immediately if DOM is ready, otherwise wait
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initializeInspector, {
+      once: true,
+    });
   } else {
-    console.log("[CSS Inspector] Inspector instance already exists");
+    // If already loaded, initialize immediately
+    initializeInspector();
   }
-  return inspector;
-}
 
-// Initialize immediately if DOM is ready, otherwise wait
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", initializeInspector, {
-    once: true,
-  });
-} else {
-  // If already loaded, initialize immediately
-  initializeInspector();
-}
-
-// Handle case when script is injected dynamically - ensure immediate initialization
-if (typeof window !== "undefined") {
-  // Try to initialize immediately
-  if (!window.cssInspector) {
-    // Use a small delay to ensure DOM is ready
-    setTimeout(initializeInspector, 0);
+  // Handle case when script is injected dynamically - ensure immediate initialization
+  if (typeof window !== "undefined") {
+    // Try to initialize immediately
+    if (!window.cssInspector) {
+      // Use a small delay to ensure DOM is ready
+      setTimeout(initializeInspector, 0);
+    }
   }
-}
-
 })(); // End IIFE - prevents multiple script injections

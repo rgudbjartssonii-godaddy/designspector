@@ -46,39 +46,10 @@
   height: 0 !important;
 }
 
-#css-inspector-panel::before {
-  content: '' !important;
-  position: absolute !important;
-  top: -2px !important;
-  left: -2px !important;
-  right: -2px !important;
-  bottom: -2px !important;
-  border-radius: 10px !important;
-  background: linear-gradient(45deg, 
-    rgba(114, 65, 255, 0.1), 
-    rgba(251, 58, 162, 0.1), 
-    rgba(114, 65, 255, 0.1)) !important;
-  background-size: 200% 200% !important;
-  z-index: -1 !important;
-  animation: glowRotate 8s ease-in-out infinite !important;
-  opacity: 0.6 !important;
-}
-
 #css-inspector-panel::-webkit-scrollbar {
   display: none !important;
   width: 0 !important;
   height: 0 !important;
-}
-
-@keyframes glowRotate {
-  0%, 100% {
-    background-position: 0% 50%;
-    opacity: 0.4;
-  }
-  50% {
-    background-position: 100% 50%;
-    opacity: 0.6;
-  }
 }
 
 @keyframes subtleGlow {
