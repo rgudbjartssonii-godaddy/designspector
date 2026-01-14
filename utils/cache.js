@@ -6,16 +6,9 @@
   
   // Check if already loaded
   if (typeof window !== 'undefined' && window.LRUCache) {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cache.js:8',message:'LRUCache already loaded, skipping',data:{alreadyExists:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
     // Already loaded, skip declaration
     return;
   }
-  
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cache.js:15',message:'Declaring LRUCache',data:{alreadyExists:false},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-  // #endregion
 
   class LRUCache {
     constructor(maxSize = 100) {

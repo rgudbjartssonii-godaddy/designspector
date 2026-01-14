@@ -426,33 +426,6 @@
         console.error("[CSS Inspector] Invalid theme:", theme);
         return;
       }
-
-      // #region agent log
-      fetch(
-        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: "content.js:381",
-            message: "setTheme entry",
-            data: {
-              theme,
-              oldTheme: this.theme,
-              currentHeight: this.inspectorPanel
-                ? this.inspectorPanel.offsetHeight
-                : null,
-              isActive: this.isActive,
-            },
-            timestamp: Date.now(),
-            sessionId: "debug-session",
-            runId: "run1",
-            hypothesisId: "C",
-          }),
-        }
-      ).catch(() => {});
-      // #endregion
-
       this.theme = theme;
       localStorage.setItem("css-inspector-theme", theme);
 
@@ -484,49 +457,8 @@
           : null;
         const savedScrollTop = panelContent ? panelContent.scrollTop : 0;
         const currentHeight = this.inspectorPanel.offsetHeight;
-
-        // #region agent log
-        fetch(
-          "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              location: "content.js:411",
-              message: "setTheme before re-render",
-              data: { currentHeight, savedScrollTop, isActive: this.isActive },
-              timestamp: Date.now(),
-              sessionId: "debug-session",
-              runId: "run1",
-              hypothesisId: "C",
-            }),
-          }
-        ).catch(() => {});
-        // #endregion
-
         if (this.isActive) {
           this.switchPanelToInspectorMode();
-          // #region agent log
-          fetch(
-            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                location: "content.js:417",
-                message: "setTheme after switchPanelToInspectorMode",
-                data: {
-                  heightAfterSwitch: this.inspectorPanel.offsetHeight,
-                  currentHeight,
-                },
-                timestamp: Date.now(),
-                sessionId: "debug-session",
-                runId: "run1",
-                hypothesisId: "C",
-              }),
-            }
-          ).catch(() => {});
-          // #endregion
           // Restore scroll position after re-rendering
           if (panelContent && savedScrollTop > 0) {
             setTimeout(() => {
@@ -566,31 +498,7 @@
               ? "fonts"
               : "colors";
 
-          this.switchPanelToOverviewMode(activeTab);
-          // #region agent log
-          fetch(
-            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                location: "content.js:451",
-                message: "setTheme after switchPanelToOverviewMode",
-                data: {
-                  heightAfterSwitch: this.inspectorPanel.offsetHeight,
-                  currentHeight,
-                  activeTab,
-                },
-                timestamp: Date.now(),
-                sessionId: "debug-session",
-                runId: "run1",
-                hypothesisId: "C",
-              }),
-            }
-          ).catch(() => {});
-          // #endregion
-
-          // Restore scroll position after re-rendering
+          this.switchPanelToOverviewMode(activeTab); // Restore scroll position after re-rendering
           if (panelContent && savedScrollTop > 0) {
             setTimeout(() => {
               const newPanelContent = this.shadowRoot
@@ -871,107 +779,10 @@
       // CRITICAL FIX: After setting panel to height: auto and forcing reflows,
       // the panel's offsetHeight is the natural height we need (includes header, content, padding, and border)
       // This matches what you see when you uncheck the height in DevTools
-      const totalHeight = this.inspectorPanel.offsetHeight;
-
-      // #region agent log
-      const overviewContentMeasured =
-        this.shadowRoot.querySelector("#overview-content");
-      const colorsViewMeasured =
-        this.shadowRoot.querySelector("#overview-colors-view") ||
-        this.shadowRoot.querySelector("#colors-view");
-      const fontsViewMeasured =
-        this.shadowRoot.querySelector("#overview-fonts-view") ||
-        this.shadowRoot.querySelector("#fonts-view");
-      const segmentedControlMeasured = this.shadowRoot.querySelector(
-        "#overview-segment-container"
-      );
-      const panelContentComputedStyleForFlex =
-        window.getComputedStyle(panelContent);
-      fetch(
-        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: "content.js:870",
-            message: "measureContentHeight - detailed measurement",
-            data: {
-              actualPanelContentHeight,
-              headerHeight,
-              totalHeight,
-              panelContentPaddingTop,
-              panelContentPaddingBottom,
-              totalPadding,
-              panelContentOffsetHeight: panelContent.offsetHeight,
-              panelContentClientHeight: panelContent.clientHeight,
-              panelHeight: this.inspectorPanel.offsetHeight,
-              overviewContentScrollHeight: overviewContentMeasured
-                ? overviewContentMeasured.scrollHeight
-                : 0,
-              overviewContentOffsetHeight: overviewContentMeasured
-                ? overviewContentMeasured.offsetHeight
-                : 0,
-              colorsViewScrollHeight: colorsViewMeasured
-                ? colorsViewMeasured.scrollHeight
-                : 0,
-              fontsViewScrollHeight: fontsViewMeasured
-                ? fontsViewMeasured.scrollHeight
-                : 0,
-              colorsViewOpacity: colorsViewMeasured
-                ? window.getComputedStyle(colorsViewMeasured).opacity
-                : "",
-              fontsViewOpacity: fontsViewMeasured
-                ? window.getComputedStyle(fontsViewMeasured).opacity
-                : "",
-              colorsViewDisplay: colorsViewMeasured
-                ? window.getComputedStyle(colorsViewMeasured).display
-                : "",
-              fontsViewDisplay: fontsViewMeasured
-                ? window.getComputedStyle(fontsViewMeasured).display
-                : "",
-              segmentedControlHeight: segmentedControlMeasured
-                ? segmentedControlMeasured.offsetHeight
-                : 0,
-              panelContentFlex: panelContentComputedStyleForFlex.flex,
-            },
-            timestamp: Date.now(),
-            sessionId: "debug-session",
-            runId: "run1",
-            hypothesisId: "A,B",
-          }),
-        }
-      ).catch(() => {});
-      // #endregion
-
-      // Restore original styles
+      const totalHeight = this.inspectorPanel.offsetHeight; // Restore original styles
       // Always keep overflow-y: auto - don't restore original value which might be hidden
       // This ensures scrolling works after view switches
-      panelContent.style.setProperty("overflow-y", "auto", "important");
-
-      // #region agent log
-      fetch(
-        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: "content.js:947",
-            message:
-              "measureContentHeight: Set overflow-y to auto (not restoring original)",
-            data: {
-              originalOverflowY,
-              scrollHeight: panelContent.scrollHeight,
-              clientHeight: panelContent.clientHeight,
-            },
-            timestamp: Date.now(),
-            sessionId: "debug-session",
-            runId: "run1",
-            hypothesisId: "G",
-          }),
-        }
-      ).catch(() => {});
-      // #endregion
-      // CRITICAL: Restore panel height to original value so finishHeightUpdate can animate correctly
+      panelContent.style.setProperty("overflow-y", "auto", "important"); // CRITICAL: Restore panel height to original value so finishHeightUpdate can animate correctly
       // We saved originalPanelHeight before setting it to 'auto', so restore it now
       // If originalPanelHeight was empty, restore to heightBeforeMeasurement (the height before we set it to 'auto')
       if (originalPanelHeight) {
@@ -1021,56 +832,9 @@
 
       // Prevent multiple simultaneous height updates
       if (this.isUpdatingHeight && !immediate) {
-        // #region agent log
-        fetch(
-          "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              location: "content.js:632",
-              message: "updatePanelHeight blocked - already updating",
-              data: {
-                isUpdatingHeight: this.isUpdatingHeight,
-                immediate,
-                skipAuto,
-              },
-              timestamp: Date.now(),
-              sessionId: "debug-session",
-              runId: "run1",
-              hypothesisId: "D",
-            }),
-          }
-        ).catch(() => {});
-        // #endregion
         return;
       }
       this.isUpdatingHeight = true;
-
-      // #region agent log
-      fetch(
-        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: "content.js:628",
-            message: "updatePanelHeight entry",
-            data: {
-              immediate,
-              skipAuto,
-              currentHeight: this.inspectorPanel.offsetHeight,
-              currentTransition: this.inspectorPanel.style.transition,
-            },
-            timestamp: Date.now(),
-            sessionId: "debug-session",
-            runId: "run1",
-            hypothesisId: "A,B,C,D,E",
-          }),
-        }
-      ).catch(() => {});
-      // #endregion
-
       // Get the panel content element from shadow root
       const panelContent = this.shadowRoot.querySelector("#panel-content");
       if (!panelContent) {
@@ -1100,41 +864,7 @@
             this.inspectorPanel.style.getPropertyValue("max-height");
           const computedStyle = window.getComputedStyle(panelContent);
           const hasFlexInCSS =
-            computedStyle.flex !== "none" && computedStyle.flex !== "0 0 auto";
-
-          // #region agent log - Before measurement
-          const cssInspectorPanel = this.inspectorPanel;
-          const cssInspectorPanelRect = cssInspectorPanel
-            ? cssInspectorPanel.getBoundingClientRect()
-            : {};
-          const panelContentRectBefore = panelContent
-            ? panelContent.getBoundingClientRect()
-            : {};
-          fetch(
-            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                location: "content.js:699",
-                message: "updatePanelHeight - Before measurement",
-                data: {
-                  cssInspectorPanelHeight: cssInspectorPanelRect.height,
-                  panelContentRectBefore,
-                  originalHeight,
-                  originalFlex,
-                  originalOverflowY,
-                },
-                timestamp: Date.now(),
-                sessionId: "debug-session",
-                runId: "run2",
-                hypothesisId: "A,B",
-              }),
-            }
-          ).catch(() => {});
-          // #endregion
-
-          // Temporarily remove ALL constraints to get natural content height
+            computedStyle.flex !== "none" && computedStyle.flex !== "0 0 auto"; // Temporarily remove ALL constraints to get natural content height
           if (hasFlexInCSS) {
             panelContent.style.setProperty("flex", "0 0 auto", "important");
           }
@@ -1220,51 +950,7 @@
             );
           } else if (fontsView) {
             fontsView.style.removeProperty("opacity");
-          }
-
-          // #region agent log - After measurement, before restore
-          const panelContentRectAfter = panelContent
-            ? panelContent.getBoundingClientRect()
-            : {};
-          // overviewContent, panelContentComputedStyle, panelContentPaddingTop, panelContentPaddingBottom, totalPadding already declared above
-          fetch(
-            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                location: "content.js:720",
-                message:
-                  "updatePanelHeight - After measurement, before restore",
-                data: {
-                  contentHeight,
-                  panelContentScrollHeight: panelContent.scrollHeight,
-                  panelContentOffsetHeight: panelContent.offsetHeight,
-                  panelContentClientHeight: panelContent.clientHeight,
-                  panelContentRectAfter,
-                  panelContentPaddingTop,
-                  panelContentPaddingBottom,
-                  totalPadding,
-                  overviewContentScrollHeight: overviewContent
-                    ? overviewContent.scrollHeight
-                    : 0,
-                  overviewContentOffsetHeight: overviewContent
-                    ? overviewContent.offsetHeight
-                    : 0,
-                  overviewContentClientHeight: overviewContent
-                    ? overviewContent.clientHeight
-                    : 0,
-                },
-                timestamp: Date.now(),
-                sessionId: "debug-session",
-                runId: "run2",
-                hypothesisId: "A,B",
-              }),
-            }
-          ).catch(() => {});
-          // #endregion
-
-          // Restore original styles
+          } // Restore original styles
           // CRITICAL: Don't restore height or flex - let finishHeightUpdate set them correctly
           // Restoring the old values can interfere with the measurement and cause incorrect sizing
           // Keep flex: 0 0 auto until finishHeightUpdate sets the correct height
@@ -1281,32 +967,7 @@
           // }
           // Always keep overflow-y: auto - don't restore original value which might be hidden
           // This ensures scrolling works after view switches
-          panelContent.style.setProperty("overflow-y", "auto", "important");
-
-          // #region agent log
-          fetch(
-            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                location: "content.js:1282",
-                message:
-                  "measureContentHeight (delayed): Set overflow-y to auto (not restoring original)",
-                data: {
-                  originalOverflowY,
-                  scrollHeight: panelContent.scrollHeight,
-                  clientHeight: panelContent.clientHeight,
-                },
-                timestamp: Date.now(),
-                sessionId: "debug-session",
-                runId: "run1",
-                hypothesisId: "G",
-              }),
-            }
-          ).catch(() => {});
-          // #endregion
-          // CRITICAL: Don't restore panel height here - it constrains panelContent and affects measurement
+          panelContent.style.setProperty("overflow-y", "auto", "important"); // CRITICAL: Don't restore panel height here - it constrains panelContent and affects measurement
           // finishHeightUpdate will set the correct panel height based on our measurement
           // if (originalPanelHeight) {
           //   this.inspectorPanel.style.setProperty('height', originalPanelHeight, 'important');
@@ -1341,81 +1002,6 @@
           // the panel's offsetHeight is the natural height we need (includes header, content, padding, and border)
           // This matches what you see when you uncheck the height in DevTools
           const totalHeight = this.inspectorPanel.offsetHeight;
-
-          // #region agent log - Comprehensive measurement data
-          // colorsView and fontsView already declared above in the opacity handling section
-          // overviewContent already declared above in "After measurement, before restore" section
-          const panelContentComputed = window.getComputedStyle(panelContent);
-          const panelContentOpacity = panelContentComputed.opacity;
-          const panelContentDisplay = panelContentComputed.display;
-          const colorsViewDisplay = colorsView
-            ? window.getComputedStyle(colorsView).display
-            : "N/A";
-          const fontsViewDisplay = fontsView
-            ? window.getComputedStyle(fontsView).display
-            : "N/A";
-          const colorsViewOpacity = colorsView
-            ? window.getComputedStyle(colorsView).opacity
-            : "N/A";
-          const fontsViewOpacity = fontsView
-            ? window.getComputedStyle(fontsView).opacity
-            : "N/A";
-          const colorsViewScrollHeight = colorsView
-            ? colorsView.scrollHeight
-            : 0;
-          const fontsViewScrollHeight = fontsView ? fontsView.scrollHeight : 0;
-          const colorsViewOffsetHeight = colorsView
-            ? colorsView.offsetHeight
-            : 0;
-          const fontsViewOffsetHeight = fontsView ? fontsView.offsetHeight : 0;
-          const needsScrolling =
-            panelContent.scrollHeight > panelContent.clientHeight;
-          fetch(
-            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                location: "content.js:680",
-                message: "updatePanelHeight measurement",
-                data: {
-                  currentHeight,
-                  totalHeight,
-                  calculatedHeight,
-                  contentHeight,
-                  actualPanelContentHeight,
-                  headerHeight,
-                  panelHeight: this.inspectorPanel.offsetHeight,
-                  panelContentScrollHeight: panelContent.scrollHeight,
-                  panelContentClientHeight: panelContent.clientHeight,
-                  panelContentOffsetHeight: panelContent.offsetHeight,
-                  needsScrolling,
-                  panelContentOpacity,
-                  panelContentDisplay,
-                  colorsViewDisplay,
-                  fontsViewDisplay,
-                  colorsViewOpacity,
-                  fontsViewOpacity,
-                  colorsViewScrollHeight,
-                  fontsViewScrollHeight,
-                  colorsViewOffsetHeight,
-                  fontsViewOffsetHeight,
-                  overviewContentScrollHeight: overviewContent
-                    ? overviewContent.scrollHeight
-                    : 0,
-                  overviewContentOffsetHeight: overviewContent
-                    ? overviewContent.offsetHeight
-                    : 0,
-                },
-                timestamp: Date.now(),
-                sessionId: "debug-session",
-                runId: "run1",
-                hypothesisId: "A,B,C,D,E",
-              }),
-            }
-          ).catch(() => {});
-          // #endregion
-
           this.finishHeightUpdate(
             currentHeight,
             totalHeight,
@@ -1438,59 +1024,8 @@
       // Set height to content height, but not exceeding max-height
       const finalHeight = Math.min(totalHeight, maxHeight);
 
-      // #region agent log - Final height calculation with border/box-sizing check
+      // Get panelContent at the start so it's available in all code paths (including setTimeout callbacks)
       const panelContent = this.shadowRoot.querySelector("#panel-content");
-      const actualContentHeight = panelContent ? panelContent.scrollHeight : 0;
-      const actualNeedsScrolling = panelContent
-        ? panelContent.scrollHeight > panelContent.clientHeight
-        : false;
-      const panelComputedStyle = window.getComputedStyle(this.inspectorPanel);
-      const panelBoxSizing = panelComputedStyle.boxSizing;
-      const panelBorderTop = parseInt(panelComputedStyle.borderTopWidth) || 0;
-      const panelBorderBottom =
-        parseInt(panelComputedStyle.borderBottomWidth) || 0;
-      const panelBorderTotal = panelBorderTop + panelBorderBottom;
-      const panelOffsetHeight = this.inspectorPanel.offsetHeight;
-      const panelClientHeight = this.inspectorPanel.clientHeight;
-      const heightDiff = panelOffsetHeight - panelClientHeight; // Should equal border if box-sizing is content-box
-      fetch(
-        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: "content.js:693",
-            message: "Total height before finishHeightUpdate",
-            data: {
-              totalHeight,
-              currentHeight,
-              finalHeight,
-              maxHeight,
-              actualContentHeight,
-              measuredContentHeight,
-              actualNeedsScrolling,
-              chosenValue:
-                Math.abs(currentHeight - finalHeight) < 1
-                  ? "noChange"
-                  : immediate
-                  ? "immediate"
-                  : "animate",
-              panelBoxSizing,
-              panelBorderTop,
-              panelBorderBottom,
-              panelBorderTotal,
-              panelOffsetHeight,
-              panelClientHeight,
-              heightDiff,
-            },
-            timestamp: Date.now(),
-            sessionId: "debug-session",
-            runId: "run1",
-            hypothesisId: "A,B,C,D,E",
-          }),
-        }
-      ).catch(() => {});
-      // #endregion
 
       // CRITICAL FIX: Use the measured content height directly instead of calculating from finalHeight
       // This ensures we use the actual measured scrollHeight which accounts for all content
@@ -1515,28 +1050,6 @@
 
       // If the height hasn't changed, don't animate
       if (Math.abs(currentHeight - finalHeight) < 1) {
-        // #region agent log
-        fetch(
-          "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              location: "content.js:708",
-              message: "finishHeightUpdate - no change path",
-              data: {
-                currentHeight,
-                finalHeight,
-                heightDiff: Math.abs(currentHeight - finalHeight),
-              },
-              timestamp: Date.now(),
-              sessionId: "debug-session",
-              runId: "run1",
-              hypothesisId: "A,B",
-            }),
-          }
-        ).catch(() => {});
-        // #endregion
         this.inspectorPanel.style.setProperty(
           "height",
           `${finalHeight}px`,
@@ -1545,39 +1058,10 @@
 
         // CRITICAL: Even in no-change path, ensure flex: 1 and overflow-y: auto are set
         // This ensures scrolling works after view switches when height doesn't change
-        const panelContent = this.shadowRoot.querySelector("#panel-content");
         if (panelContent) {
           panelContent.style.setProperty("flex", "1", "important");
           panelContent.style.setProperty("overflow-y", "auto", "important");
           panelContent.style.setProperty("min-height", "0", "important");
-
-          // #region agent log
-          fetch(
-            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                location: "content.js:1540",
-                message:
-                  "finishHeightUpdate - no change path: Set flex:1 and overflow-y:auto",
-                data: {
-                  scrollHeight: panelContent.scrollHeight,
-                  clientHeight: panelContent.clientHeight,
-                  isScrollable:
-                    panelContent.scrollHeight > panelContent.clientHeight,
-                  computedFlex: window.getComputedStyle(panelContent).flex,
-                  computedOverflowY:
-                    window.getComputedStyle(panelContent).overflowY,
-                },
-                timestamp: Date.now(),
-                sessionId: "debug-session",
-                runId: "run1",
-                hypothesisId: "J",
-              }),
-            }
-          ).catch(() => {});
-          // #endregion
         }
 
         // Re-enable transition (CSS will handle it)
@@ -1588,24 +1072,6 @@
 
       // If immediate is true, set height without animation
       if (immediate) {
-        // #region agent log
-        fetch(
-          "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              location: "content.js:721",
-              message: "finishHeightUpdate - immediate path",
-              data: { currentHeight, finalHeight },
-              timestamp: Date.now(),
-              sessionId: "debug-session",
-              runId: "run1",
-              hypothesisId: "A,B",
-            }),
-          }
-        ).catch(() => {});
-        // #endregion
         this.inspectorPanel.style.setProperty(
           "height",
           `${finalHeight}px`,
@@ -1618,30 +1084,6 @@
       }
 
       // Set current height explicitly first (to establish a starting point for transition)
-      // #region agent log
-      fetch(
-        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: "content.js:700",
-            message: "finishHeightUpdate entry",
-            data: {
-              currentHeight,
-              totalHeight,
-              maxHeight,
-              finalHeight,
-              immediate,
-            },
-            timestamp: Date.now(),
-            sessionId: "debug-session",
-            runId: "run1",
-            hypothesisId: "A,B,C",
-          }),
-        }
-      ).catch(() => {});
-      // #endregion
       this.inspectorPanel.style.setProperty(
         "height",
         `${currentHeight}px`,
@@ -1662,75 +1104,8 @@
 
       // Force a reflow to ensure transition is applied
       this.inspectorPanel.offsetHeight;
-
-      // #region agent log
-      const panelContentBeforeAnim =
-        this.shadowRoot.querySelector("#panel-content");
-      const overviewContentBeforeAnim =
-        this.shadowRoot.querySelector("#overview-content");
-      fetch(
-        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: "content.js:1548",
-            message: "BEFORE animation - panel-content keeps default flex: 1",
-            data: {
-              totalHeight,
-              maxHeight,
-              finalHeight,
-              currentHeight,
-              panelContentFlex: panelContentBeforeAnim
-                ? window.getComputedStyle(panelContentBeforeAnim).flex
-                : "",
-              panelContentOverflow: panelContentBeforeAnim
-                ? window.getComputedStyle(panelContentBeforeAnim).overflowY
-                : "",
-              panelContentScrollHeight: panelContentBeforeAnim
-                ? panelContentBeforeAnim.scrollHeight
-                : 0,
-              panelContentClientHeight: panelContentBeforeAnim
-                ? panelContentBeforeAnim.clientHeight
-                : 0,
-              panelHeight: this.inspectorPanel.offsetHeight,
-              overviewContentScrollHeight: overviewContentBeforeAnim
-                ? overviewContentBeforeAnim.scrollHeight
-                : 0,
-            },
-            timestamp: Date.now(),
-            sessionId: "debug-session",
-            runId: "run1",
-            hypothesisId: "A,B,C,D,E",
-          }),
-        }
-      ).catch(() => {});
-      // #endregion
-
       // Use requestAnimationFrame to trigger the transition
       requestAnimationFrame(() => {
-        // #region agent log
-        fetch(
-          "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              location: "content.js:751",
-              message: "finishHeightUpdate - starting animation",
-              data: {
-                currentHeight,
-                finalHeight,
-                heightBeforeAnim: this.inspectorPanel.offsetHeight,
-              },
-              timestamp: Date.now(),
-              sessionId: "debug-session",
-              runId: "run1",
-              hypothesisId: "A,B",
-            }),
-          }
-        ).catch(() => {});
-        // #endregion
         this.inspectorPanel.style.setProperty(
           "height",
           `${finalHeight}px`,
@@ -1738,96 +1113,6 @@
         );
         // Clear flag after transition completes (0.45s to match panel height animation)
         setTimeout(() => {
-          // #region agent log - After animation complete with border/box-sizing check
-          const panelContent = this.shadowRoot.querySelector("#panel-content");
-          const actualContentHeight = panelContent
-            ? panelContent.scrollHeight
-            : 0;
-          const actualNeedsScrolling = panelContent
-            ? panelContent.scrollHeight > panelContent.clientHeight
-            : false;
-          const panelComputedStyleAfter = window.getComputedStyle(
-            this.inspectorPanel
-          );
-          const panelBoxSizingAfter = panelComputedStyleAfter.boxSizing;
-          const panelBorderTopAfter =
-            parseInt(panelComputedStyleAfter.borderTopWidth) || 0;
-          const panelBorderBottomAfter =
-            parseInt(panelComputedStyleAfter.borderBottomWidth) || 0;
-          const panelBorderTotalAfter =
-            panelBorderTopAfter + panelBorderBottomAfter;
-          const actualHeight = this.inspectorPanel.offsetHeight;
-          const actualClientHeight = this.inspectorPanel.clientHeight;
-          const heightDiffAfter = actualHeight - actualClientHeight;
-          const heightMismatch = actualHeight - finalHeight;
-          const panelContentHeightAfter = panelContent
-            ? panelContent.offsetHeight
-            : 0;
-          const panelContentScrollHeightAfter = panelContent
-            ? panelContent.scrollHeight
-            : 0;
-          const panelContentClientHeightAfter = panelContent
-            ? panelContent.clientHeight
-            : 0;
-          const needsScrollingAfterAnim = panelContent
-            ? panelContent.scrollHeight > panelContent.clientHeight
-            : false;
-
-          // #region agent log
-          const overviewContentAfter =
-            this.shadowRoot.querySelector("#overview-content");
-          const colorsViewAfter =
-            this.shadowRoot.querySelector("#overview-colors-view") ||
-            this.shadowRoot.querySelector("#colors-view");
-          const fontsViewAfter =
-            this.shadowRoot.querySelector("#overview-fonts-view") ||
-            this.shadowRoot.querySelector("#fonts-view");
-          fetch(
-            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                location: "content.js:1669",
-                message: "Post-animation - final state",
-                data: {
-                  totalHeight,
-                  measuredContentHeight,
-                  panelHeight: this.inspectorPanel.offsetHeight,
-                  panelContentScrollHeight: panelContent
-                    ? panelContent.scrollHeight
-                    : 0,
-                  panelContentClientHeight: panelContent
-                    ? panelContent.clientHeight
-                    : 0,
-                  overviewContentScrollHeight: overviewContentAfter
-                    ? overviewContentAfter.scrollHeight
-                    : 0,
-                  colorsViewScrollHeight: colorsViewAfter
-                    ? colorsViewAfter.scrollHeight
-                    : 0,
-                  fontsViewScrollHeight: fontsViewAfter
-                    ? fontsViewAfter.scrollHeight
-                    : 0,
-                  colorsViewOpacity: colorsViewAfter
-                    ? window.getComputedStyle(colorsViewAfter).opacity
-                    : "",
-                  fontsViewOpacity: fontsViewAfter
-                    ? window.getComputedStyle(fontsViewAfter).opacity
-                    : "",
-                  contentCutoff: panelContent
-                    ? panelContent.scrollHeight > panelContent.clientHeight
-                    : false,
-                },
-                timestamp: Date.now(),
-                sessionId: "debug-session",
-                runId: "run1",
-                hypothesisId: "A,B,C,D,E",
-              }),
-            }
-          ).catch(() => {});
-          // #endregion
-
           // After animation completes, set panelContent properties so it sizes correctly to content
           // Panel is now at final height, so panelContent will size correctly based on final height
           if (panelContent) {
@@ -1839,36 +1124,6 @@
               : 48;
 
             if (totalHeight <= maxHeight) {
-              // #region agent log
-              fetch(
-                "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    location: "content.js:1580",
-                    message: "Post-animation: totalHeight <= maxHeight - entry",
-                    data: {
-                      totalHeight,
-                      maxHeight,
-                      measuredContentHeight,
-                      panelHeightBefore: this.inspectorPanel.offsetHeight,
-                      panelContentScrollHeightBefore: panelContent
-                        ? panelContent.scrollHeight
-                        : 0,
-                      panelContentClientHeightBefore: panelContent
-                        ? panelContent.clientHeight
-                        : 0,
-                    },
-                    timestamp: Date.now(),
-                    sessionId: "debug-session",
-                    runId: "run1",
-                    hypothesisId: "A,B,C,D,E",
-                  }),
-                }
-              ).catch(() => {});
-              // #endregion
-
               // Always use flex: 1 to constrain panel-content by panel's max-height (80vh)
               // This ensures panel-content can scroll when content exceeds available space
               panelContent.style.removeProperty("height");
@@ -1879,105 +1134,11 @@
               // Always keep overflow-y: auto to allow scrolling when content exceeds panel height
               // The panel has max-height: 80vh, so panel-content should scroll when needed
               panelContent.style.setProperty("overflow-y", "auto", "important");
-
-              // #region agent log - Track flex and overflow after setting
-              const computedFlex = window.getComputedStyle(panelContent).flex;
-              const computedOverflowY =
-                window.getComputedStyle(panelContent).overflowY;
-              fetch(
-                "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    location: "content.js:1838",
-                    message:
-                      "finishHeightUpdate: After setting flex:1 and overflow-y:auto",
-                    data: {
-                      scrollHeight: panelContent.scrollHeight,
-                      clientHeight: panelContent.clientHeight,
-                      isScrollable:
-                        panelContent.scrollHeight > panelContent.clientHeight,
-                      computedFlex,
-                      computedOverflowY,
-                      panelHeight: this.inspectorPanel.offsetHeight,
-                      maxHeight: window.getComputedStyle(this.inspectorPanel)
-                        .maxHeight,
-                    },
-                    timestamp: Date.now(),
-                    sessionId: "debug-session",
-                    runId: "run1",
-                    hypothesisId: "H",
-                  }),
-                }
-              ).catch(() => {});
-              // #endregion
-
-              // #region agent log
-              fetch(
-                "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    location: "content.js:1820",
-                    message: "Post-fix: Set overflow-y to auto",
-                    data: {
-                      scrollHeight: panelContent.scrollHeight,
-                      clientHeight: panelContent.clientHeight,
-                      panelHeight: this.inspectorPanel.offsetHeight,
-                      maxHeight: window.getComputedStyle(this.inspectorPanel)
-                        .maxHeight,
-                      overflowY:
-                        window.getComputedStyle(panelContent).overflowY,
-                    },
-                    timestamp: Date.now(),
-                    sessionId: "debug-session",
-                    runId: "post-fix",
-                    hypothesisId: "FIX",
-                  }),
-                }
-              ).catch(() => {});
-              // #endregion
-
               // CRITICAL FIX: After setting flex: 1, check if content height has changed
               // and adjust panel height if content exceeds the available space
               // This handles cases where content height changes after measurement (font rendering, layout shifts, etc.)
               setTimeout(() => {
                 if (panelContent) {
-                  // #region agent log - Check flex and overflow after setTimeout
-                  const computedFlex =
-                    window.getComputedStyle(panelContent).flex;
-                  const computedOverflowY =
-                    window.getComputedStyle(panelContent).overflowY;
-                  fetch(
-                    "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                    {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        location: "content.js:1908",
-                        message:
-                          "Post-animation setTimeout: Check flex and overflow state",
-                        data: {
-                          scrollHeight: panelContent.scrollHeight,
-                          clientHeight: panelContent.clientHeight,
-                          isScrollable:
-                            panelContent.scrollHeight >
-                            panelContent.clientHeight,
-                          computedFlex,
-                          computedOverflowY,
-                          panelHeight: this.inspectorPanel.offsetHeight,
-                        },
-                        timestamp: Date.now(),
-                        sessionId: "debug-session",
-                        runId: "run1",
-                        hypothesisId: "I",
-                      }),
-                    }
-                  ).catch(() => {});
-                  // #endregion
-
                   const currentContentHeight = panelContent.scrollHeight;
                   const currentPanelHeight = this.inspectorPanel.offsetHeight;
                   const headerElement = this.shadowRoot
@@ -2006,99 +1167,9 @@
                         `${newTotalHeight}px`,
                         "important"
                       );
-
-                      // #region agent log
-                      fetch(
-                        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                        {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            location: "content.js:1820",
-                            message:
-                              "Post-animation: adjusted panel height due to content growth",
-                            data: {
-                              originalHeight: currentPanelHeight,
-                              newHeight: newTotalHeight,
-                              contentHeight: currentContentHeight,
-                              availableContentHeight,
-                              measuredContentHeight,
-                            },
-                            timestamp: Date.now(),
-                            sessionId: "debug-session",
-                            runId: "run1",
-                            hypothesisId: "A,C",
-                          }),
-                        }
-                      ).catch(() => {});
-                      // #endregion
                     }
                   }
-                }
-
-                // #region agent log
-                const overviewContentAfterFlexDelay =
-                  this.shadowRoot.querySelector("#overview-content");
-                const colorsViewAfterFlexDelay =
-                  this.shadowRoot.querySelector("#overview-colors-view") ||
-                  this.shadowRoot.querySelector("#colors-view");
-                const fontsViewAfterFlexDelay =
-                  this.shadowRoot.querySelector("#overview-fonts-view") ||
-                  this.shadowRoot.querySelector("#fonts-view");
-                fetch(
-                  "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                  {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      location: "content.js:1820",
-                      message:
-                        "Post-animation: after flex 0 0 auto + delay (check for layout shifts)",
-                      data: {
-                        totalHeight,
-                        finalHeight,
-                        panelHeight: this.inspectorPanel.offsetHeight,
-                        panelContentScrollHeight: panelContent
-                          ? panelContent.scrollHeight
-                          : 0,
-                        panelContentClientHeight: panelContent
-                          ? panelContent.clientHeight
-                          : 0,
-                        overviewContentScrollHeight:
-                          overviewContentAfterFlexDelay
-                            ? overviewContentAfterFlexDelay.scrollHeight
-                            : 0,
-                        colorsViewScrollHeight: colorsViewAfterFlexDelay
-                          ? colorsViewAfterFlexDelay.scrollHeight
-                          : 0,
-                        fontsViewScrollHeight: fontsViewAfterFlexDelay
-                          ? fontsViewAfterFlexDelay.scrollHeight
-                          : 0,
-                        contentCutoff: panelContent
-                          ? panelContent.scrollHeight >
-                            panelContent.clientHeight
-                          : false,
-                        panelContentFlex: panelContent
-                          ? window.getComputedStyle(panelContent).flex
-                          : "",
-                        panelContentOverflowY: panelContent
-                          ? window.getComputedStyle(panelContent).overflowY
-                          : "",
-                        isScrollableAfterDelay: panelContent
-                          ? panelContent.scrollHeight >
-                            panelContent.clientHeight
-                          : false,
-                      },
-                      timestamp: Date.now(),
-                      sessionId: "debug-session",
-                      runId: "run1",
-                      hypothesisId: "A,C,D",
-                    }),
-                  }
-                ).catch(() => {});
-                // #endregion
-
-                // CRITICAL: Ensure flex: 1 and overflow-y: auto are still set after all async operations
+                } // CRITICAL: Ensure flex: 1 and overflow-y: auto are still set after all async operations
                 // This prevents any code from accidentally resetting them
                 if (panelContent) {
                   panelContent.style.setProperty("flex", "1", "important");
@@ -2112,74 +1183,8 @@
                     "0",
                     "important"
                   );
-
-                  // #region agent log - Final safeguard check
-                  const finalFlex = window.getComputedStyle(panelContent).flex;
-                  const finalOverflowY =
-                    window.getComputedStyle(panelContent).overflowY;
-                  fetch(
-                    "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                    {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        location: "content.js:2052",
-                        message:
-                          "Post-animation setTimeout: Final safeguard - ensure flex:1 and overflow-y:auto",
-                        data: {
-                          scrollHeight: panelContent.scrollHeight,
-                          clientHeight: panelContent.clientHeight,
-                          isScrollable:
-                            panelContent.scrollHeight >
-                            panelContent.clientHeight,
-                          finalFlex,
-                          finalOverflowY,
-                        },
-                        timestamp: Date.now(),
-                        sessionId: "debug-session",
-                        runId: "run1",
-                        hypothesisId: "I",
-                      }),
-                    }
-                  ).catch(() => {});
-                  // #endregion
                 }
               }, 100);
-
-              // #region agent log
-              fetch(
-                "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    location: "content.js:1595",
-                    message: "Post-animation: after setting flex 0 0 auto",
-                    data: {
-                      totalHeight,
-                      finalHeight,
-                      panelHeightAfterFlex: this.inspectorPanel.offsetHeight,
-                      panelContentScrollHeightAfterFlex: panelContent
-                        ? panelContent.scrollHeight
-                        : 0,
-                      panelContentClientHeightAfterFlex: panelContent
-                        ? panelContent.clientHeight
-                        : 0,
-                      panelContentOffsetHeightAfterFlex: panelContent
-                        ? panelContent.offsetHeight
-                        : 0,
-                      needsScrolling: panelContent
-                        ? panelContent.scrollHeight > panelContent.clientHeight
-                        : false,
-                    },
-                    timestamp: Date.now(),
-                    sessionId: "debug-session",
-                    runId: "run1",
-                    hypothesisId: "A,B,C,D,E",
-                  }),
-                }
-              ).catch(() => {});
-              // #endregion
             } else {
               // Content exceeds maxHeight - check if it fits in available maxHeight space
               const maxAvailableContentHeight = maxHeight - headerHeight;
@@ -2207,67 +1212,6 @@
                   "auto",
                   "important"
                 );
-
-                // #region agent log - Track flex and overflow after setting (immediate path)
-                const computedFlex = window.getComputedStyle(panelContent).flex;
-                const computedOverflowY =
-                  window.getComputedStyle(panelContent).overflowY;
-                fetch(
-                  "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                  {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      location: "content.js:2062",
-                      message:
-                        "finishHeightUpdate (immediate): After setting flex:1 and overflow-y:auto",
-                      data: {
-                        scrollHeight: panelContent.scrollHeight,
-                        clientHeight: panelContent.clientHeight,
-                        isScrollable:
-                          panelContent.scrollHeight > panelContent.clientHeight,
-                        computedFlex,
-                        computedOverflowY,
-                        panelHeight: this.inspectorPanel.offsetHeight,
-                        maxHeight: window.getComputedStyle(this.inspectorPanel)
-                          .maxHeight,
-                      },
-                      timestamp: Date.now(),
-                      sessionId: "debug-session",
-                      runId: "run1",
-                      hypothesisId: "H",
-                    }),
-                  }
-                ).catch(() => {});
-                // #endregion
-
-                // #region agent log
-                fetch(
-                  "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                  {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      location: "content.js:2025",
-                      message:
-                        "Post-fix: Set overflow-y to auto (immediate path)",
-                      data: {
-                        scrollHeight: panelContent.scrollHeight,
-                        clientHeight: panelContent.clientHeight,
-                        panelHeight: this.inspectorPanel.offsetHeight,
-                        maxHeight: window.getComputedStyle(this.inspectorPanel)
-                          .maxHeight,
-                        overflowY:
-                          window.getComputedStyle(panelContent).overflowY,
-                      },
-                      timestamp: Date.now(),
-                      sessionId: "debug-session",
-                      runId: "post-fix",
-                      hypothesisId: "FIX",
-                    }),
-                  }
-                ).catch(() => {});
-                // #endregion
               } else {
                 // Content doesn't fit - use scrolling
                 panelContent.style.removeProperty("height");
@@ -2281,43 +1225,6 @@
               }
             }
           }
-          fetch(
-            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                location: "content.js:758",
-                message: "finishHeightUpdate - animation complete",
-                data: {
-                  finalHeight,
-                  actualHeight,
-                  actualContentHeight,
-                  actualNeedsScrolling,
-                  panelContentClientHeight: panelContent
-                    ? panelContent.clientHeight
-                    : 0,
-                  panelBoxSizingAfter,
-                  panelBorderTopAfter,
-                  panelBorderBottomAfter,
-                  panelBorderTotalAfter,
-                  actualClientHeight,
-                  heightDiffAfter,
-                  heightMismatch,
-                  panelContentHeightAfter,
-                  panelContentScrollHeightAfter,
-                  panelContentClientHeightAfter,
-                  needsScrollingAfterAnim,
-                  measuredContentHeight,
-                },
-                timestamp: Date.now(),
-                sessionId: "debug-session",
-                runId: "run1",
-                hypothesisId: "A,B,C,D,E",
-              }),
-            }
-          ).catch(() => {});
-          // #endregion
           this.isUpdatingHeight = false;
         }, 450);
       });
@@ -2680,30 +1587,7 @@
     }
 
     createPanel() {
-      console.log("[CSS Inspector] createPanel called");
-      // #region agent log
-      fetch(
-        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: "content.js:1195",
-            message: "createPanel entry",
-            data: {
-              isActive: this.isActive,
-              theme: this.theme,
-              hasPanel: !!this.inspectorPanel,
-            },
-            timestamp: Date.now(),
-            sessionId: "debug-session",
-            runId: "run1",
-            hypothesisId: "E",
-          }),
-        }
-      ).catch(() => {});
-      // #endregion
-      // Ensure document.body exists
+      console.log("[CSS Inspector] createPanel called"); // Ensure document.body exists
       if (!document.body) {
         console.warn(
           "[CSS Inspector] document.body not available yet, waiting..."
@@ -2841,92 +1725,14 @@
       panel.addEventListener(
         "wheel",
         (e) => {
-          // #region agent log
-          fetch(
-            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                location: "content.js:2600",
-                message: "Wheel event received on panel",
-                data: {
-                  clientX: e.clientX,
-                  clientY: e.clientY,
-                  deltaY: e.deltaY,
-                  defaultPrevented: e.defaultPrevented,
-                  target: e.target?.tagName || "unknown",
-                },
-                timestamp: Date.now(),
-                sessionId: "debug-session",
-                runId: "run1",
-                hypothesisId: "A",
-              }),
-            }
-          ).catch(() => {});
-          // #endregion
-
           const panelRect = panel.getBoundingClientRect();
           const isMouseOverPanel =
             e.clientX >= panelRect.left &&
             e.clientX <= panelRect.right &&
             e.clientY >= panelRect.top &&
             e.clientY <= panelRect.bottom;
-
-          // #region agent log
-          fetch(
-            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                location: "content.js:2610",
-                message: "Mouse position check",
-                data: {
-                  isMouseOverPanel,
-                  panelRect: {
-                    left: panelRect.left,
-                    right: panelRect.right,
-                    top: panelRect.top,
-                    bottom: panelRect.bottom,
-                  },
-                  mousePos: { x: e.clientX, y: e.clientY },
-                },
-                timestamp: Date.now(),
-                sessionId: "debug-session",
-                runId: "run1",
-                hypothesisId: "B",
-              }),
-            }
-          ).catch(() => {});
-          // #endregion
-
           if (isMouseOverPanel) {
             const panelContent = shadowRoot.querySelector("#panel-content");
-
-            // #region agent log
-            fetch(
-              "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  location: "content.js:2611",
-                  message: "Panel content check",
-                  data: {
-                    panelContentFound: !!panelContent,
-                    scrollHeight: panelContent?.scrollHeight || 0,
-                    clientHeight: panelContent?.clientHeight || 0,
-                  },
-                  timestamp: Date.now(),
-                  sessionId: "debug-session",
-                  runId: "run1",
-                  hypothesisId: "C",
-                }),
-              }
-            ).catch(() => {});
-            // #endregion
-
             if (panelContent) {
               // Check if the panel content is scrollable
               const isScrollable =
@@ -2937,34 +1743,6 @@
                 const isAtBottom =
                   panelContent.scrollTop + panelContent.clientHeight >=
                   panelContent.scrollHeight - 1;
-
-                // #region agent log
-                fetch(
-                  "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                  {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      location: "content.js:2617",
-                      message: "Scroll state check",
-                      data: {
-                        isScrollable,
-                        isAtTop,
-                        isAtBottom,
-                        scrollTop: panelContent.scrollTop,
-                        scrollHeight: panelContent.scrollHeight,
-                        clientHeight: panelContent.clientHeight,
-                        deltaY: e.deltaY,
-                      },
-                      timestamp: Date.now(),
-                      sessionId: "debug-session",
-                      runId: "run1",
-                      hypothesisId: "D",
-                    }),
-                  }
-                ).catch(() => {});
-                // #endregion
-
                 // Always prevent page scroll when cursor is over panel, even at boundaries
                 // This ensures the page never scrolls when interacting with the panel
                 e.preventDefault();
@@ -2979,78 +1757,13 @@
                   const scrollAmount = e.deltaY;
                   const scrollTopBefore = panelContent.scrollTop;
                   panelContent.scrollTop += scrollAmount;
-
-                  // #region agent log
-                  fetch(
-                    "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                    {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        location: "content.js:2630",
-                        message: "Prevented default and scrolled panel-content",
-                        data: {
-                          defaultPrevented: e.defaultPrevented,
-                          deltaY: e.deltaY,
-                          scrollAmount,
-                          scrollTopBefore,
-                          scrollTopAfter: panelContent.scrollTop,
-                        },
-                        timestamp: Date.now(),
-                        sessionId: "debug-session",
-                        runId: "run1",
-                        hypothesisId: "E",
-                      }),
-                    }
-                  ).catch(() => {});
-                  // #endregion
                 } else {
                   // At boundary - prevent page scroll but don't scroll panel
-                  // #region agent log
-                  fetch(
-                    "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                    {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        location: "content.js:2626",
-                        message: "At boundary - prevented page scroll",
-                        data: { deltaY: e.deltaY, isAtTop, isAtBottom },
-                        timestamp: Date.now(),
-                        sessionId: "debug-session",
-                        runId: "run1",
-                        hypothesisId: "D",
-                      }),
-                    }
-                  ).catch(() => {});
-                  // #endregion
                 }
               } else {
                 // Panel content is not scrollable - still prevent page scroll when cursor is over panel
                 e.preventDefault();
                 e.stopPropagation();
-
-                // #region agent log
-                fetch(
-                  "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                  {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      location: "content.js:2634",
-                      message: "Panel not scrollable - prevented page scroll",
-                      data: {
-                        scrollHeight: panelContent.scrollHeight,
-                        clientHeight: panelContent.clientHeight,
-                      },
-                      timestamp: Date.now(),
-                      sessionId: "debug-session",
-                      runId: "run1",
-                      hypothesisId: "C",
-                    }),
-                  }
-                ).catch(() => {});
-                // #endregion
               }
             }
           }
@@ -3068,31 +1781,6 @@
             e.clientX <= panelRect.right &&
             e.clientY >= panelRect.top &&
             e.clientY <= panelRect.bottom;
-
-          // #region agent log
-          fetch(
-            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                location: "content.js:2645",
-                message: "Document-level wheel event",
-                data: {
-                  isMouseOverPanel,
-                  clientX: e.clientX,
-                  clientY: e.clientY,
-                  defaultPrevented: e.defaultPrevented,
-                  target: e.target?.tagName || "unknown",
-                },
-                timestamp: Date.now(),
-                sessionId: "debug-session",
-                runId: "run1",
-                hypothesisId: "F",
-              }),
-            }
-          ).catch(() => {});
-          // #endregion
         },
         { passive: false, capture: true }
       );
@@ -3169,49 +1857,7 @@
       ); // Use capture phase
 
       // Initialize panel with overview mode content
-      // #region agent log
-      fetch(
-        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: "content.js:1393",
-            message: "createPanel before switchPanelToOverviewMode",
-            data: {
-              panelHeight: this.inspectorPanel.offsetHeight,
-              panelHeightStyle: this.inspectorPanel.style.height,
-            },
-            timestamp: Date.now(),
-            sessionId: "debug-session",
-            runId: "run1",
-            hypothesisId: "E",
-          }),
-        }
-      ).catch(() => {});
-      // #endregion
       this.switchPanelToOverviewMode();
-      // #region agent log
-      fetch(
-        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: "content.js:1394",
-            message: "createPanel after switchPanelToOverviewMode",
-            data: {
-              panelHeight: this.inspectorPanel.offsetHeight,
-              panelHeightStyle: this.inspectorPanel.style.height,
-            },
-            timestamp: Date.now(),
-            sessionId: "debug-session",
-            runId: "run1",
-            hypothesisId: "E",
-          }),
-        }
-      ).catch(() => {});
-      // #endregion
     }
 
     initDragHandle() {
@@ -3342,52 +1988,9 @@
 
       // Prevent duplicate calls
       if (this.isSwitchingMode) {
-        // #region agent log
-        fetch(
-          "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              location: "content.js:1526",
-              message: "switchPanelToOverviewMode blocked - already switching",
-              data: { activeTab },
-              timestamp: Date.now(),
-              sessionId: "debug-session",
-              runId: "run1",
-              hypothesisId: "D",
-            }),
-          }
-        ).catch(() => {});
-        // #endregion
         return;
       }
-      this.isSwitchingMode = true;
-
-      // #region agent log
-      fetch(
-        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: "content.js:1517",
-            message: "switchPanelToOverviewMode entry",
-            data: {
-              activeTab,
-              currentHeight: this.inspectorPanel.offsetHeight,
-              currentHeightStyle: this.inspectorPanel.style.height,
-            },
-            timestamp: Date.now(),
-            sessionId: "debug-session",
-            runId: "run1",
-            hypothesisId: "A,C",
-          }),
-        }
-      ).catch(() => {});
-      // #endregion
-
-      // Clear selected element when switching to overview
+      this.isSwitchingMode = true; // Clear selected element when switching to overview
       this.selectedElement = null;
       this.hoveredElement = null;
 
@@ -3414,34 +2017,7 @@
       const panelContent = this.shadowRoot.querySelector("#panel-content");
       const originalOpacity = panelContent
         ? window.getComputedStyle(panelContent).opacity
-        : "1";
-
-      // #region agent log
-      fetch(
-        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: "content.js:1544",
-            message: "switchPanelToOverviewMode before innerHTML",
-            data: {
-              heightBeforeInnerHTML,
-              preservedHeight,
-              activeTab,
-              currentTransition: this.inspectorPanel.style.transition,
-              originalOpacity,
-            },
-            timestamp: Date.now(),
-            sessionId: "debug-session",
-            runId: "run1",
-            hypothesisId: "A,C",
-          }),
-        }
-      ).catch(() => {});
-      // #endregion
-
-      // Temporarily disable transitions and set opacity to 0 to prevent flash during DOM replacement
+        : "1"; // Temporarily disable transitions and set opacity to 0 to prevent flash during DOM replacement
       const originalTransition = this.inspectorPanel.style.transition;
       this.inspectorPanel.style.setProperty("transition", "none", "important");
 
@@ -3575,33 +2151,7 @@
           `${preservedHeight}px`,
           "important"
         );
-      }
-
-      // #region agent log
-      fetch(
-        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: "content.js:1649",
-            message: "switchPanelToOverviewMode after innerHTML",
-            data: {
-              heightBeforeInnerHTML,
-              heightAfterInnerHTML: this.inspectorPanel.offsetHeight,
-              heightStyle: this.inspectorPanel.style.height,
-              preservedHeight,
-            },
-            timestamp: Date.now(),
-            sessionId: "debug-session",
-            runId: "run1",
-            hypothesisId: "A,C",
-          }),
-        }
-      ).catch(() => {});
-      // #endregion
-
-      // Load stats
+      } // Load stats
       this.loadPanelStats();
 
       // After DOM settles, recalculate height dynamically based on new content
@@ -3681,28 +2231,7 @@
           // Prevent rapid clicks
           if (overviewBtn.disabled) return;
           overviewBtn.disabled = true;
-          inspectorBtn.disabled = true;
-
-          // #region agent log
-          fetch(
-            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                location: "content.js:1607",
-                message: "Overview click - entry",
-                data: { currentHeight: this.inspectorPanel.offsetHeight },
-                timestamp: Date.now(),
-                sessionId: "debug-session",
-                runId: "run1",
-                hypothesisId: "A",
-              }),
-            }
-          ).catch(() => {});
-          // #endregion
-
-          // Get current height BEFORE any changes
+          inspectorBtn.disabled = true; // Get current height BEFORE any changes
           const currentHeight = this.inspectorPanel.offsetHeight;
 
           // Update button styles immediately
@@ -3720,53 +2249,7 @@
 
           // Switch after brief fade, then restore opacity and update height
           setTimeout(() => {
-            // #region agent log
-            fetch(
-              "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  location: "content.js:1655",
-                  message: "Overview click - before setInspectorState",
-                  data: {
-                    currentHeight,
-                    panelHeight: this.inspectorPanel.offsetHeight,
-                    panelHeightStyle: this.inspectorPanel.style.height,
-                  },
-                  timestamp: Date.now(),
-                  sessionId: "debug-session",
-                  runId: "run1",
-                  hypothesisId: "A",
-                }),
-              }
-            ).catch(() => {});
-            // #endregion
-            this.setInspectorState(false);
-
-            // #region agent log
-            fetch(
-              "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  location: "content.js:1657",
-                  message: "Overview click - after setInspectorState",
-                  data: {
-                    panelHeight: this.inspectorPanel.offsetHeight,
-                    panelHeightStyle: this.inspectorPanel.style.height,
-                  },
-                  timestamp: Date.now(),
-                  sessionId: "debug-session",
-                  runId: "run1",
-                  hypothesisId: "A",
-                }),
-              }
-            ).catch(() => {});
-            // #endregion
-
-            // CRITICAL: Set new content to opacity 0 SYNCHRONOUSLY immediately after DOM replacement
+            this.setInspectorState(false); // CRITICAL: Set new content to opacity 0 SYNCHRONOUSLY immediately after DOM replacement
             // This must happen before any RAF or async operations to prevent flash
             const newPanelContent =
               this.shadowRoot.querySelector("#panel-content");
@@ -3799,63 +2282,12 @@
                     : 0;
                   const calculatedHeight = contentHeight + headerHeight;
                   const maxHeight = window.innerHeight * 0.8;
-                  const newHeight = Math.min(calculatedHeight, maxHeight);
-
-                  // #region agent log
-                  fetch(
-                    "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                    {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        location: "content.js:1676",
-                        message: "Height calculated",
-                        data: {
-                          currentHeight,
-                          newHeight,
-                          calculatedHeight,
-                          panelHeightBeforeSet:
-                            this.inspectorPanel.offsetHeight,
-                        },
-                        timestamp: Date.now(),
-                        sessionId: "debug-session",
-                        runId: "run1",
-                        hypothesisId: "A",
-                      }),
-                    }
-                  ).catch(() => {});
-                  // #endregion
-
-                  // Set current height (starting point)
+                  const newHeight = Math.min(calculatedHeight, maxHeight); // Set current height (starting point)
                   this.inspectorPanel.style.setProperty(
                     "height",
                     `${currentHeight}px`,
                     "important"
-                  );
-
-                  // #region agent log
-                  fetch(
-                    "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                    {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        location: "content.js:1689",
-                        message: "Height set to currentHeight before animation",
-                        data: {
-                          currentHeight,
-                          panelHeightAfterSet: this.inspectorPanel.offsetHeight,
-                        },
-                        timestamp: Date.now(),
-                        sessionId: "debug-session",
-                        runId: "run1",
-                        hypothesisId: "A",
-                      }),
-                    }
-                  ).catch(() => {});
-                  // #endregion
-
-                  // Enable transitions
+                  ); // Enable transitions
                   this.inspectorPanel.style.setProperty(
                     "transition",
                     "height 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
@@ -3873,33 +2305,7 @@
                       `${newHeight}px`,
                       "important"
                     );
-                    newPanelContent.style.opacity = "1";
-
-                    // #region agent log
-                    fetch(
-                      "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                      {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          location: "content.js:1704",
-                          message: "Animation started",
-                          data: {
-                            height: newHeight,
-                            opacity: 1,
-                            panelHeightAfterAnimStart:
-                              this.inspectorPanel.offsetHeight,
-                          },
-                          timestamp: Date.now(),
-                          sessionId: "debug-session",
-                          runId: "run1",
-                          hypothesisId: "A",
-                        }),
-                      }
-                    ).catch(() => {});
-                    // #endregion
-
-                    // Re-enable buttons after transition
+                    newPanelContent.style.opacity = "1"; // Re-enable buttons after transition
                     setTimeout(() => {
                       overviewBtn.disabled = false;
                       inspectorBtn.disabled = false;
@@ -3918,28 +2324,7 @@
           // Prevent rapid clicks
           if (inspectorBtn.disabled) return;
           overviewBtn.disabled = true;
-          inspectorBtn.disabled = true;
-
-          // #region agent log
-          fetch(
-            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                location: "content.js:1684",
-                message: "Inspector click - entry",
-                data: { currentHeight: this.inspectorPanel.offsetHeight },
-                timestamp: Date.now(),
-                sessionId: "debug-session",
-                runId: "run1",
-                hypothesisId: "A",
-              }),
-            }
-          ).catch(() => {});
-          // #endregion
-
-          // Get current height BEFORE any changes
+          inspectorBtn.disabled = true; // Get current height BEFORE any changes
           const currentHeight = this.inspectorPanel.offsetHeight;
 
           // Update button styles immediately
@@ -3957,53 +2342,7 @@
 
           // Switch after brief fade, then restore opacity and update height
           setTimeout(() => {
-            // #region agent log
-            fetch(
-              "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  location: "content.js:1820",
-                  message: "Inspector click - before setInspectorState",
-                  data: {
-                    currentHeight,
-                    panelHeight: this.inspectorPanel.offsetHeight,
-                    panelHeightStyle: this.inspectorPanel.style.height,
-                  },
-                  timestamp: Date.now(),
-                  sessionId: "debug-session",
-                  runId: "run1",
-                  hypothesisId: "A",
-                }),
-              }
-            ).catch(() => {});
-            // #endregion
-            this.setInspectorState(true);
-
-            // #region agent log
-            fetch(
-              "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  location: "content.js:1822",
-                  message: "Inspector click - after setInspectorState",
-                  data: {
-                    panelHeight: this.inspectorPanel.offsetHeight,
-                    panelHeightStyle: this.inspectorPanel.style.height,
-                  },
-                  timestamp: Date.now(),
-                  sessionId: "debug-session",
-                  runId: "run1",
-                  hypothesisId: "A",
-                }),
-              }
-            ).catch(() => {});
-            // #endregion
-
-            // CRITICAL: Set new content to opacity 0 SYNCHRONOUSLY immediately after DOM replacement
+            this.setInspectorState(true); // CRITICAL: Set new content to opacity 0 SYNCHRONOUSLY immediately after DOM replacement
             // This must happen before any RAF or async operations to prevent flash
             const newPanelContent =
               this.shadowRoot.querySelector("#panel-content");
@@ -4036,63 +2375,12 @@
                     : 0;
                   const calculatedHeight = contentHeight + headerHeight;
                   const maxHeight = window.innerHeight * 0.8;
-                  const newHeight = Math.min(calculatedHeight, maxHeight);
-
-                  // #region agent log
-                  fetch(
-                    "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                    {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        location: "content.js:1842",
-                        message: "Height calculated",
-                        data: {
-                          currentHeight,
-                          newHeight,
-                          calculatedHeight,
-                          panelHeightBeforeSet:
-                            this.inspectorPanel.offsetHeight,
-                        },
-                        timestamp: Date.now(),
-                        sessionId: "debug-session",
-                        runId: "run1",
-                        hypothesisId: "A",
-                      }),
-                    }
-                  ).catch(() => {});
-                  // #endregion
-
-                  // Set current height (starting point)
+                  const newHeight = Math.min(calculatedHeight, maxHeight); // Set current height (starting point)
                   this.inspectorPanel.style.setProperty(
                     "height",
                     `${currentHeight}px`,
                     "important"
-                  );
-
-                  // #region agent log
-                  fetch(
-                    "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                    {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        location: "content.js:1854",
-                        message: "Height set to currentHeight before animation",
-                        data: {
-                          currentHeight,
-                          panelHeightAfterSet: this.inspectorPanel.offsetHeight,
-                        },
-                        timestamp: Date.now(),
-                        sessionId: "debug-session",
-                        runId: "run1",
-                        hypothesisId: "A",
-                      }),
-                    }
-                  ).catch(() => {});
-                  // #endregion
-
-                  // Enable transitions
+                  ); // Enable transitions
                   this.inspectorPanel.style.setProperty(
                     "transition",
                     "height 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
@@ -4110,33 +2398,7 @@
                       `${newHeight}px`,
                       "important"
                     );
-                    newPanelContent.style.opacity = "1";
-
-                    // #region agent log
-                    fetch(
-                      "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                      {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          location: "content.js:1869",
-                          message: "Animation started",
-                          data: {
-                            height: newHeight,
-                            opacity: 1,
-                            panelHeightAfterAnimStart:
-                              this.inspectorPanel.offsetHeight,
-                          },
-                          timestamp: Date.now(),
-                          sessionId: "debug-session",
-                          runId: "run1",
-                          hypothesisId: "A",
-                        }),
-                      }
-                    ).catch(() => {});
-                    // #endregion
-
-                    // Re-enable buttons after transition
+                    newPanelContent.style.opacity = "1"; // Re-enable buttons after transition
                     setTimeout(() => {
                       overviewBtn.disabled = false;
                       inspectorBtn.disabled = false;
@@ -4243,31 +2505,7 @@
           // Prevent rapid clicks
           if (colorsSegment.disabled) return;
           colorsSegment.disabled = true;
-          fontsSegment.disabled = true;
-
-          // #region agent log
-          fetch(
-            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                location: "content.js:1843",
-                message: "Colors click - entry",
-                data: {
-                  currentHeight: this.inspectorPanel.offsetHeight,
-                  fontsDisplay: fontsView.style.display,
-                },
-                timestamp: Date.now(),
-                sessionId: "debug-session",
-                runId: "run1",
-                hypothesisId: "B",
-              }),
-            }
-          ).catch(() => {});
-          // #endregion
-
-          // Get current height BEFORE any changes
+          fontsSegment.disabled = true; // Get current height BEFORE any changes
           const currentHeight = this.inspectorPanel.offsetHeight;
 
           // Update button colors immediately
@@ -4280,62 +2518,13 @@
           segmentIndicator.style.transform = "translateX(0)";
 
           // STEP 1: Hide old view
-          fontsView.style.display = "none";
-
-          // #region agent log
-          fetch(
-            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                location: "content.js:2038",
-                message: "Colors click - old view hidden",
-                data: {
-                  fontsDisplay: fontsView.style.display,
-                  colorsDisplay: colorsView.style.display,
-                  currentHeight,
-                },
-                timestamp: Date.now(),
-                sessionId: "debug-session",
-                runId: "run1",
-                hypothesisId: "B",
-              }),
-            }
-          ).catch(() => {});
-          // #endregion
-
-          // STEP 2: Show new view but keep it invisible
+          fontsView.style.display = "none"; // STEP 2: Show new view but keep it invisible
           colorsView.style.display = "block";
           colorsView.style.transition = "opacity 0.2s ease-out";
           colorsView.style.opacity = "0";
 
           // STEP 3: Render content
-          this.renderColorsView();
-
-          // #region agent log
-          fetch(
-            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                location: "content.js:2049",
-                message: "Colors click - content rendered",
-                data: {
-                  colorsViewScrollHeight: colorsView.scrollHeight,
-                  colorsViewOffsetHeight: colorsView.offsetHeight,
-                },
-                timestamp: Date.now(),
-                sessionId: "debug-session",
-                runId: "run1",
-                hypothesisId: "B",
-              }),
-            }
-          ).catch(() => {});
-          // #endregion
-
-          // STEP 4: Wait for layout to fully settle, then use updatePanelHeight for consistent measurement
+          this.renderColorsView(); // STEP 4: Wait for layout to fully settle, then use updatePanelHeight for consistent measurement
           // This ensures we use the EXACT same measurement logic as initial load
           // Use triple RAF to ensure grid layout is fully calculated
           requestAnimationFrame(() => {
@@ -4349,32 +2538,7 @@
                 if (gridContainer) {
                   gridContainer.offsetHeight;
                   gridContainer.scrollHeight;
-                }
-
-                // #region agent log
-                fetch(
-                  "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                  {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      location: "content.js:2067",
-                      message: "Colors click - before measurement",
-                      data: {
-                        currentHeight,
-                        panelHeight: this.inspectorPanel.offsetHeight,
-                        colorsViewScrollHeight: colorsView.scrollHeight,
-                      },
-                      timestamp: Date.now(),
-                      sessionId: "debug-session",
-                      runId: "run1",
-                      hypothesisId: "B",
-                    }),
-                  }
-                ).catch(() => {});
-                // #endregion
-
-                // STEP 1: Measure content height FIRST (before animating)
+                } // STEP 1: Measure content height FIRST (before animating)
                 // This ensures we know the target height before starting animation
                 // Pass currentHeight so it can restore panel to correct height after measurement
                 const measurement = this.measureContentHeight(currentHeight);
@@ -4384,34 +2548,7 @@
                   return;
                 }
 
-                const { totalHeight, measuredContentHeight } = measurement;
-
-                // #region agent log
-                fetch(
-                  "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                  {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      location: "content.js:2067",
-                      message:
-                        "Colors click - after measurement, before animation",
-                      data: {
-                        currentHeight,
-                        totalHeight,
-                        measuredContentHeight,
-                        panelHeight: this.inspectorPanel.offsetHeight,
-                      },
-                      timestamp: Date.now(),
-                      sessionId: "debug-session",
-                      runId: "run1",
-                      hypothesisId: "B",
-                    }),
-                  }
-                ).catch(() => {});
-                // #endregion
-
-                // STEP 2: Now animate to the calculated height
+                const { totalHeight, measuredContentHeight } = measurement; // STEP 2: Now animate to the calculated height
                 // Set isUpdatingHeight flag to prevent concurrent updates
                 this.isUpdatingHeight = true;
                 this.finishHeightUpdate(
@@ -4424,29 +2561,6 @@
                 // STEP 3: Fade in content after animation starts
                 requestAnimationFrame(() => {
                   colorsView.style.opacity = "1";
-
-                  // #region agent log
-                  fetch(
-                    "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                    {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        location: "content.js:2085",
-                        message: "Colors click - fade in started",
-                        data: {
-                          currentHeight,
-                          panelHeight: this.inspectorPanel.offsetHeight,
-                        },
-                        timestamp: Date.now(),
-                        sessionId: "debug-session",
-                        runId: "run1",
-                        hypothesisId: "B",
-                      }),
-                    }
-                  ).catch(() => {});
-                  // #endregion
-
                   console.log("[DEBUG Colors] Transition started", {
                     currentHeight,
                     panelHeight: this.inspectorPanel.offsetHeight,
@@ -4457,52 +2571,6 @@
                     colorsView.style.transition = "";
                     colorsSegment.disabled = false;
                     fontsSegment.disabled = false;
-
-                    // #region agent log
-                    const panelContentAfterFade =
-                      this.shadowRoot.querySelector("#panel-content");
-                    const overviewContentAfterFade =
-                      this.shadowRoot.querySelector("#overview-content");
-                    fetch(
-                      "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                      {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          location: "content.js:3825",
-                          message:
-                            "Colors fade-in complete - check content height",
-                          data: {
-                            panelHeight: this.inspectorPanel.offsetHeight,
-                            panelContentScrollHeight: panelContentAfterFade
-                              ? panelContentAfterFade.scrollHeight
-                              : 0,
-                            panelContentClientHeight: panelContentAfterFade
-                              ? panelContentAfterFade.clientHeight
-                              : 0,
-                            overviewContentScrollHeight:
-                              overviewContentAfterFade
-                                ? overviewContentAfterFade.scrollHeight
-                                : 0,
-                            colorsViewScrollHeight: colorsView
-                              ? colorsView.scrollHeight
-                              : 0,
-                            colorsViewOpacity: colorsView
-                              ? window.getComputedStyle(colorsView).opacity
-                              : "",
-                            contentCutoff: panelContentAfterFade
-                              ? panelContentAfterFade.scrollHeight >
-                                panelContentAfterFade.clientHeight
-                              : false,
-                          },
-                          timestamp: Date.now(),
-                          sessionId: "debug-session",
-                          runId: "run1",
-                          hypothesisId: "A,C",
-                        }),
-                      }
-                    ).catch(() => {});
-                    // #endregion
                   }, 200);
                 });
               });
@@ -4518,31 +2586,7 @@
           // Prevent rapid clicks
           if (fontsSegment.disabled) return;
           colorsSegment.disabled = true;
-          fontsSegment.disabled = true;
-
-          // #region agent log
-          fetch(
-            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                location: "content.js:1988",
-                message: "Fonts click - entry",
-                data: {
-                  currentHeight: this.inspectorPanel.offsetHeight,
-                  colorsDisplay: colorsView.style.display,
-                },
-                timestamp: Date.now(),
-                sessionId: "debug-session",
-                runId: "run1",
-                hypothesisId: "B",
-              }),
-            }
-          ).catch(() => {});
-          // #endregion
-
-          // Get current height BEFORE any changes
+          fontsSegment.disabled = true; // Get current height BEFORE any changes
           const currentHeight = this.inspectorPanel.offsetHeight;
 
           // Update button colors immediately
@@ -4562,62 +2606,13 @@
           }px)`;
 
           // STEP 1: Hide old view
-          colorsView.style.display = "none";
-
-          // #region agent log
-          fetch(
-            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                location: "content.js:2146",
-                message: "Fonts click - old view hidden",
-                data: {
-                  colorsDisplay: colorsView.style.display,
-                  fontsDisplay: fontsView.style.display,
-                  currentHeight,
-                },
-                timestamp: Date.now(),
-                sessionId: "debug-session",
-                runId: "run1",
-                hypothesisId: "B",
-              }),
-            }
-          ).catch(() => {});
-          // #endregion
-
-          // STEP 2: Show new view but keep it invisible
+          colorsView.style.display = "none"; // STEP 2: Show new view but keep it invisible
           fontsView.style.display = "block";
           fontsView.style.transition = "opacity 0.2s ease-out";
           fontsView.style.opacity = "0";
 
           // STEP 3: Render content
-          this.renderFontsView();
-
-          // #region agent log
-          fetch(
-            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                location: "content.js:2158",
-                message: "Fonts click - content rendered",
-                data: {
-                  fontsViewScrollHeight: fontsView.scrollHeight,
-                  fontsViewOffsetHeight: fontsView.offsetHeight,
-                },
-                timestamp: Date.now(),
-                sessionId: "debug-session",
-                runId: "run1",
-                hypothesisId: "B",
-              }),
-            }
-          ).catch(() => {});
-          // #endregion
-
-          // STEP 4: Wait for layout to fully settle, then use updatePanelHeight for consistent measurement
+          this.renderFontsView(); // STEP 4: Wait for layout to fully settle, then use updatePanelHeight for consistent measurement
           // This ensures we use the EXACT same measurement logic as initial load
           // Use triple RAF to ensure layout is fully calculated
           requestAnimationFrame(() => {
@@ -4625,32 +2620,7 @@
               requestAnimationFrame(() => {
                 // Force reflow to ensure layout is complete
                 fontsView.offsetHeight;
-                fontsView.scrollHeight;
-
-                // #region agent log
-                fetch(
-                  "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                  {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      location: "content.js:2167",
-                      message: "Fonts click - before measurement",
-                      data: {
-                        currentHeight,
-                        panelHeight: this.inspectorPanel.offsetHeight,
-                        fontsViewScrollHeight: fontsView.scrollHeight,
-                      },
-                      timestamp: Date.now(),
-                      sessionId: "debug-session",
-                      runId: "run1",
-                      hypothesisId: "B",
-                    }),
-                  }
-                ).catch(() => {});
-                // #endregion
-
-                // STEP 1: Measure content height FIRST (before animating)
+                fontsView.scrollHeight; // STEP 1: Measure content height FIRST (before animating)
                 // This ensures we know the target height before starting animation
                 // Pass currentHeight so it can restore panel to correct height after measurement
                 const measurement = this.measureContentHeight(currentHeight);
@@ -4660,34 +2630,7 @@
                   return;
                 }
 
-                const { totalHeight, measuredContentHeight } = measurement;
-
-                // #region agent log
-                fetch(
-                  "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                  {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      location: "content.js:2167",
-                      message:
-                        "Fonts click - after measurement, before animation",
-                      data: {
-                        currentHeight,
-                        totalHeight,
-                        measuredContentHeight,
-                        panelHeight: this.inspectorPanel.offsetHeight,
-                      },
-                      timestamp: Date.now(),
-                      sessionId: "debug-session",
-                      runId: "run1",
-                      hypothesisId: "B",
-                    }),
-                  }
-                ).catch(() => {});
-                // #endregion
-
-                // STEP 2: Now animate to the calculated height
+                const { totalHeight, measuredContentHeight } = measurement; // STEP 2: Now animate to the calculated height
                 // Set isUpdatingHeight flag to prevent concurrent updates
                 this.isUpdatingHeight = true;
                 this.finishHeightUpdate(
@@ -4700,29 +2643,6 @@
                 // STEP 3: Fade in content after animation starts
                 requestAnimationFrame(() => {
                   fontsView.style.opacity = "1";
-
-                  // #region agent log
-                  fetch(
-                    "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                    {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        location: "content.js:2185",
-                        message: "Fonts click - fade in started",
-                        data: {
-                          currentHeight,
-                          panelHeight: this.inspectorPanel.offsetHeight,
-                        },
-                        timestamp: Date.now(),
-                        sessionId: "debug-session",
-                        runId: "run1",
-                        hypothesisId: "B",
-                      }),
-                    }
-                  ).catch(() => {});
-                  // #endregion
-
                   console.log("[DEBUG Fonts] Transition started", {
                     currentHeight,
                     panelHeight: this.inspectorPanel.offsetHeight,
@@ -4733,52 +2653,6 @@
                     fontsView.style.transition = "";
                     colorsSegment.disabled = false;
                     fontsSegment.disabled = false;
-
-                    // #region agent log
-                    const panelContentAfterFade =
-                      this.shadowRoot.querySelector("#panel-content");
-                    const overviewContentAfterFade =
-                      this.shadowRoot.querySelector("#overview-content");
-                    fetch(
-                      "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-                      {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          location: "content.js:4055",
-                          message:
-                            "Fonts fade-in complete - check content height",
-                          data: {
-                            panelHeight: this.inspectorPanel.offsetHeight,
-                            panelContentScrollHeight: panelContentAfterFade
-                              ? panelContentAfterFade.scrollHeight
-                              : 0,
-                            panelContentClientHeight: panelContentAfterFade
-                              ? panelContentAfterFade.clientHeight
-                              : 0,
-                            overviewContentScrollHeight:
-                              overviewContentAfterFade
-                                ? overviewContentAfterFade.scrollHeight
-                                : 0,
-                            fontsViewScrollHeight: fontsView
-                              ? fontsView.scrollHeight
-                              : 0,
-                            fontsViewOpacity: fontsView
-                              ? window.getComputedStyle(fontsView).opacity
-                              : "",
-                            contentCutoff: panelContentAfterFade
-                              ? panelContentAfterFade.scrollHeight >
-                                panelContentAfterFade.clientHeight
-                              : false,
-                          },
-                          timestamp: Date.now(),
-                          sessionId: "debug-session",
-                          runId: "run1",
-                          hypothesisId: "A,C",
-                        }),
-                      }
-                    ).catch(() => {});
-                    // #endregion
                   }, 200);
                 });
               });
@@ -4799,30 +2673,6 @@
           e.stopPropagation();
           e.preventDefault();
           console.log("[CSS Inspector] Theme switcher clicked");
-          // #region agent log
-          fetch(
-            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                location: "content.js:2215",
-                message: "Theme switcher click",
-                data: {
-                  currentTheme: this.theme,
-                  panelHeight: this.inspectorPanel
-                    ? this.inspectorPanel.offsetHeight
-                    : null,
-                  isActive: this.isActive,
-                },
-                timestamp: Date.now(),
-                sessionId: "debug-session",
-                runId: "run1",
-                hypothesisId: "C",
-              }),
-            }
-          ).catch(() => {});
-          // #endregion
           this.toggleTheme();
         });
       } else {
@@ -4845,31 +2695,7 @@
       if (this.isSwitchingMode) {
         return;
       }
-      this.isSwitchingMode = true;
-
-      // #region agent log
-      fetch(
-        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: "content.js:2186",
-            message: "switchPanelToInspectorMode entry",
-            data: {
-              currentHeight: this.inspectorPanel.offsetHeight,
-              currentHeightStyle: this.inspectorPanel.style.height,
-            },
-            timestamp: Date.now(),
-            sessionId: "debug-session",
-            runId: "run1",
-            hypothesisId: "A,C",
-          }),
-        }
-      ).catch(() => {});
-      // #endregion
-
-      // Get website name and URL
+      this.isSwitchingMode = true; // Get website name and URL
       const websiteName = document.title || "Untitled Page";
       const websiteUrl = window.location.href;
 
@@ -5013,33 +2839,7 @@
           `${preservedHeight}px`,
           "important"
         );
-      }
-
-      // #region agent log
-      fetch(
-        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: "content.js:2326",
-            message: "switchPanelToInspectorMode after innerHTML",
-            data: {
-              heightBeforeInnerHTML,
-              heightAfterInnerHTML: this.inspectorPanel.offsetHeight,
-              heightStyle: this.inspectorPanel.style.height,
-              preservedHeight,
-            },
-            timestamp: Date.now(),
-            sessionId: "debug-session",
-            runId: "run1",
-            hypothesisId: "A,C",
-          }),
-        }
-      ).catch(() => {});
-      // #endregion
-
-      // After DOM settles, recalculate height dynamically based on new content
+      } // After DOM settles, recalculate height dynamically based on new content
       // Use double RAF to ensure content is fully rendered
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
@@ -5125,30 +2925,6 @@
           e.stopPropagation();
           e.preventDefault();
           console.log("[CSS Inspector] Theme switcher clicked");
-          // #region agent log
-          fetch(
-            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                location: "content.js:2215",
-                message: "Theme switcher click",
-                data: {
-                  currentTheme: this.theme,
-                  panelHeight: this.inspectorPanel
-                    ? this.inspectorPanel.offsetHeight
-                    : null,
-                  isActive: this.isActive,
-                },
-                timestamp: Date.now(),
-                sessionId: "debug-session",
-                runId: "run1",
-                hypothesisId: "C",
-              }),
-            }
-          ).catch(() => {});
-          // #endregion
           this.toggleTheme();
         });
       } else {
@@ -5191,53 +2967,9 @@
     renderColorsView() {
       // Prevent duplicate calls
       if (this.isRenderingColors) {
-        // #region agent log
-        fetch(
-          "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              location: "content.js:2481",
-              message: "renderColorsView blocked - already rendering",
-              data: {},
-              timestamp: Date.now(),
-              sessionId: "debug-session",
-              runId: "run1",
-              hypothesisId: "B",
-            }),
-          }
-        ).catch(() => {});
-        // #endregion
         return;
       }
       this.isRenderingColors = true;
-
-      // #region agent log
-      fetch(
-        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: "content.js:2471",
-            message: "renderColorsView entry",
-            data: {
-              panelHeight: this.inspectorPanel
-                ? this.inspectorPanel.offsetHeight
-                : null,
-              colorsViewDisplay: this.shadowRoot?.querySelector(
-                "#overview-colors-view"
-              )?.style.display,
-            },
-            timestamp: Date.now(),
-            sessionId: "debug-session",
-            runId: "run1",
-            hypothesisId: "B,E",
-          }),
-        }
-      ).catch(() => {});
-      // #endregion
       const colors = this.extractColors();
       if (!this.shadowRoot) {
         this.isRenderingColors = false;
@@ -5321,36 +3053,7 @@
       <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px;">
         ${colorGrid}
       </div>
-    `;
-
-      // #region agent log
-      fetch(
-        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: "content.js:2528",
-            message: "renderColorsView after innerHTML",
-            data: {
-              panelHeight: this.inspectorPanel
-                ? this.inspectorPanel.offsetHeight
-                : null,
-              colorsViewScrollHeight: colorsView.scrollHeight,
-              colorsViewOffsetHeight: colorsView.offsetHeight,
-              colorsViewDisplay: colorsView.style.display,
-              colorsViewOpacity: colorsView.style.opacity,
-            },
-            timestamp: Date.now(),
-            sessionId: "debug-session",
-            runId: "run1",
-            hypothesisId: "B,E",
-          }),
-        }
-      ).catch(() => {});
-      // #endregion
-
-      // Update panel height after content is rendered - use double RAF to ensure layout is complete
+    `; // Update panel height after content is rendered - use double RAF to ensure layout is complete
       // Skip updatePanelHeight if view is hidden (opacity: 0) - tab handlers will handle height manually
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
@@ -5433,19 +3136,301 @@
             // Invalid URL, skip
           }
         });
+
+        // Also check for CSS @import statements in stylesheets
+        try {
+          const styleSheets = Array.from(document.styleSheets);
+          for (const sheet of styleSheets) {
+            try {
+              const rules = Array.from(sheet.cssRules || []);
+              for (const rule of rules) {
+                if (rule.type === CSSRule.IMPORT_RULE && rule.href) {
+                  const href = rule.href;
+                  if (href.includes("fonts.googleapis.com")) {
+                    try {
+                      const url = new URL(href);
+                      const families = url.searchParams.getAll("family");
+                      families.forEach((family) => {
+                        const fontName = family
+                          .split(":")[0]
+                          .split("&")[0]
+                          .replace(/\+/g, " ")
+                          .trim();
+                        if (fontName) {
+                          fonts.add(fontName);
+                        }
+                      });
+                    } catch (e) {
+                      // Invalid URL, skip
+                    }
+                  }
+                }
+              }
+            } catch (e) {
+              // Cross-origin stylesheet, skip
+              continue;
+            }
+          }
+        } catch (e) {
+          // Error parsing imports
+        }
       } catch (e) {
         // Error parsing links
       }
       return fonts;
     }
 
+    // Parse Fontshare link tags to extract actual font names being loaded
+    parseFontshareFromLinks() {
+      const fonts = new Set();
+      // #region agent log
+      fetch(
+        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "content.js:3184",
+            message: "parseFontshareFromLinks entry",
+            data: {},
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "E",
+          }),
+        }
+      ).catch(() => {});
+      // #endregion
+      try {
+        const links = document.querySelectorAll(
+          'link[href*="api.fontshare.com"]'
+        );
+        // #region agent log
+        fetch(
+          "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              location: "content.js:3190",
+              message: "Fontshare links found",
+              data: {
+                linksCount: links.length,
+                linksArray: Array.from(links).map((l) => l.href),
+              },
+              timestamp: Date.now(),
+              sessionId: "debug-session",
+              runId: "run1",
+              hypothesisId: "E",
+            }),
+          }
+        ).catch(() => {});
+        // #endregion
+        links.forEach((link) => {
+          try {
+            const url = new URL(link.href);
+            // Fontshare uses f[] query parameter for font names
+            const families = url.searchParams.getAll("f[]");
+            families.forEach((family) => {
+              // Font names in Fontshare URLs are typically lowercase with hyphens
+              // Example: "clash-display" from f[]=clash-display
+              const fontName = family.trim();
+              if (fontName) {
+                // Convert to display format (e.g., "clash-display" -> "Clash Display")
+                const displayName = fontName
+                  .split("-")
+                  .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+                  .join(" ");
+                fonts.add(displayName);
+              }
+            });
+          } catch (e) {
+            // Invalid URL, skip
+            // #region agent log
+            fetch(
+              "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  location: "content.js:3208",
+                  message: "Fontshare link parse error",
+                  data: { error: e.message, href: link.href },
+                  timestamp: Date.now(),
+                  sessionId: "debug-session",
+                  runId: "run1",
+                  hypothesisId: "E",
+                }),
+              }
+            ).catch(() => {});
+            // #endregion
+          }
+        });
+      } catch (e) {
+        // Error parsing links
+        // #region agent log
+        fetch(
+          "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              location: "content.js:3213",
+              message: "Fontshare parse error",
+              data: { error: e.message },
+              timestamp: Date.now(),
+              sessionId: "debug-session",
+              runId: "run1",
+              hypothesisId: "E",
+            }),
+          }
+        ).catch(() => {});
+        // #endregion
+      }
+      // #region agent log
+      fetch(
+        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "content.js:3215",
+            message: "parseFontshareFromLinks result",
+            data: { fontsCount: fonts.size, fontsArray: Array.from(fonts) },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "E",
+          }),
+        }
+      ).catch(() => {});
+      // #endregion
+      return fonts;
+    }
+
+    // Detect font platform from @font-face URL
+    detectFontPlatformFromUrl(url) {
+      // Platform mapping: domain patterns -> platform info
+      const platformMap = [
+        {
+          domains: ["fonts.gstatic.com", "fonts.googleapis.com"],
+          name: "Google Fonts",
+          sourceId: "google",
+          urlPattern: (fontName) => {
+            // Preserve original casing for Google Fonts URL
+            return `https://fonts.google.com/specimen/${fontName.replace(
+              /\s+/g,
+              "+"
+            )}`;
+          },
+        },
+        {
+          domains: ["use.typekit.net", "fonts.adobe.com", "adobe.com"],
+          name: "Adobe Fonts",
+          sourceId: "adobe",
+          urlPattern: (fontName) => {
+            let baseName = fontName.toLowerCase();
+            baseName = baseName.replace(
+              /\s+(pro|std|display|text|variable)$/i,
+              ""
+            );
+            return `https://fonts.adobe.com/fonts/${baseName.replace(
+              /\s+/g,
+              "-"
+            )}`;
+          },
+        },
+        {
+          domains: ["fontshare.com", "api.fontshare.com"],
+          name: "Fontshare",
+          sourceId: "fontshare",
+          urlPattern: (fontName) => {
+            let baseName = fontName.toLowerCase();
+            baseName = baseName.replace(
+              /\s+(pro|std|display|text|variable)$/i,
+              ""
+            );
+            return `https://www.fontshare.com/fonts/${baseName.replace(
+              /\s+/g,
+              "-"
+            )}`;
+          },
+        },
+        {
+          domains: ["fonts.com", "fast.fonts.com"],
+          name: "Fonts.com",
+          sourceId: "fontscom",
+          urlPattern: (fontName) => {
+            let baseName = fontName.toLowerCase().replace(/\s+/g, "-");
+            return `https://www.fonts.com/font/${baseName}`;
+          },
+        },
+        {
+          domains: ["myfonts.com"],
+          name: "MyFonts",
+          sourceId: "myfonts",
+          urlPattern: (fontName) => {
+            let baseName = fontName.toLowerCase().replace(/\s+/g, "-");
+            return `https://www.myfonts.com/fonts/${baseName}`;
+          },
+        },
+        {
+          domains: ["fontsquirrel.com"],
+          name: "Font Squirrel",
+          sourceId: "fontsquirrel",
+          urlPattern: (fontName) => {
+            let baseName = fontName.toLowerCase().replace(/\s+/g, "-");
+            return `https://www.fontsquirrel.com/fonts/${baseName}`;
+          },
+        },
+      ];
+
+      // Check if URL is external (not self-hosted)
+      try {
+        const urlObj = new URL(url, window.location.href);
+        const isExternal = urlObj.origin !== window.location.origin;
+
+        if (!isExternal) {
+          return null; // Self-hosted, not detectable
+        }
+
+        // Check for /fontshare/ path pattern (Framer-hosted Fontshare fonts)
+        if (url.includes("/fontshare/")) {
+          return platformMap.find((p) => p.sourceId === "fontshare");
+        }
+
+        // Match domain to platform
+        for (const platform of platformMap) {
+          for (const domain of platform.domains) {
+            if (url.includes(domain)) {
+              return platform;
+            }
+          }
+        }
+
+        // External URL but unknown platform - return null (show "Source not detected")
+        return null;
+      } catch (e) {
+        return null; // Invalid URL
+      }
+    }
+
     // Normalize font name for comparison (hyphens/underscores to spaces, lowercase)
+    // Also strips common suffixes like "Variable", "Pro", "Std", "Display", "Text" for better matching
     normalizeFontNameForComparison(fontName) {
-      return fontName
+      let normalized = fontName
         .replace(/['"]/g, "")
         .trim()
         .toLowerCase()
         .replace(/[-_]/g, " ");
+
+      // Remove common suffixes for comparison (e.g., "eb garamond variable" -> "eb garamond")
+      // This helps match "EB Garamond Variable" with "EB Garamond"
+      normalized = normalized
+        .replace(/\s+(variable|pro|std|display|text)$/i, "")
+        .trim();
+
+      return normalized;
     }
 
     isFontDefined(fontFamily) {
@@ -5481,6 +3466,47 @@
         // Error accessing stylesheets
       }
       return false;
+    }
+
+    // Get all @font-face font families defined on the page
+    // This works universally - all sites define custom fonts in @font-face rules
+    getAllFontFaceFonts(systemFonts) {
+      const fontFamilies = new Set();
+
+      try {
+        const styleSheets = Array.from(document.styleSheets);
+        for (const sheet of styleSheets) {
+          try {
+            const rules = Array.from(sheet.cssRules || []);
+            for (const rule of rules) {
+              if (
+                rule.type === CSSRule.FONT_FACE_RULE ||
+                rule instanceof CSSFontFaceRule
+              ) {
+                const fontFamily = rule.style.fontFamily;
+                if (fontFamily) {
+                  // Extract font family names (handle multiple values separated by commas)
+                  const families = fontFamily
+                    .split(",")
+                    .map((f) => f.replace(/['"]/g, "").trim());
+                  families.forEach((f) => {
+                    if (f && !systemFonts.has(f)) {
+                      fontFamilies.add(f);
+                    }
+                  });
+                }
+              }
+            }
+          } catch (e) {
+            // Cross-origin stylesheet, skip
+            continue;
+          }
+        }
+      } catch (e) {
+        // Error accessing stylesheets
+      }
+
+      return Array.from(fontFamilies);
     }
 
     // Detect which font is actually being rendered by measuring text width
@@ -5571,16 +3597,11 @@
         return false;
       }
 
-      // Check if element is positioned off-screen (common way to hide elements)
-      const isOffScreen =
-        rect.top + rect.height < 0 ||
-        rect.left + rect.width < 0 ||
-        rect.top > window.innerHeight ||
-        rect.left > window.innerWidth;
-
-      if (isOffScreen) {
-        return false;
-      }
+      // REMOVED: Viewport-based off-screen check
+      // This was excluding elements scrolled out of view, which prevents
+      // detecting all fonts on the page regardless of scroll position.
+      // Elements that are truly hidden will still be excluded by other checks
+      // (display: none, visibility: hidden, opacity: 0, width/height 0, etc.)
 
       // Check if element has transform that makes it invisible
       const transform = styles.transform;
@@ -5600,30 +3621,29 @@
       let depth = 0;
       while (parent && depth < 10) {
         const parentStyles = window.getComputedStyle(parent);
-        const parentRect = parent.getBoundingClientRect();
 
         if (
           parentStyles.display === "none" ||
           parentStyles.visibility === "hidden" ||
-          parentStyles.opacity === "0" ||
-          parentRect.width === 0 ||
-          parentRect.height === 0
+          parentStyles.opacity === "0"
         ) {
           return false;
         }
 
-        // Check if parent has overflow hidden and element is completely outside parent bounds
-        if (
-          (parentStyles.overflow === "hidden" ||
-            parentStyles.overflowX === "hidden" ||
-            parentStyles.overflowY === "hidden") &&
-          (rect.bottom < parentRect.top ||
-            rect.top > parentRect.bottom ||
-            rect.right < parentRect.left ||
-            rect.left > parentRect.right)
-        ) {
-          return false;
-        }
+        // REMOVED: Parent width/height === 0 check using viewport-relative coordinates
+        // This was incorrectly filtering out elements scrolled out of view.
+        // When an element is scrolled out of view, its parent's viewport-relative dimensions
+        // (from getBoundingClientRect()) may be 0 even though the element is visible in
+        // document coordinates. We want to detect all fonts on the page regardless of scroll
+        // position, so this check has been removed.
+
+        // REMOVED: Overflow hidden check using viewport-relative coordinates
+        // This was incorrectly filtering out elements scrolled out of view.
+        // When an element is scrolled out of view, its viewport-relative coordinates
+        // (from getBoundingClientRect()) will be outside the parent's viewport-relative
+        // bounds, even though it's still within the parent in document coordinates.
+        // We want to detect all fonts on the page regardless of scroll position,
+        // so this check has been removed.
 
         parent = parent.parentElement;
         depth++;
@@ -5636,11 +3656,60 @@
       const cleanFontName = fontFamily.replace(/['"]/g, "").trim();
       const originalFontName = fontFamily.replace(/['"]/g, "").trim();
 
+      // #region agent log
+      fetch(
+        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "content.js:3455",
+            message: "getFontSourceUrl entry",
+            data: { cleanFontName, originalFontName },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "A",
+          }),
+        }
+      ).catch(() => {});
+      // #endregion
+
       // Parse Google Fonts from link tags (cache this for performance)
       if (!this._googleFontsCache) {
         this._googleFontsCache = this.parseGoogleFontsFromLinks();
       }
       const googleFontsSet = this._googleFontsCache;
+
+      // Parse Fontshare from link tags (cache this for performance)
+      if (!this._fontshareCache) {
+        this._fontshareCache = this.parseFontshareFromLinks();
+      }
+      const fontshareSet = this._fontshareCache;
+
+      // #region agent log
+      fetch(
+        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "content.js:3470",
+            message: "Parsed font sets",
+            data: {
+              googleFontsSetSize: googleFontsSet.size,
+              fontshareSetSize: fontshareSet.size,
+              googleFontsArray: Array.from(googleFontsSet),
+              fontshareArray: Array.from(fontshareSet),
+            },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "E",
+          }),
+        }
+      ).catch(() => {});
+      // #endregion
 
       // Check for Typekit/Adobe Fonts scripts
       const hasTypekit =
@@ -5651,7 +3720,7 @@
       // Check @font-face rules to find where font is loaded from
       const styleSheets = Array.from(document.styleSheets);
       let fontSource = null;
-      let detectedSourceType = null; // 'google' or 'adobe'
+      let detectedSourceType = null; // 'google', 'adobe', or 'fontshare'
 
       try {
         for (const sheet of styleSheets) {
@@ -5683,19 +3752,37 @@
                           /url\(['"]?([^'"]+)['"]?\)/
                         )[1];
 
-                        // Determine source type from URL
+                        // #region agent log
                         if (
-                          url.includes("fonts.gstatic.com") ||
-                          url.includes("fonts.googleapis.com")
+                          cleanFontName.includes("Clash") ||
+                          cleanFontName.includes("Instrument")
                         ) {
-                          detectedSourceType = "google";
-                          break;
-                        } else if (
-                          url.includes("use.typekit.net") ||
-                          url.includes("fonts.adobe.com") ||
-                          url.includes("adobe.com")
-                        ) {
-                          detectedSourceType = "adobe";
+                          fetch(
+                            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                            {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                location: "content.js:3510",
+                                message: "@font-face URL found",
+                                data: { cleanFontName, ruleFontFamily, url },
+                                timestamp: Date.now(),
+                                sessionId: "debug-session",
+                                runId: "run1",
+                                hypothesisId: "A",
+                              }),
+                            }
+                          ).catch(() => {});
+                        }
+                        // #endregion
+
+                        // Detect platform from URL using flexible detection
+                        const detectedPlatform =
+                          this.detectFontPlatformFromUrl(url);
+                        if (detectedPlatform) {
+                          detectedSourceType = detectedPlatform.sourceId;
+                          // Store platform info for URL construction
+                          this._detectedPlatform = detectedPlatform;
                           break;
                         }
                       }
@@ -5714,6 +3801,25 @@
       } catch (e) {
         // Error accessing stylesheets
       }
+
+      // #region agent log
+      fetch(
+        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "content.js:3549",
+            message: "After @font-face detection",
+            data: { detectedSourceType, hasTypekit, hasAdobeFonts },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "A",
+          }),
+        }
+      ).catch(() => {});
+      // #endregion
 
       // Construct URL based on detected source type
       if (detectedSourceType === "google") {
@@ -5737,36 +3843,48 @@
               return googleFontNormalized === fontNameNormalized;
             }) || originalFontName;
 
+          // Preserve original casing for Google Fonts URL (e.g., "EB Garamond" not "eb garamond")
+          // Google Fonts URLs use + for spaces and preserve casing
           const cleanName = exactFontName.replace(/\s+/g, "+");
           fontSource = `https://fonts.google.com/specimen/${cleanName}`;
+        } else {
+          // Font detected from @font-face URL but not in parsed link tags
+          // Construct URL using original font name (may have been loaded via @import or other methods)
+          // Preserve original casing for Google Fonts URL
+          // #region agent log
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:3576",
+                message: "Google Fonts from @font-face but not in set",
+                data: { cleanFontName, originalFontName, isInGoogleFonts },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "A",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
+          const cleanName = originalFontName.replace(/\s+/g, "+");
+          fontSource = `https://fonts.google.com/specimen/${cleanName}`;
         }
-      } else if (detectedSourceType === "adobe") {
-        // Adobe Fonts - construct URL
-        // Remove common suffixes like "pro", "std", etc. for URL
-        let baseName = cleanFontName.toLowerCase();
-        baseName = baseName.replace(/\s+(pro|std|display|text)$/i, "");
-        const cleanName = baseName.replace(/\s+/g, "-");
-        fontSource = `https://fonts.adobe.com/fonts/${cleanName}`;
-      } else if (hasTypekit || hasAdobeFonts) {
-        // If Typekit/Adobe is present but @font-face detection didn't work,
-        // try to match font name and assume it's from Adobe
-        // This handles cases where @font-face rules aren't accessible (cross-origin, etc.)
-        detectedSourceType = "adobe";
-        let baseName = cleanFontName.toLowerCase();
-        baseName = baseName.replace(/\s+(pro|std|display|text)$/i, "");
-        const cleanName = baseName.replace(/\s+/g, "-");
-        fontSource = `https://fonts.adobe.com/fonts/${cleanName}`;
+      } else if (this._detectedPlatform && this._detectedPlatform.urlPattern) {
+        // Use platform's URL pattern for other detected platforms
+        fontSource = this._detectedPlatform.urlPattern(originalFontName);
+        // Clear the stored platform info after use
+        this._detectedPlatform = null;
       }
 
-      // Return object with url and source type, or null if no source found
-      return fontSource
-        ? { url: fontSource, source: detectedSourceType }
-        : null;
-    }
+      // Fallback: If no source detected via @font-face URLs, try to match by font name
+      // This handles cases where fonts are loaded via CSS @import or cross-origin stylesheets
+      if (!fontSource) {
+        const fontNameNormalized =
+          this.normalizeFontNameForComparison(cleanFontName);
 
-    renderFontsView() {
-      // Prevent duplicate calls
-      if (this.isRenderingFonts) {
         // #region agent log
         fetch(
           "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
@@ -5774,9 +3892,9 @@
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              location: "content.js:2935",
-              message: "renderFontsView blocked - already rendering",
-              data: {},
+              location: "content.js:3602",
+              message: "Entering fallback logic",
+              data: { cleanFontName, fontNameNormalized },
               timestamp: Date.now(),
               sessionId: "debug-session",
               runId: "run1",
@@ -5785,9 +3903,261 @@
           }
         ).catch(() => {});
         // #endregion
-        return;
+
+        // Step 1: Check all parsed sets first (most reliable)
+        // Check Google Fonts parsed set
+        const isInGoogleFonts = Array.from(googleFontsSet).some((font) => {
+          const googleFontNormalized =
+            this.normalizeFontNameForComparison(font);
+          return googleFontNormalized === fontNameNormalized;
+        });
+
+        // #region agent log
+        fetch(
+          "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              location: "content.js:3612",
+              message: "Google Fonts set check result",
+              data: {
+                isInGoogleFonts,
+                fontNameNormalized,
+                googleFontsArray: Array.from(googleFontsSet),
+              },
+              timestamp: Date.now(),
+              sessionId: "debug-session",
+              runId: "run1",
+              hypothesisId: "B",
+            }),
+          }
+        ).catch(() => {});
+        // #endregion
+
+        if (isInGoogleFonts) {
+          // Find the exact font name from the set
+          const exactFontName =
+            Array.from(googleFontsSet).find((font) => {
+              const googleFontNormalized =
+                this.normalizeFontNameForComparison(font);
+              return googleFontNormalized === fontNameNormalized;
+            }) || originalFontName;
+
+          // Preserve original casing for Google Fonts URL
+          const cleanName = exactFontName.replace(/\s+/g, "+");
+          fontSource = `https://fonts.google.com/specimen/${cleanName}`;
+          detectedSourceType = "google";
+        } else {
+          // Check Fontshare parsed set
+          const isInFontshare = Array.from(fontshareSet).some((font) => {
+            const fontshareNormalized =
+              this.normalizeFontNameForComparison(font);
+            return fontshareNormalized === fontNameNormalized;
+          });
+
+          // #region agent log
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:3633",
+                message: "Fontshare set check result",
+                data: {
+                  isInFontshare,
+                  fontNameNormalized,
+                  fontshareArray: Array.from(fontshareSet),
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "B",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
+
+          if (isInFontshare) {
+            // Find the exact font name from the set
+            const exactFontName =
+              Array.from(fontshareSet).find((font) => {
+                const fontshareNormalized =
+                  this.normalizeFontNameForComparison(font);
+                return fontshareNormalized === fontNameNormalized;
+              }) || originalFontName;
+
+            // Convert to URL format
+            let baseName = exactFontName.toLowerCase();
+            baseName = baseName.replace(
+              /\s+(pro|std|display|text|variable)$/i,
+              ""
+            );
+            const cleanName = baseName.replace(/\s+/g, "-");
+            fontSource = `https://www.fontshare.com/fonts/${cleanName}`;
+            detectedSourceType = "fontshare";
+          } else {
+            // Step 2: Check platform indicators (link tags) if font not in any parsed set
+            // Priority: Adobe (most reliable) → Fontshare → Google Fonts
+
+            // Check Adobe Fonts first (if Typekit/Adobe indicators are present)
+            // This is more reliable than checking link tags
+            if (hasTypekit || hasAdobeFonts) {
+              // Try to match font name and assume it's from Adobe
+              // This handles cases where @font-face rules aren't accessible (cross-origin, etc.)
+              detectedSourceType = "adobe";
+              let baseName = cleanFontName.toLowerCase();
+              baseName = baseName.replace(
+                /\s+(pro|std|display|text|variable)$/i,
+                ""
+              );
+              const cleanName = baseName.replace(/\s+/g, "-");
+              fontSource = `https://fonts.adobe.com/fonts/${cleanName}`;
+            }
+            // REMOVED: Fallback to construct URLs just because link tags exist
+            // This was causing false positives - fonts not on Google Fonts/Fontshare were getting links
+            // Only construct URLs when font is in parsed set OR detected from @font-face URLs
+            // If we can't detect the source, return null instead of guessing
+          }
+        }
       }
-      this.isRenderingFonts = true;
+
+      // Threshold-based fallback: only construct URL if platform indicators exist and font is not a system font
+      if (!fontSource) {
+        // System font check
+        const systemFonts = new Set([
+          "arial",
+          "helvetica",
+          "times",
+          "times new roman",
+          "courier",
+          "courier new",
+          "verdana",
+          "georgia",
+          "palatino",
+          "garamond",
+          "bookman",
+          "comic sans ms",
+          "trebuchet ms",
+          "arial black",
+          "impact",
+          "tahoma",
+          "century gothic",
+          "lucida console",
+          "lucida sans unicode",
+          "segoe ui",
+          "calibri",
+          "cambria",
+          "candara",
+          "consolas",
+          "constantia",
+          "corbel",
+          "franklin gothic medium",
+          "gadget",
+          "geneva",
+          "gill sans",
+          "goudy old style",
+          "hoefler text",
+          "lucida bright",
+          "lucida fax",
+          "lucida handwriting",
+          "lucida sans",
+          "lucida sans typewriter",
+          "monaco",
+          "palatino linotype",
+          "papyrus",
+          "perpetua",
+          "rockwell",
+          "rockwell extra bold",
+          "sans-serif",
+          "serif",
+          "monospace",
+          "cursive",
+          "fantasy",
+          "ui-serif",
+          "ui-sans-serif",
+          "ui-monospace",
+          "ui-rounded",
+          "system-ui",
+          "emoji",
+          "math",
+          "fangsong",
+        ]);
+
+        const fontNameLower = cleanFontName.toLowerCase();
+        const isSystemFont =
+          systemFonts.has(fontNameLower) ||
+          fontNameLower.includes("system") ||
+          fontNameLower.startsWith("ui-");
+
+        // Only construct URL if not a system font AND platform indicators exist
+        if (!isSystemFont) {
+          // Priority: Google Fonts → Adobe Fonts → Fontshare
+          if (googleFontsSet.size > 0) {
+            // Check if font name matches a font in the parsed Google Fonts set
+            const fontNameNormalized =
+              this.normalizeFontNameForComparison(cleanFontName);
+            const isInGoogleFonts = Array.from(googleFontsSet).some((font) => {
+              const googleFontNormalized =
+                this.normalizeFontNameForComparison(font);
+              return googleFontNormalized === fontNameNormalized;
+            });
+
+            if (isInGoogleFonts) {
+              // Font name matches a font in the parsed set, construct Google Fonts URL
+              const exactFontName =
+                Array.from(googleFontsSet).find((font) => {
+                  const googleFontNormalized =
+                    this.normalizeFontNameForComparison(font);
+                  return googleFontNormalized === fontNameNormalized;
+                }) || originalFontName;
+              const cleanName = exactFontName.replace(/\s+/g, "+");
+              fontSource = `https://fonts.google.com/specimen/${cleanName}`;
+              detectedSourceType = "google";
+            }
+          } else if (hasTypekit || hasAdobeFonts) {
+            // Adobe Fonts indicators exist, construct Adobe Fonts URL
+            // Note: We don't have a parsed set for Adobe fonts, so we rely on indicators
+            let baseName = cleanFontName.toLowerCase();
+            baseName = baseName.replace(
+              /\s+(pro|std|display|text|variable)$/i,
+              ""
+            );
+            const cleanName = baseName.replace(/\s+/g, "-");
+            fontSource = `https://fonts.adobe.com/fonts/${cleanName}`;
+            detectedSourceType = "adobe";
+          } else if (fontshareSet.size > 0) {
+            // Check if font name matches a font in the parsed Fontshare set
+            const fontNameNormalized =
+              this.normalizeFontNameForComparison(cleanFontName);
+            const isInFontshare = Array.from(fontshareSet).some((font) => {
+              const fontshareNormalized =
+                this.normalizeFontNameForComparison(font);
+              return fontshareNormalized === fontNameNormalized;
+            });
+
+            if (isInFontshare) {
+              // Font name matches a font in the parsed set, construct Fontshare URL
+              const exactFontName =
+                Array.from(fontshareSet).find((font) => {
+                  const fontshareNormalized =
+                    this.normalizeFontNameForComparison(font);
+                  return fontshareNormalized === fontNameNormalized;
+                }) || originalFontName;
+              let baseName = exactFontName.toLowerCase();
+              baseName = baseName.replace(
+                /\s+(pro|std|display|text|variable)$/i,
+                ""
+              );
+              const cleanName = baseName.replace(/\s+/g, "-");
+              fontSource = `https://www.fontshare.com/fonts/${cleanName}`;
+              detectedSourceType = "fontshare";
+            }
+          }
+          // If no platform indicators exist or font doesn't match parsed set, fontSource remains null (show "Source not detected")
+        }
+      }
 
       // #region agent log
       fetch(
@@ -5796,25 +4166,54 @@
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            location: "content.js:2925",
-            message: "renderFontsView entry",
-            data: {
-              panelHeight: this.inspectorPanel
-                ? this.inspectorPanel.offsetHeight
-                : null,
-              fontsViewDisplay: this.shadowRoot?.querySelector(
-                "#overview-fonts-view"
-              )?.style.display,
-            },
+            location: "content.js:3697",
+            message: "getFontSourceUrl result",
+            data: { cleanFontName, fontSource, detectedSourceType },
             timestamp: Date.now(),
             sessionId: "debug-session",
             runId: "run1",
-            hypothesisId: "B,E",
+            hypothesisId: "A",
           }),
         }
       ).catch(() => {});
       // #endregion
+
+      // Return object with url, source type, and platform name, or null if no source found
+      let platformName = null;
+      if (this._detectedPlatform) {
+        platformName = this._detectedPlatform.name;
+        this._detectedPlatform = null; // Clear after use
+      } else if (detectedSourceType === "google") {
+        platformName = "Google Fonts";
+      } else if (detectedSourceType === "adobe") {
+        platformName = "Adobe Fonts";
+      } else if (detectedSourceType === "fontshare") {
+        platformName = "Fontshare";
+      }
+
+      return fontSource
+        ? {
+            url: fontSource,
+            source: detectedSourceType,
+            platformName: platformName,
+          }
+        : null;
+    }
+
+    renderFontsView() {
+      // Prevent duplicate calls
+      if (this.isRenderingFonts) {
+        return;
+      }
+      this.isRenderingFonts = true;
       const fonts = this.extractTypography();
+      // #region agent log
+      const instrumentSerifInFonts = fonts.find(
+        (f) =>
+          f.fontFamily === "Instrument Serif" ||
+          f.fontFamily.includes("Instrument Serif")
+      );
+      // #endregion
       if (!this.shadowRoot) {
         this.isRenderingFonts = false;
         return;
@@ -5883,15 +4282,20 @@
                   <div style="display: flex; align-items: center; justify-content: center; font-size: 13px; color: ${
                     themeColors.textPrimary
                   }; font-family: 'Inter', sans-serif; font-weight: 500;">
-                    <span style="cursor: pointer; padding: 4px 8px; border-radius: 4px; transition: background 0.2s;" 
+                    <span style="cursor: pointer; padding: 4px 8px; border-radius: 4px; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent;" 
                           onmouseover="this.style.background='${
                             themeColors.bgHover
-                          }'" 
-                          onmouseout="this.style.background='transparent'"
+                          }'; this.style.borderColor='${themeColors.bgHover}';" 
+                          onmouseout="this.style.background='transparent'; this.style.borderColor='transparent';"
                           data-copy-value="${font.fontFamily}" 
-                          data-copy-message="Font family copied">${
-                            font.fontFamily
-                          }</span>
+                          data-copy-message="Font family copied">
+                          ${font.fontFamily}
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" style="flex-shrink: 0; opacity: 0.6;"><path fill="${
+                            themeColors.textPrimary
+                          }" d="M4 5.4C4 4.622 4.622 4 5.4 4h7.2c.778 0 1.4.622 1.4 1.4V6a1 1 0 1 0 2 0v-.6C16 3.518 14.482 2 12.6 2H5.4A3.394 3.394 0 0 0 2 5.4v7.2C2 14.482 3.518 16 5.4 16H6a1 1 0 1 0 0-2h-.6c-.778 0-1.4-.622-1.4-1.4z"/><path fill="${
+            themeColors.textPrimary
+          }" d="M9 11.4A2.4 2.4 0 0 1 11.4 9h7.2a2.4 2.4 0 0 1 2.4 2.4v7.2a2.4 2.4 0 0 1-2.4 2.4h-7.2A2.4 2.4 0 0 1 9 18.6z"/></svg>
+                        </span>
                   </div>
                   ${
                     fontSourceUrl
@@ -5899,18 +4303,76 @@
                           fontSourceUrl.url
                         }" target="_blank" rel="noopener noreferrer" style="font-size: 11px; color: ${
                           themeColors.textSecondary
-                        }; text-decoration: none; transition: color 0.2s;" onmouseover="this.style.color='${
+                        }; text-decoration: none; transition: color 0.2s; display: inline-flex; align-items: center; gap: 2px;" onmouseover="this.style.color='${
                           themeColors.textPrimary
-                        }'" onmouseout="this.style.color='${
+                        }'; this.querySelector('svg path').setAttribute('stroke', '${
+                          themeColors.textPrimary
+                        }');" onmouseout="this.style.color='${
                           themeColors.textSecondary
-                        }'">
+                        }'; this.querySelector('svg path').setAttribute('stroke', '${
+                          themeColors.textSecondary
+                        }');">
                           View on ${
-                            fontSourceUrl.source === "google"
+                            fontSourceUrl.platformName ||
+                            (fontSourceUrl.source === "google"
                               ? "Google Fonts"
-                              : "Adobe Fonts"
+                              : fontSourceUrl.source === "adobe"
+                              ? "Adobe Fonts"
+                              : fontSourceUrl.source === "fontshare"
+                              ? "Fontshare"
+                              : "Unknown Source")
                           }
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" style="flex-shrink: 0;"><path stroke="${
+                            themeColors.textSecondary
+                          }" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="m8 16 8-8m0 0v5m0-5h-5"/></svg>
                         </a>`
-                      : ""
+                      : `<span style="font-size: 11px; color: ${themeColors.textSecondary}; display: inline-flex; align-items: center; gap: 4px;">
+                          Source unavailable
+                          <span style="display: inline-flex; align-items: center; cursor: pointer; position: relative;" 
+                                onmouseenter="(function(el){
+                                  const panel = document.getElementById('css-inspector-panel');
+                                  if(!panel || !panel.shadowRoot) return;
+                                  const existingPopover = panel.shadowRoot.querySelector('.font-source-popover');
+                                  if(existingPopover) existingPopover.remove();
+                                  const elRect = el.getBoundingClientRect();
+                                  const popover = document.createElement('div');
+                                  popover.className = 'font-source-popover';
+                                  popover.innerHTML = 'This font is self-hosted on the site. Self-hosted fonts don\\'t expose their original source, so it can\\'t always be identified.';
+                                  
+                                  // Calculate position: center horizontally on icon, position below
+                                  const popoverWidth = 240;
+                                  const iconCenterX = elRect.left + (elRect.width / 2);
+                                  const popoverLeft = iconCenterX - (popoverWidth / 2);
+                                  
+                                  // Ensure popover stays within viewport (8px margin from edges)
+                                  const viewportWidth = window.innerWidth;
+                                  const minLeft = 8;
+                                  const maxLeft = viewportWidth - popoverWidth - 8;
+                                  const adjustedLeft = Math.max(minLeft, Math.min(popoverLeft, maxLeft));
+                                  
+                                  // Position below icon, or above if not enough space below
+                                  const spaceBelow = window.innerHeight - elRect.bottom;
+                                  const spaceAbove = elRect.top;
+                                  const popoverHeight = 80; // Approximate height
+                                  const showAbove = spaceBelow < popoverHeight && spaceAbove > spaceBelow;
+                                  const topPosition = showAbove 
+                                    ? (elRect.top - popoverHeight - 4) 
+                                    : (elRect.bottom + 4);
+                                  
+                                  popover.style.cssText = 'position: fixed; top: ' + topPosition + 'px; left: ' + adjustedLeft + 'px; width: ' + popoverWidth + 'px; background: ${themeColors.bgTertiary}; color: ${themeColors.textPrimary}; padding: 8px 12px; border-radius: 6px; font-size: 11px; font-family: Inter, sans-serif; line-height: 1.4; z-index: 2147483648; pointer-events: none; box-shadow: 0 2px 8px rgba(0,0,0,0.3);';
+                                  panel.shadowRoot.appendChild(popover);
+                                })(this);"
+                                onmouseleave="(function(el){
+                                  const panel = document.getElementById('css-inspector-panel');
+                                  if(!panel || !panel.shadowRoot) return;
+                                  const popover = panel.shadowRoot.querySelector('.font-source-popover');
+                                  if(popover) popover.remove();
+                                })(this);">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" style="vertical-align: middle;">
+                              <path fill="${themeColors.textSecondary}" fill-rule="evenodd" d="M22 12c0 5.523-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2s10 4.477 10 10M11 8a1 1 0 0 0 1 1h.008a1 1 0 1 0 0-2H12a1 1 0 0 0-1 1m1 9a1 1 0 0 0 1-1v-5a1 1 0 1 0-2 0v5a1 1 0 0 0 1 1" clip-rule="evenodd"/>
+                            </svg>
+                          </span>
+                        </span>`
                   }
                 </div>
             </div>
@@ -5930,36 +4392,7 @@
       <div>
         ${fontList}
       </div>
-    `;
-
-      // #region agent log
-      fetch(
-        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: "content.js:3043",
-            message: "renderFontsView after innerHTML",
-            data: {
-              panelHeight: this.inspectorPanel
-                ? this.inspectorPanel.offsetHeight
-                : null,
-              fontsViewScrollHeight: fontsView.scrollHeight,
-              fontsViewOffsetHeight: fontsView.offsetHeight,
-              fontsViewDisplay: fontsView.style.display,
-              fontsViewOpacity: fontsView.style.opacity,
-            },
-            timestamp: Date.now(),
-            sessionId: "debug-session",
-            runId: "run1",
-            hypothesisId: "B,E",
-          }),
-        }
-      ).catch(() => {});
-      // #endregion
-
-      // Update panel height after content is rendered - use double RAF to ensure layout is complete
+    `; // Update panel height after content is rendered - use double RAF to ensure layout is complete
       // Skip updatePanelHeight if view is hidden (opacity: 0) - tab handlers will handle height manually
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
@@ -6381,7 +4814,9 @@
 
       // Add copy button listeners
       setTimeout(() => {
-        document.querySelectorAll("[data-color]").forEach((btn) => {
+        if (!this.shadowRoot) return;
+
+        this.shadowRoot.querySelectorAll("[data-color]").forEach((btn) => {
           btn.addEventListener("click", (e) => {
             const color = e.target.closest("[data-color]").dataset.color;
             navigator.clipboard.writeText(color).then(() => {
@@ -6395,27 +4830,29 @@
         });
 
         // Add font preview copy listener
-        document.querySelectorAll(".font-preview-copyable").forEach((el) => {
-          el.addEventListener("click", (e) => {
-            const fontFamily = el.dataset.fontFamily;
-            if (fontFamily) {
-              navigator.clipboard
-                .writeText(fontFamily)
-                .then(() => {
-                  this.showToast("Font family copied", el);
-                })
-                .catch((err) => {
-                  console.warn(
-                    "[Designspector] Failed to copy font family:",
-                    err
-                  );
-                });
-            }
+        this.shadowRoot
+          .querySelectorAll(".font-preview-copyable")
+          .forEach((el) => {
+            el.addEventListener("click", (e) => {
+              const fontFamily = el.dataset.fontFamily;
+              if (fontFamily) {
+                navigator.clipboard
+                  .writeText(fontFamily)
+                  .then(() => {
+                    this.showToast("Font family copied", el);
+                  })
+                  .catch((err) => {
+                    console.warn(
+                      "[Designspector] Failed to copy font family:",
+                      err
+                    );
+                  });
+              }
+            });
           });
-        });
 
         // Add copy listeners for all copyable elements
-        document.querySelectorAll("[data-copy-value]").forEach((el) => {
+        this.shadowRoot.querySelectorAll("[data-copy-value]").forEach((el) => {
           el.addEventListener("click", (e) => {
             e.stopPropagation();
             const value = el.dataset.copyValue;
@@ -7683,6 +6120,45 @@
         const rect = element.getBoundingClientRect();
         const isVisible = this.isElementVisible(element, styles, rect);
 
+        // #region agent log - Check for blue-gray color BEFORE filtering
+        const textContentForColor = element.textContent?.trim() || "";
+        const mightHaveBlueGray =
+          styles.color &&
+          (styles.color.includes("395762") ||
+            (styles.color.includes("57") &&
+              styles.color.includes("86") &&
+              styles.color.includes("98")));
+        if (mightHaveBlueGray) {
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:5352",
+                message:
+                  "Element with potential blue-gray color BEFORE filtering",
+                data: {
+                  tagName: element.tagName,
+                  textPreview: textContentForColor.substring(0, 50),
+                  rawColor: styles.color,
+                  isVisible,
+                  hasText: !!(textContentForColor.length > 0),
+                  rect: { width: rect.width, height: rect.height },
+                  display: styles.display,
+                  visibility: styles.visibility,
+                  opacity: styles.opacity,
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "C3",
+              }),
+            }
+          ).catch(() => {});
+        }
+        // #endregion
+
         if (!isVisible) {
           return;
         }
@@ -7692,31 +6168,110 @@
 
         // Text color - weight by approximate text area
         // Estimate text area as a fraction of element area (text typically doesn't fill entire element)
+        // Only extract from elements that actually have text content
+        const hasText =
+          element.textContent && element.textContent.trim().length > 0;
         if (
+          hasText &&
           styles.color &&
           styles.color !== "rgba(0, 0, 0, 0)" &&
           styles.color !== "transparent"
         ) {
           const hex = this.rgbToHex(styles.color);
+          // #region agent log
+          const mightBeBlueGray =
+            styles.color &&
+            (styles.color.includes("395762") ||
+              (styles.color.includes("57") &&
+                styles.color.includes("86") &&
+                styles.color.includes("98")));
+          if (mightBeBlueGray || hex === "#395762") {
+            fetch(
+              "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  location: "content.js:5372",
+                  message: "Blue-gray color detected in text",
+                  data: {
+                    hex,
+                    rawColor: styles.color,
+                    tagName: element.tagName,
+                    textPreview: element.textContent?.substring(0, 50),
+                    elementArea,
+                    hasText,
+                  },
+                  timestamp: Date.now(),
+                  sessionId: "debug-session",
+                  runId: "run1",
+                  hypothesisId: "C1",
+                }),
+              }
+            ).catch(() => {});
+          }
+          // #endregion
           if (hex) {
-            const existing = colors.get(hex) || {
-              hex,
-              instances: 0,
-              area: 0,
-              categories: new Set(),
-            };
-            // For text, estimate area as 30-50% of element area (text doesn't fill entire element)
-            // Use font size to determine coverage: larger fonts = more coverage
-            const fontSize = parseFloat(styles.fontSize) || 16;
-            const textCoverageRatio = Math.min(
-              0.5,
-              Math.max(0.2, fontSize / 40)
-            ); // Between 20-50% based on font size
-            const estimatedTextArea = elementArea * textCoverageRatio;
-            existing.instances++;
-            existing.area += estimatedTextArea;
-            existing.categories.add("typography");
-            colors.set(hex, existing);
+            // Filter out default browser link colors that aren't actually visible
+            // Check if this is a link element and if it has default browser link color
+            const isLink = element.tagName === "A" || element.closest("a");
+            const isDefaultLinkColor =
+              hex === "#0000EE" || hex === "#0000FF" || hex === "#551A8B";
+
+            // Only include default link colors if the link has custom styling (not using browser defaults)
+            if (isLink && isDefaultLinkColor) {
+              // Check if link has custom color styling (not using browser defaults)
+              const computedColor = styles.color;
+              const isDefaultBlue =
+                computedColor === "rgb(0, 0, 238)" ||
+                computedColor === "rgb(0, 0, 255)" ||
+                hex === "#0000EE" ||
+                hex === "#0000FF";
+              // If it's the default blue and no inline style, skip it
+              if (isDefaultBlue && !element.style.color) {
+                // Skip default unstyled link colors
+              } else {
+                // Custom styled link color - include it
+                const existing = colors.get(hex) || {
+                  hex,
+                  instances: 0,
+                  area: 0,
+                  categories: new Set(),
+                };
+                // For text, estimate area as 30-50% of element area (text doesn't fill entire element)
+                // Use font size to determine coverage: larger fonts = more coverage
+                const fontSize = parseFloat(styles.fontSize) || 16;
+                const textCoverageRatio = Math.min(
+                  0.5,
+                  Math.max(0.2, fontSize / 40)
+                ); // Between 20-50% based on font size
+                const estimatedTextArea = elementArea * textCoverageRatio;
+                existing.instances++;
+                existing.area += estimatedTextArea;
+                existing.categories.add("typography");
+                colors.set(hex, existing);
+              }
+            } else {
+              // Not a link or not a default link color - process normally
+              const existing = colors.get(hex) || {
+                hex,
+                instances: 0,
+                area: 0,
+                categories: new Set(),
+              };
+              // For text, estimate area as 30-50% of element area (text doesn't fill entire element)
+              // Use font size to determine coverage: larger fonts = more coverage
+              const fontSize = parseFloat(styles.fontSize) || 16;
+              const textCoverageRatio = Math.min(
+                0.5,
+                Math.max(0.2, fontSize / 40)
+              ); // Between 20-50% based on font size
+              const estimatedTextArea = elementArea * textCoverageRatio;
+              existing.instances++;
+              existing.area += estimatedTextArea;
+              existing.categories.add("typography");
+              colors.set(hex, existing);
+            }
           }
         }
 
@@ -7859,6 +6414,35 @@
         }))
         .sort((a, b) => b.area - a.area); // Sort by area instead of instances
 
+      // #region agent log
+      const blueGrayInResult = result.find((c) => c.hex === "#395762");
+      fetch(
+        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "content.js:5574",
+            message: "Final color extraction result",
+            data: {
+              totalColors: result.length,
+              blueGrayFound: !!blueGrayInResult,
+              blueGrayData: blueGrayInResult,
+              allColors: result.slice(0, 10).map((c) => ({
+                hex: c.hex,
+                area: c.area,
+                instances: c.instances,
+              })),
+            },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "C2",
+          }),
+        }
+      ).catch(() => {});
+      // #endregion
+
       // Cache the result
       this.colorExtractionCache = result;
       return result;
@@ -7891,13 +6475,117 @@
         const rect = element.getBoundingClientRect();
         const isVisible = this.isElementVisible(element, styles, rect);
 
+        // #region agent log - Check for Control Upright BEFORE filtering
+        const textContentForFont = element.textContent?.trim() || "";
+        const mightHaveControlUpright =
+          textContentForFont.includes("TO SOCIALIZE") ||
+          textContentForFont.includes("SOCIALIZE") ||
+          textContentForFont.includes("COMING SOON") ||
+          styles.fontFamily?.includes("Control") ||
+          styles.fontFamily?.includes("Upright");
+        if (mightHaveControlUpright) {
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:5669",
+                message:
+                  "Element with potential Control Upright BEFORE filtering",
+                data: {
+                  tagName: element.tagName,
+                  textPreview: textContentForFont.substring(0, 50),
+                  rawFontFamily: styles.fontFamily,
+                  isVisible,
+                  hasText: !!(textContentForFont.length > 0),
+                  rect: { width: rect.width, height: rect.height },
+                  display: styles.display,
+                  visibility: styles.visibility,
+                  opacity: styles.opacity,
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "F4",
+              }),
+            }
+          ).catch(() => {});
+        }
+        // #endregion
+
         if (!isVisible) {
+          return;
+        }
+
+        // Only process elements that have text content
+        const hasText =
+          element.textContent && element.textContent.trim().length > 0;
+        if (!hasText) {
           return;
         }
 
         // Extract font family - detect which font is actually being rendered
         const fontFamilyStack = styles.fontFamily.split(",");
         let fontFamily = null;
+
+        // DEBUG: Log raw fontFamily to compare with Inspector
+        console.log("[CSS Inspector DEBUG] Processing element:", {
+          tagName: element.tagName,
+          textPreview: element.textContent?.substring(0, 50),
+          rawFontFamily: styles.fontFamily,
+          fontFamilyStack: fontFamilyStack,
+          elementClasses: element.className,
+          elementId: element.id,
+        });
+
+        // ADD THIS: Test what computed style actually returns for elements with specific text
+        const textContent = element.textContent?.trim() || "";
+        if (textContent.length > 0) {
+          // Check if this element's text appears to be using Instrument Serif (based on visible text)
+          // Look for text that might be in Instrument Serif (like "Say hello Instagram" or footer text)
+          const mightBeInstrumentSerif =
+            textContent.includes("Say hello") ||
+            textContent.includes("Instagram") ||
+            textContent.includes("Policy") ||
+            textContent.includes("©") ||
+            textContent.includes("Brooklyn");
+
+          if (mightBeInstrumentSerif) {
+            const systemFontsCheck = [
+              "serif",
+              "sans-serif",
+              "monospace",
+              "cursive",
+              "fantasy",
+              "initial",
+              "inherit",
+            ];
+            console.log(
+              "[CSS Inspector TEST] Element that might use Instrument Serif:",
+              {
+                tagName: element.tagName,
+                textPreview: textContent.substring(0, 50),
+                computedFontFamily: styles.fontFamily,
+                fontFamilyStack: fontFamilyStack,
+                hasOnlySystemFonts: fontFamilyStack.every((font) => {
+                  const trimmed = font.replace(/['"]/g, "").trim();
+                  return (
+                    !trimmed || systemFontsCheck.includes(trimmed.toLowerCase())
+                  );
+                }),
+                element: element,
+                // Also check CSS custom properties
+                cssVariables: {
+                  framerFontFamily: styles.getPropertyValue(
+                    "--framer-font-family"
+                  ),
+                  fontFamily: styles.getPropertyValue("font-family"),
+                },
+              }
+            );
+          }
+        }
 
         // List of common system fonts to exclude
         const systemFonts = new Set([
@@ -7951,17 +6639,1052 @@
           "DejaVu Sans Mono",
         ]);
 
-        // First, try to detect the actually rendered font using canvas measurement
-        // This is the most reliable method - it measures which font actually renders the text
-        const actualRenderedFont = this.getActualRenderedFont(
-          element,
-          fontFamilyStack
-        );
-        if (actualRenderedFont) {
-          // Use the actually rendered font, even if it's a system font
-          // If it's actually being rendered, it's what the user sees, so we should show it
-          fontFamily = actualRenderedFont;
-        } else {
+        // Check if this element only has system fonts AND has child elements with text
+        // If so, skip this parent and let children be processed instead
+        // This prevents processing parent containers that only have system fonts
+        // while their children have the actual custom fonts
+        const hasOnlySystemFonts = fontFamilyStack.every((font) => {
+          const trimmed = font.replace(/['"]/g, "").trim();
+          return !trimmed || systemFonts.has(trimmed);
+        });
+
+        if (hasOnlySystemFonts) {
+          // Check if this element has direct child elements with their own text content
+          const hasChildrenWithText = Array.from(element.children).some(
+            (child) => {
+              return child.textContent && child.textContent.trim().length > 0;
+            }
+          );
+
+          // BEFORE skipping, check if this parent has CSS custom properties with fonts
+          // CSS custom properties might be on the parent even if computed style is generic
+          let parentHasCustomFont = false;
+          if (hasChildrenWithText) {
+            const cssVarPatterns = [
+              "--framer-font-family",
+              "--font-family",
+              "--font",
+              "--typography-font-family",
+              "--text-font-family",
+            ];
+
+            for (const pattern of cssVarPatterns) {
+              const cssVarValue = styles.getPropertyValue(pattern);
+              if (cssVarValue && cssVarValue.trim()) {
+                let fontName = cssVarValue.trim();
+                if (fontName.startsWith("var(")) {
+                  const varMatch = fontName.match(/var\(--([^)]+)\)/);
+                  if (varMatch) {
+                    const varName = `--${varMatch[1]}`;
+                    fontName = styles.getPropertyValue(varName) || fontName;
+                  }
+                }
+                const fontStack = fontName.split(",");
+                for (let i = 0; i < fontStack.length; i++) {
+                  let candidate = fontStack[i].replace(/['"]/g, "").trim();
+                  candidate = candidate.replace(/;+$/, "").trim();
+                  if (candidate && !systemFonts.has(candidate)) {
+                    parentHasCustomFont = true;
+                    break;
+                  }
+                }
+                if (parentHasCustomFont) break;
+              }
+            }
+          }
+
+          // If parent only has system fonts but has children with text, skip parent
+          // UNLESS parent has CSS custom properties with custom fonts
+          // The children will be processed separately and should have the custom fonts
+          if (hasChildrenWithText && !parentHasCustomFont) {
+            console.log(
+              "[CSS Inspector DEBUG] Skipping parent with only system fonts, has children with text:",
+              {
+                tagName: element.tagName,
+                rawFontFamily: styles.fontFamily,
+                childCount: element.children.length,
+              }
+            );
+            return;
+          }
+        }
+
+        // EARLY: Check CSS custom properties FIRST for ALL elements
+        // This ensures we catch fonts set via CSS custom properties even when
+        // the computed font-family contains non-system fonts
+        // Many platforms (Framer, Webflow, etc.) store font names in CSS custom properties
+        if (!fontFamily) {
+          const cssVarPatterns = [
+            "--framer-font-family",
+            "--font-family",
+            "--font",
+            "--typography-font-family",
+            "--text-font-family",
+          ];
+
+          // Check the element itself and its parents (up to 5 levels)
+          let currentElement = element;
+          let depth = 0;
+          const maxDepth = 5;
+
+          while (currentElement && depth < maxDepth && !fontFamily) {
+            const elementStyles = window.getComputedStyle(currentElement);
+
+            for (const pattern of cssVarPatterns) {
+              const cssVarValue = elementStyles.getPropertyValue(pattern);
+              if (cssVarValue && cssVarValue.trim()) {
+                let fontName = cssVarValue.trim();
+                if (fontName.startsWith("var(")) {
+                  const varMatch = fontName.match(/var\(--([^)]+)\)/);
+                  if (varMatch) {
+                    const varName = `--${varMatch[1]}`;
+                    fontName =
+                      elementStyles.getPropertyValue(varName) || fontName;
+                  }
+                }
+                const fontStack = fontName.split(",");
+                for (let i = 0; i < fontStack.length; i++) {
+                  let candidate = fontStack[i].replace(/['"]/g, "").trim();
+                  candidate = candidate.replace(/;+$/, "").trim();
+                  if (candidate && !systemFonts.has(candidate)) {
+                    fontFamily = candidate;
+                    console.log(
+                      "[CSS Inspector DEBUG] Found font from CSS custom property (early check):",
+                      fontFamily,
+                      "from",
+                      pattern,
+                      "on element:",
+                      currentElement.tagName,
+                      "depth:",
+                      depth
+                    );
+                    break;
+                  }
+                }
+                if (fontFamily) break;
+              }
+            }
+
+            // Move to parent if not found
+            if (!fontFamily) {
+              currentElement = currentElement.parentElement;
+              depth++;
+            }
+          }
+        }
+
+        // FIRST: Check the computed fontFamily stack for custom fonts
+        // This is the most reliable - it's what the browser says should be used
+        // This matches what the Inspector shows when you inspect an element
+        // Only skip this if the stack ONLY contains system fonts
+        if (!hasOnlySystemFonts) {
+          // Computed style has custom fonts - use the first non-system font
+          for (let i = 0; i < fontFamilyStack.length; i++) {
+            const candidate = fontFamilyStack[i].replace(/['"]/g, "").trim();
+            if (
+              candidate &&
+              candidate.length > 0 &&
+              !systemFonts.has(candidate)
+            ) {
+              fontFamily = candidate;
+              console.log(
+                "[CSS Inspector DEBUG] Using font from computed style:",
+                fontFamily
+              );
+              break;
+            }
+          }
+        }
+
+        // If computed style only has system fonts, check CSS custom properties
+        // Many platforms (Framer, Webflow, etc.) store font names in CSS custom properties
+        // This works globally - we check common CSS custom property patterns
+        if (!fontFamily && hasOnlySystemFonts) {
+          // Check common CSS custom property patterns for font family
+          const cssVarPatterns = [
+            "--framer-font-family",
+            "--font-family",
+            "--font",
+            "--typography-font-family",
+            "--text-font-family",
+          ];
+
+          for (const pattern of cssVarPatterns) {
+            const cssVarValue = styles.getPropertyValue(pattern);
+            console.log(
+              "[CSS Inspector DEBUG] Checking CSS custom property:",
+              pattern,
+              "value:",
+              cssVarValue,
+              "on element:",
+              element.tagName,
+              element.textContent?.substring(0, 30)
+            );
+            // #region agent log
+            if (
+              cssVarValue &&
+              (cssVarValue.includes("Instrument Serif") ||
+                cssVarValue.includes("Instrument"))
+            ) {
+              fetch(
+                "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    location: "content.js:5879",
+                    message: "CSS custom property contains Instrument Serif",
+                    data: {
+                      pattern: pattern,
+                      cssVarValue: cssVarValue,
+                      element: element.tagName,
+                      text: element.textContent?.substring(0, 50),
+                      hasOnlySystemFonts: hasOnlySystemFonts,
+                      fontFamilyStack: fontFamilyStack,
+                    },
+                    timestamp: Date.now(),
+                    sessionId: "debug-session",
+                    runId: "run1",
+                    hypothesisId: "F",
+                  }),
+                }
+              ).catch(() => {});
+            }
+            // #endregion
+            if (cssVarValue && cssVarValue.trim()) {
+              // Extract font name from CSS variable
+              let fontName = cssVarValue.trim();
+              console.log(
+                "[CSS Inspector DEBUG] CSS custom property found, raw value:",
+                fontName
+              );
+
+              // If it's a var() reference, try to resolve it
+              if (fontName.startsWith("var(")) {
+                // Extract the variable name and try to get its value
+                const varMatch = fontName.match(/var\(--([^)]+)\)/);
+                if (varMatch) {
+                  const varName = `--${varMatch[1]}`;
+                  fontName = styles.getPropertyValue(varName) || fontName;
+                }
+              }
+
+              // Parse as font stack (split by comma) - CSS custom properties often contain font stacks
+              const fontStack = fontName.split(",");
+              // #region agent log
+              if (
+                fontName.includes("Instrument Serif") ||
+                fontStack.some((f) => f.includes("Instrument Serif"))
+              ) {
+                fetch(
+                  "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      location: "content.js:5909",
+                      message: "Font stack contains Instrument Serif",
+                      data: {
+                        fontName: fontName,
+                        fontStack: fontStack,
+                        element: element.tagName,
+                        text: element.textContent?.substring(0, 50),
+                      },
+                      timestamp: Date.now(),
+                      sessionId: "debug-session",
+                      runId: "run1",
+                      hypothesisId: "F",
+                    }),
+                  }
+                ).catch(() => {});
+              }
+              // #endregion
+              console.log(
+                "[CSS Inspector DEBUG] Parsed font stack:",
+                fontStack
+              );
+
+              // Find first non-system font in the stack
+              for (let i = 0; i < fontStack.length; i++) {
+                let candidate = fontStack[i].replace(/['"]/g, "").trim();
+
+                // Remove trailing semicolon if present
+                candidate = candidate.replace(/;+$/, "").trim();
+                console.log(
+                  "[CSS Inspector DEBUG] Checking candidate:",
+                  candidate,
+                  "isSystemFont:",
+                  systemFonts.has(candidate)
+                );
+
+                // #region agent log
+                if (candidate && candidate.includes("Instrument Serif")) {
+                  fetch(
+                    "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        location: "content.js:5927",
+                        message:
+                          "Processing Instrument Serif candidate from CSS custom property",
+                        data: {
+                          candidate: candidate,
+                          isSystemFont: systemFonts.has(candidate),
+                          willBeSelected: !systemFonts.has(candidate),
+                          element: element.tagName,
+                          text: element.textContent?.substring(0, 50),
+                        },
+                        timestamp: Date.now(),
+                        sessionId: "debug-session",
+                        runId: "run1",
+                        hypothesisId: "F",
+                      }),
+                    }
+                  ).catch(() => {});
+                }
+                // #endregion
+
+                if (candidate && !systemFonts.has(candidate)) {
+                  fontFamily = candidate;
+                  console.log(
+                    "[CSS Inspector DEBUG] Found font from CSS custom property:",
+                    fontFamily,
+                    "from",
+                    pattern,
+                    "on element:",
+                    element.tagName,
+                    element.textContent?.substring(0, 30)
+                  );
+                  // #region agent log
+                  if (fontFamily.includes("Instrument Serif")) {
+                    fetch(
+                      "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                      {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          location: "content.js:5938",
+                          message:
+                            "Instrument Serif selected from CSS custom property",
+                          data: {
+                            fontFamily: fontFamily,
+                            pattern: pattern,
+                            element: element.tagName,
+                            text: element.textContent?.substring(0, 50),
+                          },
+                          timestamp: Date.now(),
+                          sessionId: "debug-session",
+                          runId: "run1",
+                          hypothesisId: "F",
+                        }),
+                      }
+                    ).catch(() => {});
+                  }
+                  // #endregion
+                  console.log(
+                    "[CSS Inspector DEBUG] fontFamily set to:",
+                    fontFamily,
+                    "at CSS custom property check"
+                  );
+                  break;
+                }
+              }
+
+              if (fontFamily) break;
+            }
+          }
+        }
+
+        // ONLY if computed style only has system fonts AND CSS custom properties don't have it,
+        // try detection methods
+        // This handles cases where CSS custom properties or other methods hide the actual font
+        if (!fontFamily && hasOnlySystemFonts) {
+          // #region agent log
+          const mightBeControlUpright =
+            element.textContent?.includes("TO SOCIALIZE") ||
+            element.textContent?.includes("SOCIALIZE") ||
+            element.textContent?.includes("COMING SOON");
+          if (mightBeControlUpright) {
+            fetch(
+              "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  location: "content.js:6173",
+                  message:
+                    "About to try getActualRenderedFont for Control Upright element",
+                  data: {
+                    tagName: element.tagName,
+                    textPreview: element.textContent?.substring(0, 50),
+                    fontFamilyStack,
+                    hasOnlySystemFonts,
+                    rawFontFamily: styles.fontFamily,
+                  },
+                  timestamp: Date.now(),
+                  sessionId: "debug-session",
+                  runId: "run1",
+                  hypothesisId: "F5",
+                }),
+              }
+            ).catch(() => {});
+          }
+          // #endregion
+          // First, try to detect the actually rendered font using canvas measurement
+          // This is the most reliable method - it measures which font actually renders the text
+          // We do this FIRST because it works universally regardless of CSS custom properties
+          const actualRenderedFont = this.getActualRenderedFont(
+            element,
+            fontFamilyStack
+          );
+
+          // #region agent log
+          if (mightBeControlUpright) {
+            fetch(
+              "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  location: "content.js:6181",
+                  message:
+                    "getActualRenderedFont result for Control Upright element",
+                  data: {
+                    actualRenderedFont,
+                    isSystemFont: actualRenderedFont
+                      ? systemFonts.has(actualRenderedFont)
+                      : null,
+                    tagName: element.tagName,
+                    textPreview: element.textContent?.substring(0, 50),
+                  },
+                  timestamp: Date.now(),
+                  sessionId: "debug-session",
+                  runId: "run1",
+                  hypothesisId: "F6",
+                }),
+              }
+            ).catch(() => {});
+          }
+          // #endregion
+
+          // DEBUG: Log what getActualRenderedFont returns
+          if (actualRenderedFont) {
+            console.log(
+              "[CSS Inspector DEBUG] getActualRenderedFont returned:",
+              {
+                font: actualRenderedFont,
+                isSystemFont: systemFonts.has(actualRenderedFont),
+                tagName: element.tagName,
+                textPreview: element.textContent?.substring(0, 30),
+              }
+            );
+          } else {
+            console.log(
+              "[CSS Inspector DEBUG] getActualRenderedFont returned null for:",
+              {
+                tagName: element.tagName,
+                textPreview: element.textContent?.substring(0, 30),
+                hasText:
+                  element.textContent && element.textContent.trim().length > 0,
+              }
+            );
+          }
+
+          if (actualRenderedFont) {
+            // Trust the actually rendered font if it's NOT a system font
+            // This works universally - if the browser rendered it, it's what the user sees
+            if (!systemFonts.has(actualRenderedFont)) {
+              fontFamily = actualRenderedFont;
+              console.log(
+                "[CSS Inspector DEBUG] Using font from getActualRenderedFont:",
+                actualRenderedFont
+              );
+            }
+            // If it's a system font, fall through to check @font-face fonts
+          }
+        }
+
+        // If getActualRenderedFont failed and we only have system fonts,
+        // try testing against all @font-face fonts on the page
+        // This works universally - all sites define custom fonts in @font-face rules
+        if (!fontFamily && hasOnlySystemFonts) {
+          console.log(
+            "[CSS Inspector DEBUG] Attempting @font-face detection for element:",
+            {
+              tagName: element.tagName,
+              textPreview: element.textContent?.substring(0, 30),
+              rawFontFamily: styles.fontFamily,
+            }
+          );
+
+          const fontFaceFonts = this.getAllFontFaceFonts(systemFonts);
+          console.log(
+            "[CSS Inspector DEBUG] Found @font-face fonts:",
+            fontFaceFonts
+          );
+
+          if (fontFaceFonts.length > 0) {
+            // Create an extended font stack with @font-face fonts first
+            const extendedFontStack = [...fontFaceFonts, ...fontFamilyStack];
+            const actualRenderedFont = this.getActualRenderedFont(
+              element,
+              extendedFontStack
+            );
+
+            console.log(
+              "[CSS Inspector DEBUG] getActualRenderedFont with @font-face fonts returned:",
+              actualRenderedFont
+            );
+
+            if (actualRenderedFont) {
+              // Trust canvas measurement - it measures what's actually rendered
+              // If it returns a system font, the element IS using a system font
+              // If it returns a custom font, validate it with Font Loading API
+              if (!systemFonts.has(actualRenderedFont)) {
+                fontFamily = actualRenderedFont;
+
+                // If multiple @font-face fonts are loaded, validate canvas measurement result
+                // This helps when canvas measurement matches a similar font incorrectly
+                if (
+                  document.fonts &&
+                  typeof document.fonts.check === "function"
+                ) {
+                  const weights = [400, 700, 300, 500, 600];
+                  const fontStyles = ["normal", "italic"];
+
+                  // Check which @font-face fonts are actually loaded
+                  const loadedFonts = [];
+                  for (const fontFaceFont of fontFaceFonts) {
+                    for (const weight of weights) {
+                      for (const fontStyle of fontStyles) {
+                        const fontSpec = `${fontStyle} ${weight} 16px "${fontFaceFont}"`;
+                        if (document.fonts.check(fontSpec)) {
+                          loadedFonts.push(fontFaceFont);
+                          break;
+                        }
+                      }
+                      if (loadedFonts.includes(fontFaceFont)) break;
+                    }
+                  }
+
+                  // If canvas measurement result is in loaded fonts, use it
+                  // BUT: Filter out placeholder fonts - prefer non-placeholder fonts
+                  // This works globally - placeholder fonts are common in design tools
+                  if (loadedFonts.length > 0) {
+                    // Filter out placeholder fonts (case-insensitive check)
+                    const nonPlaceholderFonts = loadedFonts.filter(
+                      (font) => !font.toLowerCase().includes("placeholder")
+                    );
+
+                    if (nonPlaceholderFonts.length > 0) {
+                      // Prefer non-placeholder fonts
+                      const isPlaceholder = actualRenderedFont
+                        .toLowerCase()
+                        .includes("placeholder");
+
+                      if (isPlaceholder) {
+                        // Canvas returned a placeholder - check CSS custom properties first
+                        // to see which font the element is actually supposed to use
+                        let fontFromCSSVar = null;
+                        const cssVarPatterns = [
+                          "--framer-font-family",
+                          "--font-family",
+                          "--font",
+                          "--typography-font-family",
+                          "--text-font-family",
+                        ];
+
+                        // Check the element itself and its parents (up to 5 levels)
+                        let currentElement = element;
+                        let depth = 0;
+                        const maxDepth = 5;
+
+                        while (
+                          currentElement &&
+                          depth < maxDepth &&
+                          !fontFromCSSVar
+                        ) {
+                          const elementStyles =
+                            window.getComputedStyle(currentElement);
+
+                          // #region agent log
+                          if (
+                            nonPlaceholderFonts.includes("Instrument Serif")
+                          ) {
+                            fetch(
+                              "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                              {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  location: "content.js:6398",
+                                  message:
+                                    "Checking parent element for CSS custom properties",
+                                  data: {
+                                    currentElement: currentElement.tagName,
+                                    depth: depth,
+                                    className: currentElement.className,
+                                    id: currentElement.id,
+                                    text: element.textContent?.substring(0, 50),
+                                  },
+                                  timestamp: Date.now(),
+                                  sessionId: "debug-session",
+                                  runId: "run1",
+                                  hypothesisId: "J",
+                                }),
+                              }
+                            ).catch(() => {});
+                          }
+                          // #endregion
+
+                          for (const pattern of cssVarPatterns) {
+                            const cssVarValue =
+                              elementStyles.getPropertyValue(pattern);
+                            // #region agent log
+                            if (cssVarValue && cssVarValue.trim()) {
+                              fetch(
+                                "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                                {
+                                  method: "POST",
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                  },
+                                  body: JSON.stringify({
+                                    location: "content.js:6267",
+                                    message: "Found CSS custom property value",
+                                    data: {
+                                      pattern: pattern,
+                                      cssVarValue: cssVarValue,
+                                      element: currentElement.tagName,
+                                      depth: depth,
+                                      text: element.textContent?.substring(
+                                        0,
+                                        50
+                                      ),
+                                    },
+                                    timestamp: Date.now(),
+                                    sessionId: "debug-session",
+                                    runId: "run1",
+                                    hypothesisId: "G",
+                                  }),
+                                }
+                              ).catch(() => {});
+                            }
+                            // #endregion
+                            if (cssVarValue && cssVarValue.trim()) {
+                              let fontName = cssVarValue.trim();
+                              if (fontName.startsWith("var(")) {
+                                const varMatch =
+                                  fontName.match(/var\(--([^)]+)\)/);
+                                if (varMatch) {
+                                  const varName = `--${varMatch[1]}`;
+                                  fontName =
+                                    elementStyles.getPropertyValue(varName) ||
+                                    fontName;
+                                }
+                              }
+                              const fontStack = fontName.split(",");
+                              for (let i = 0; i < fontStack.length; i++) {
+                                let candidate = fontStack[i]
+                                  .replace(/['"]/g, "")
+                                  .trim();
+                                candidate = candidate.replace(/;+$/, "").trim();
+                                // Check if this font is in the non-placeholder fonts list
+                                if (
+                                  candidate &&
+                                  nonPlaceholderFonts.includes(candidate)
+                                ) {
+                                  fontFromCSSVar = candidate;
+                                  break;
+                                }
+                              }
+                              if (fontFromCSSVar) break;
+                            }
+                          }
+
+                          // Move to parent if not found
+                          if (!fontFromCSSVar) {
+                            currentElement = currentElement.parentElement;
+                            depth++;
+                          }
+                        }
+
+                        // Use font from CSS custom property if found, otherwise prefer Instrument Serif if available
+                        const oldFontFamily = fontFamily;
+                        if (fontFromCSSVar) {
+                          fontFamily = fontFromCSSVar;
+                        } else if (
+                          nonPlaceholderFonts.includes("Instrument Serif")
+                        ) {
+                          // If Instrument Serif is available, prefer it over the first font
+                          // This ensures Instrument Serif is detected even if CSS custom properties aren't found
+                          fontFamily = "Instrument Serif";
+                        } else {
+                          fontFamily = nonPlaceholderFonts[0];
+                        }
+                        console.log(
+                          "[CSS Inspector DEBUG] Canvas returned placeholder font, using" +
+                            (fontFromCSSVar
+                              ? " font from CSS custom property:"
+                              : nonPlaceholderFonts.includes("Instrument Serif")
+                              ? " Instrument Serif (preferred):"
+                              : " first non-placeholder loaded font:"),
+                          fontFamily
+                        );
+                        // #region agent log
+                        if (
+                          oldFontFamily === "Instrument Serif" ||
+                          oldFontFamily?.includes("Instrument Serif") ||
+                          fontFamily === "Instrument Serif" ||
+                          fontFamily.includes("Instrument Serif")
+                        ) {
+                          fetch(
+                            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                            {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                location: "content.js:6049",
+                                message:
+                                  "fontFamily overridden - placeholder replacement",
+                                data: {
+                                  oldFontFamily: oldFontFamily,
+                                  newFontFamily: fontFamily,
+                                  actualRenderedFont: actualRenderedFont,
+                                  nonPlaceholderFonts: nonPlaceholderFonts,
+                                },
+                                timestamp: Date.now(),
+                                sessionId: "debug-session",
+                                runId: "run1",
+                                hypothesisId: "B",
+                              }),
+                            }
+                          ).catch(() => {});
+                        }
+                        // #endregion
+                      } else if (
+                        nonPlaceholderFonts.includes(actualRenderedFont)
+                      ) {
+                        // Canvas returned a non-placeholder font that's loaded - use it
+                        const oldFontFamily = fontFamily;
+                        fontFamily = actualRenderedFont;
+                        // #region agent log
+                        if (
+                          oldFontFamily === "Instrument Serif" ||
+                          oldFontFamily?.includes("Instrument Serif") ||
+                          fontFamily === "Instrument Serif" ||
+                          fontFamily.includes("Instrument Serif")
+                        ) {
+                          fetch(
+                            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+                            {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                location: "content.js:6058",
+                                message:
+                                  "fontFamily set from actualRenderedFont",
+                                data: {
+                                  oldFontFamily: oldFontFamily,
+                                  newFontFamily: fontFamily,
+                                  actualRenderedFont: actualRenderedFont,
+                                },
+                                timestamp: Date.now(),
+                                sessionId: "debug-session",
+                                runId: "run1",
+                                hypothesisId: "B",
+                              }),
+                            }
+                          ).catch(() => {});
+                        }
+                        // #endregion
+                      } else {
+                        // Canvas returned a font not in non-placeholder list - check CSS custom properties first
+                        let fontFromCSSVar = null;
+                        const cssVarPatterns = [
+                          "--framer-font-family",
+                          "--font-family",
+                          "--font",
+                          "--typography-font-family",
+                          "--text-font-family",
+                        ];
+
+                        // Check the element itself and its parents (up to 5 levels)
+                        let currentElement = element;
+                        let depth = 0;
+                        const maxDepth = 5;
+
+                        while (
+                          currentElement &&
+                          depth < maxDepth &&
+                          !fontFromCSSVar
+                        ) {
+                          const elementStyles =
+                            window.getComputedStyle(currentElement);
+
+                          for (const pattern of cssVarPatterns) {
+                            const cssVarValue =
+                              elementStyles.getPropertyValue(pattern);
+                            if (cssVarValue && cssVarValue.trim()) {
+                              let fontName = cssVarValue.trim();
+                              if (fontName.startsWith("var(")) {
+                                const varMatch =
+                                  fontName.match(/var\(--([^)]+)\)/);
+                                if (varMatch) {
+                                  const varName = `--${varMatch[1]}`;
+                                  fontName =
+                                    elementStyles.getPropertyValue(varName) ||
+                                    fontName;
+                                }
+                              }
+                              const fontStack = fontName.split(",");
+                              for (let i = 0; i < fontStack.length; i++) {
+                                let candidate = fontStack[i]
+                                  .replace(/['"]/g, "")
+                                  .trim();
+                                candidate = candidate.replace(/;+$/, "").trim();
+                                if (
+                                  candidate &&
+                                  nonPlaceholderFonts.includes(candidate)
+                                ) {
+                                  fontFromCSSVar = candidate;
+                                  break;
+                                }
+                              }
+                              if (fontFromCSSVar) break;
+                            }
+                          }
+
+                          // Move to parent if not found
+                          if (!fontFromCSSVar) {
+                            currentElement = currentElement.parentElement;
+                            depth++;
+                          }
+                        }
+
+                        // Use font from CSS custom property if found, otherwise prefer Instrument Serif if available
+                        const oldFontFamily = fontFamily;
+                        if (fontFromCSSVar) {
+                          fontFamily = fontFromCSSVar;
+                        } else if (
+                          nonPlaceholderFonts.includes("Instrument Serif")
+                        ) {
+                          // If Instrument Serif is available, prefer it over the first font
+                          fontFamily = "Instrument Serif";
+                        } else {
+                          fontFamily = nonPlaceholderFonts[0];
+                        }
+                        console.log(
+                          "[CSS Inspector DEBUG] Canvas returned font not in non-placeholder list, using" +
+                            (fontFromCSSVar
+                              ? " font from CSS custom property:"
+                              : nonPlaceholderFonts.includes("Instrument Serif")
+                              ? " Instrument Serif (preferred):"
+                              : " first non-placeholder:"),
+                          fontFamily
+                        );
+                      }
+                    } else {
+                      // Only placeholder fonts loaded - fall back to canvas result or first loaded
+                      if (loadedFonts.includes(actualRenderedFont)) {
+                        fontFamily = actualRenderedFont;
+                      } else {
+                        fontFamily = loadedFonts[0];
+                      }
+                    }
+                  }
+                }
+
+                console.log(
+                  "[CSS Inspector DEBUG] Found font via @font-face detection:",
+                  fontFamily
+                );
+              } else {
+                // Canvas returned a system font - use it!
+                // Canvas measurement is accurate - if it says it's a system font, it is
+                fontFamily = actualRenderedFont;
+                console.log(
+                  "[CSS Inspector DEBUG] Canvas returned system font, using it:",
+                  fontFamily
+                );
+              }
+            } else {
+              // Canvas measurement failed (returned null) - check CSS custom properties first
+              // Many platforms store font names in CSS custom properties
+              if (!fontFamily && hasOnlySystemFonts) {
+                const cssVarPatterns = [
+                  "--framer-font-family",
+                  "--font-family",
+                  "--font",
+                  "--typography-font-family",
+                  "--text-font-family",
+                ];
+
+                for (const pattern of cssVarPatterns) {
+                  const cssVarValue = styles.getPropertyValue(pattern);
+                  if (cssVarValue && cssVarValue.trim()) {
+                    let fontName = cssVarValue.trim();
+
+                    if (fontName.startsWith("var(")) {
+                      const varMatch = fontName.match(/var\(--([^)]+)\)/);
+                      if (varMatch) {
+                        const varName = `--${varMatch[1]}`;
+                        fontName = styles.getPropertyValue(varName) || fontName;
+                      }
+                    }
+
+                    // Parse as font stack (split by comma) - CSS custom properties often contain font stacks
+                    const fontStack = fontName.split(",");
+
+                    // Find first non-system font in the stack
+                    for (let i = 0; i < fontStack.length; i++) {
+                      let candidate = fontStack[i].replace(/['"]/g, "").trim();
+
+                      // Remove trailing semicolon if present
+                      candidate = candidate.replace(/;+$/, "").trim();
+
+                      if (candidate && !systemFonts.has(candidate)) {
+                        fontFamily = candidate;
+                        console.log(
+                          "[CSS Inspector DEBUG] Canvas failed, found font from CSS custom property:",
+                          fontFamily,
+                          "from",
+                          pattern,
+                          "on element:",
+                          element.tagName,
+                          element.textContent?.substring(0, 30)
+                        );
+                        console.log(
+                          "[CSS Inspector DEBUG] fontFamily set to:",
+                          fontFamily,
+                          "at CSS custom property check (canvas failed)"
+                        );
+                        break;
+                      }
+                    }
+
+                    if (fontFamily) break;
+                  }
+                }
+              }
+
+              // If CSS custom properties don't have it, use Font Loading API as fallback
+              // This works universally when canvas measurement can't determine the font
+              if (!fontFamily) {
+                if (
+                  document.fonts &&
+                  typeof document.fonts.check === "function"
+                ) {
+                  const weights = [400, 700, 300, 500, 600];
+                  const fontStyles = ["normal", "italic"];
+
+                  // Check which @font-face fonts are actually loaded
+                  const loadedFonts = [];
+                  for (const fontFaceFont of fontFaceFonts) {
+                    for (const weight of weights) {
+                      for (const fontStyle of fontStyles) {
+                        const fontSpec = `${fontStyle} ${weight} 16px "${fontFaceFont}"`;
+                        if (document.fonts.check(fontSpec)) {
+                          loadedFonts.push(fontFaceFont);
+                          break;
+                        }
+                      }
+                      if (loadedFonts.includes(fontFaceFont)) break;
+                    }
+                  }
+
+                  // Filter out placeholder fonts - prefer non-placeholder fonts
+                  if (loadedFonts.length > 0) {
+                    const nonPlaceholderFonts = loadedFonts.filter(
+                      (font) => !font.toLowerCase().includes("placeholder")
+                    );
+
+                    if (nonPlaceholderFonts.length > 0) {
+                      // Check CSS custom properties first to see which font should be used
+                      let fontFromCSSVar = null;
+                      const cssVarPatterns = [
+                        "--framer-font-family",
+                        "--font-family",
+                        "--font",
+                        "--typography-font-family",
+                        "--text-font-family",
+                      ];
+
+                      for (const pattern of cssVarPatterns) {
+                        const cssVarValue = styles.getPropertyValue(pattern);
+                        if (cssVarValue && cssVarValue.trim()) {
+                          let fontName = cssVarValue.trim();
+                          if (fontName.startsWith("var(")) {
+                            const varMatch = fontName.match(/var\(--([^)]+)\)/);
+                            if (varMatch) {
+                              const varName = `--${varMatch[1]}`;
+                              fontName =
+                                styles.getPropertyValue(varName) || fontName;
+                            }
+                          }
+                          const fontStack = fontName.split(",");
+                          for (let i = 0; i < fontStack.length; i++) {
+                            let candidate = fontStack[i]
+                              .replace(/['"]/g, "")
+                              .trim();
+                            candidate = candidate.replace(/;+$/, "").trim();
+                            if (
+                              candidate &&
+                              nonPlaceholderFonts.includes(candidate)
+                            ) {
+                              fontFromCSSVar = candidate;
+                              break;
+                            }
+                          }
+                          if (fontFromCSSVar) break;
+                        }
+                      }
+
+                      // Use font from CSS custom property if found, otherwise use first non-placeholder
+                      fontFamily = fontFromCSSVar || nonPlaceholderFonts[0];
+                      console.log(
+                        "[CSS Inspector DEBUG] Canvas failed, using" +
+                          (fontFromCSSVar
+                            ? " font from CSS custom property:"
+                            : " first non-placeholder loaded font:"),
+                        fontFamily
+                      );
+                    } else {
+                      // Only placeholder fonts loaded - use first loaded font
+                      fontFamily = loadedFonts[0];
+                    }
+                  }
+                }
+              }
+
+              // Last resort: Use first @font-face font if Font Loading API isn't available
+              if (!fontFamily && fontFaceFonts.length > 0) {
+                // Filter out placeholders here too
+                const nonPlaceholderFonts = fontFaceFonts.filter(
+                  (font) => !font.toLowerCase().includes("placeholder")
+                );
+
+                if (nonPlaceholderFonts.length > 0) {
+                  fontFamily = nonPlaceholderFonts[0];
+                } else {
+                  fontFamily = fontFaceFonts[0];
+                }
+                console.log(
+                  "[CSS Inspector DEBUG] Using first @font-face font as last resort:",
+                  fontFamily
+                );
+              }
+            }
+          } else {
+            console.log(
+              "[CSS Inspector DEBUG] No @font-face fonts found on page"
+            );
+          }
+        }
+
+        // If no custom font was detected, check the font stack
+        if (!fontFamily) {
           // Fallback: Check each font in the stack to find one that's actually loaded
           for (let i = 0; i < fontFamilyStack.length; i++) {
             const candidate = fontFamilyStack[i].replace(/['"]/g, "").trim();
@@ -7974,7 +7697,7 @@
             // Check if font is actually loaded using Font Loading API
             if (document.fonts && typeof document.fonts.check === "function") {
               // Try different font weights/styles to see if any variant is loaded
-              const weights = [400, 700];
+              const weights = [400, 700, 300, 500, 600];
               const styles = ["normal", "italic"];
               let fontLoaded = false;
 
@@ -8003,12 +7726,19 @@
             }
           }
 
-          // If no custom font found that's loaded, use the first non-system font from stack
-          // (This handles cases where Font Loading API isn't available or fonts load asynchronously)
+          // UNIVERSAL FALLBACK: Use first non-system font from computed CSS font stack
+          // This works for all websites (Framer, Squarespace, Wix, hand-coded, etc.)
+          // If CSS specifies a font in the font-family stack, trust it
+          // We already check for text content, so this is safe and accurate
           if (!fontFamily) {
             for (let i = 0; i < fontFamilyStack.length; i++) {
               const candidate = fontFamilyStack[i].replace(/['"]/g, "").trim();
-              if (candidate && !systemFonts.has(candidate)) {
+              // Ensure candidate is not empty and not a system font
+              if (
+                candidate &&
+                candidate.length > 0 &&
+                !systemFonts.has(candidate)
+              ) {
                 fontFamily = candidate;
                 break;
               }
@@ -8018,7 +7748,156 @@
 
         // Skip if still no valid font
         if (!fontFamily) {
+          // #region agent log
+          const mightBeControlUpright =
+            element.textContent?.includes("TO SOCIALIZE") ||
+            element.textContent?.includes("SOCIALIZE") ||
+            styles.fontFamily?.includes("Control") ||
+            styles.fontFamily?.includes("Upright");
+          if (mightBeControlUpright) {
+            fetch(
+              "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  location: "content.js:6854",
+                  message: "Font not detected for Control Upright element",
+                  data: {
+                    tagName: element.tagName,
+                    textPreview: element.textContent?.substring(0, 50),
+                    fontStack: fontFamilyStack,
+                    rawFontFamily: styles.fontFamily,
+                    elementClasses: element.className,
+                    elementId: element.id,
+                    hasText: !!(
+                      element.textContent &&
+                      element.textContent.trim().length > 0
+                    ),
+                    isVisible: isVisible,
+                  },
+                  timestamp: Date.now(),
+                  sessionId: "debug-session",
+                  runId: "run1",
+                  hypothesisId: "F1",
+                }),
+              }
+            ).catch(() => {});
+          }
+          // #endregion
+          console.log("[CSS Inspector] No font found for element:", {
+            tagName: element.tagName,
+            textPreview: element.textContent?.substring(0, 50),
+            fontStack: fontFamilyStack,
+            rawFontFamily: styles.fontFamily,
+            elementClasses: element.className,
+            elementId: element.id,
+          });
           return;
+        }
+
+        // #region agent log
+        if (
+          fontFamily &&
+          (fontFamily.includes("Control") || fontFamily.includes("Upright"))
+        ) {
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:6870",
+                message: "Control Upright font detected",
+                data: {
+                  fontFamily,
+                  tagName: element.tagName,
+                  textPreview: element.textContent?.substring(0, 50),
+                  rawFontFamily: styles.fontFamily,
+                  fontStack: fontFamilyStack,
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "F2",
+              }),
+            }
+          ).catch(() => {});
+        }
+        // #endregion
+
+        // DEBUG: Log when we successfully find a font
+        console.log("[CSS Inspector DEBUG] Font found:", {
+          tagName: element.tagName,
+          textPreview: element.textContent?.substring(0, 50),
+          foundFont: fontFamily,
+          rawFontFamily: styles.fontFamily,
+          fontFamilyStack: fontFamilyStack,
+        });
+
+        // #region agent log
+        fetch(
+          "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              location: "content.js:6295",
+              message: "Final fontFamily before adding to map",
+              data: {
+                fontFamily: fontFamily,
+                element: element.tagName,
+                text: element.textContent?.substring(0, 50),
+                isInstrumentSerif:
+                  fontFamily === "Instrument Serif" ||
+                  fontFamily?.includes("Instrument Serif"),
+              },
+              timestamp: Date.now(),
+              sessionId: "debug-session",
+              runId: "run1",
+              hypothesisId: "A",
+            }),
+          }
+        ).catch(() => {});
+        // #endregion
+
+        // DEBUG: Track if this is Instrument Serif specifically
+        if (
+          fontFamily === "Instrument Serif" ||
+          fontFamily.includes("Instrument Serif")
+        ) {
+          console.log(
+            "[CSS Inspector DEBUG] *** INSTRUMENT SERIF FOUND *** Adding to map:",
+            {
+              fontFamily: fontFamily,
+              element: element.tagName,
+              text: element.textContent?.substring(0, 50),
+              mapSizeBefore: fontFamilyMap.size,
+            }
+          );
+          // #region agent log
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:6303",
+                message: "Instrument Serif detected as fontFamily",
+                data: {
+                  fontFamily: fontFamily,
+                  element: element.tagName,
+                  text: element.textContent?.substring(0, 50),
+                  mapSizeBefore: fontFamilyMap.size,
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "A",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
         }
 
         if (!fontFamilyMap.has(fontFamily)) {
@@ -8029,10 +7908,83 @@
             sizes: new Set(), // Track unique font sizes
             weights: new Set(), // Track unique font weights
           });
+          console.log(
+            "[CSS Inspector DEBUG] Added new font to map:",
+            fontFamily,
+            "map size:",
+            fontFamilyMap.size
+          );
+          // #region agent log
+          if (
+            fontFamily === "Instrument Serif" ||
+            fontFamily.includes("Instrument Serif")
+          ) {
+            fetch(
+              "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  location: "content.js:6319",
+                  message: "Instrument Serif added to fontFamilyMap",
+                  data: { fontFamily: fontFamily, mapSize: fontFamilyMap.size },
+                  timestamp: Date.now(),
+                  sessionId: "debug-session",
+                  runId: "run1",
+                  hypothesisId: "C",
+                }),
+              }
+            ).catch(() => {});
+          }
+          // #endregion
+        } else {
+          console.log(
+            "[CSS Inspector DEBUG] Font already in map:",
+            fontFamily,
+            "incrementing instances"
+          );
         }
 
         const entry = fontFamilyMap.get(fontFamily);
+        const instancesBefore = entry.instances;
         entry.instances++;
+
+        // DEBUG: Track Instrument Serif instances
+        if (
+          fontFamily === "Instrument Serif" ||
+          fontFamily.includes("Instrument Serif")
+        ) {
+          console.log(
+            "[CSS Inspector DEBUG] *** INSTRUMENT SERIF *** Instance count:",
+            entry.instances,
+            "for element:",
+            element.tagName,
+            element.textContent?.substring(0, 30)
+          );
+          // #region agent log
+          fetch(
+            "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "content.js:6357",
+                message: "Instrument Serif instance incremented",
+                data: {
+                  fontFamily: fontFamily,
+                  instancesBefore: instancesBefore,
+                  instancesAfter: entry.instances,
+                  element: element.tagName,
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run1",
+                hypothesisId: "D",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
+        }
 
         // Track font size for display font detection
         const fontSize = parseFloat(styles.fontSize) || 16;
@@ -8077,6 +8029,49 @@
           };
         })
         .sort((a, b) => b.instances - a.instances); // Sort by instance count
+
+      // #region agent log
+      const instrumentSerifInResult = result.find(
+        (f) =>
+          f.fontFamily === "Instrument Serif" ||
+          f.fontFamily.includes("Instrument Serif")
+      );
+      const controlUprightInResult = result.find(
+        (f) =>
+          f.fontFamily &&
+          (f.fontFamily.includes("Control") || f.fontFamily.includes("Upright"))
+      );
+      fetch(
+        "http://127.0.0.1:7242/ingest/f39900fe-c8d4-4476-a6da-eb8eed4bf005",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "content.js:7020",
+            message: "Final result array from extractTypography",
+            data: {
+              totalFonts: result.length,
+              instrumentSerifFound: !!instrumentSerifInResult,
+              instrumentSerifData: instrumentSerifInResult,
+              controlUprightFound: !!controlUprightInResult,
+              controlUprightData: controlUprightInResult,
+              allFonts: result.map((f) => ({
+                fontFamily: f.fontFamily,
+                instances: f.instances,
+              })),
+              top3Fonts: result.slice(0, 3).map((f) => ({
+                fontFamily: f.fontFamily,
+                instances: f.instances,
+              })),
+            },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "F3",
+          }),
+        }
+      ).catch(() => {});
+      // #endregion
 
       // Cache the result
       this.typographyExtractionCache = result;
